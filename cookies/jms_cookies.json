@@ -1,0 +1,30 @@
+[
+  {
+    "domain": "jmsbr.jtjms-br.com",
+    "httpOnly": false,
+    "name": "pwd",
+    "path": "/",
+    "sameSite": "Lax",
+    "secure": false,
+    "value": ""
+  },
+  {
+    "domain": "jmsbr.jtjms-br.com",
+    "httpOnly": false,
+    "name": "account",
+    "path": "/",
+    "sameSite": "Lax",
+    "secure": false,
+    "value": ""
+  },
+  {
+    "domain": "jmsbr.jtjms-br.com",
+    "expiry": 1759236998,
+    "httpOnly": false,
+    "name": "acct",
+    "path": "/",
+    "sameSite": "Lax",
+    "secure": false,
+    "value": "5f9366cad6e73f54ea59691da895fb03"
+  }
+]

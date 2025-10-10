@@ -1,0 +1,20 @@
+2025-10-08 17:34:16,900 - INFO - 🔎 1 arquivos encontrados.
+2025-10-08 17:34:16,900 - INFO - 📄 Lendo arquivo: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\Entrega Realizada - Dia\实际签收(detalhes)2209120251008172602.xlsx
+2025-10-08 17:35:37,886 - WARNING - ⚠️ Nenhum registro encontrado para 2025-10-08
+2025-10-08 17:35:37,886 - WARNING - ⚠️ Nenhum dado válido para gerar resumo.
+2025-10-08 17:37:40,618 - INFO - 🔎 1 arquivos encontrados.
+2025-10-08 17:37:40,618 - INFO - 📄 Lendo arquivo: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\Entrega Realizada - Dia\实际签收(detalhes)2209120251008172337.xlsx
+2025-10-08 17:39:53,892 - WARNING - ⚠️ Nenhum registro encontrado para 2025-10-08
+2025-10-08 17:39:53,892 - WARNING - ⚠️ Nenhum dado válido para gerar resumo.
+2025-10-08 17:41:01,986 - INFO - 🔎 1 arquivos encontrados.
+2025-10-08 17:41:01,986 - INFO - 📄 Lendo arquivo: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\Entrega Realizada - Dia\实际签收(detalhes)2209120251008172337.xlsx
+2025-10-08 17:43:12,872 - WARNING - ⚠️ Nenhum registro encontrado para 2025-10-08
+2025-10-08 17:43:12,872 - WARNING - ⚠️ Nenhum dado válido para gerar resumo.
+2025-10-08 17:50:37,325 - INFO - 🔎 2 arquivos encontrados.
+2025-10-08 17:50:37,325 - INFO - 📄 Lendo arquivo: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\Entrega Realizada - Dia\~$实际签收(detalhes)2209120251008172337.xlsx
+2025-10-08 17:50:37,439 - ERROR - ❌ Erro ao ler C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\Entrega Realizada - Dia\~$实际签收(detalhes)2209120251008172337.xlsx: [Errno 13] Permission denied: 'C:\\Users\\J&T-099\\OneDrive - Speed Rabbit Express Ltda (1)\\Área de Trabalho\\Testes\\Local de Teste\\Entrega Realizada - Dia\\~$实际签收(detalhes)2209120251008172337.xlsx'
+2025-10-08 17:50:37,439 - INFO - 📄 Lendo arquivo: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\Entrega Realizada - Dia\实际签收(detalhes)2209120251008172337.xlsx
+2025-10-08 17:53:58,183 - INFO -    ➕ Processando aba: sheet1 (500000 linhas)
+2025-10-08 17:53:58,186 - INFO -    ➕ Processando aba: sheet2 (308272 linhas)
+2025-10-08 17:53:59,351 - WARNING - ⚠️ Nenhum registro encontrado para 2025-10-08
+2025-10-08 17:53:59,352 - WARNING - ⚠️ Nenhum dado válido para gerar resumo.
