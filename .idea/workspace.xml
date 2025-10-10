@@ -4,7 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="" />
+    <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/Novos/Franquias/1- Franquias - Entrega Realizada.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/Novos/Franquias/2- Franquias - Regras_Sem Movimentação.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/Novos/Franquias/3- Fraquias - Custo.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -20,6 +24,18 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPEN",
+    "assignee": "TeusCarvalho"
+  }
+}]]></component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/TeusCarvalho/Bots.git",
+    "accountId": "d6d669ff-0e6b-4739-8dd6-f2111f50e684"
+  }
+}]]></component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 6
 }</component>
@@ -213,7 +229,7 @@
       <workItem from="1760042066061" duration="637000" />
       <workItem from="1760095038946" duration="6729000" />
       <workItem from="1760104623114" duration="144000" />
-      <workItem from="1760104776541" duration="461000" />
+      <workItem from="1760104776541" duration="822000" />
     </task>
     <servers />
   </component>
