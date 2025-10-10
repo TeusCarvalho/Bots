@@ -123,19 +123,20 @@ else:
             Valor_Total=('Valor a pagar (yuan)', 'sum')
         ).reset_index().sort_values(by="Valor_Total", ascending=False)
 
+        # Valor total geral
+        valor_total_geral = resumo_bases['Valor_Total'].sum()
+
         # Pegar top 5 piores bases
         top5 = resumo_bases.head(5)
 
-        # Montar mensagem
+        # Montar mensagem com TOP 5 + valor total
         data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
-        mensagem = f"📊 **Relatório de Resarcimento por Base**\n📅 Data de geração: {data_geracao}\n\n"
+        mensagem = f"📊 **Relatório de Resarcimento - TOP 5 Piores Bases**\n📅 Data de geração: {data_geracao}\n\n"
 
-        for _, row in resumo_bases.iterrows():
-            mensagem += f"- {row['Base responsável']}: {row['Qtd_Pedidos']} pedidos - R$ {format_currency(row['Valor_Total'])}\n"
-
-        mensagem += "\n🔥 **TOP 5 Piores Bases (maior valor a pagar):**\n"
         for _, row in top5.iterrows():
-            mensagem += f"🔴 {row['Base responsável']}: {row['Qtd_Pedidos']} pedidos - R$ {format_currency(row['Valor_Total'])}\n"
+            mensagem += f"🔴 {row['Base responsável']} - {row['Qtd_Pedidos']} pedidos - R$ {format_currency(row['Valor_Total'])}\n"
+
+        mensagem += f"\n💰 **Valor Total Geral:** R$ {format_currency(valor_total_geral)}"
 
         # Criar payload
         payload = create_feishu_card_payload("📊 Relatório de Resarcimento - Franquias", mensagem)

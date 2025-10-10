@@ -6,7 +6,7 @@ from datetime import datetime
 
 # ================== CONFIGURAÇÕES ==================
 # Pasta de entrada (onde ficam os arquivos originais)
-PASTA_ENTRADA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\Entrega Realizada"
+PASTA_ENTRADA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\Entrega Realizada - Dia"
 
 # Pasta de saída (novo local no OneDrive Franquias)
 ARQUIVO_SAIDA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada\Resumo_Completo.xlsx"
