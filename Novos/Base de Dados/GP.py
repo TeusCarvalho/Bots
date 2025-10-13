@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import logging
 from datetime import datetime
+from tqdm import tqdm
 
 # ===========================================================
 # Configuração de Logs Coloridos
@@ -140,7 +141,6 @@ def analisar_entregas_consolidado(df, caminho_saida):
         COLUNAS["coordenador"], COLUNAS["motorista"], COLUNAS["data"], "Entrega no Domingo"
     ]]
 
-    # 🚧 Divisão automática se ultrapassar limite do Excel
     MAX_LINHAS = 1_048_000
 
     with pd.ExcelWriter(caminho_saida, engine="openpyxl") as writer:
@@ -180,20 +180,22 @@ def analisar_entregas_consolidado(df, caminho_saida):
 
 def processar_varios_arquivos(lista_arquivos):
     dfs = []
-    for caminho in lista_arquivos:
-        logging.info(f"📂 Lendo arquivo: {os.path.basename(caminho)}")
-        df = pd.read_excel(caminho)
+    logging.info("📊 Iniciando leitura dos arquivos...")
+    for caminho in tqdm(lista_arquivos, desc="🔍 Processando arquivos", colour="green"):
+        try:
+            df = pd.read_excel(caminho)
+            df.columns = df.columns.astype(str).str.strip()
+            df['data_convertida'] = pd.to_datetime(df[COLUNAS["data"]], errors='coerce')
 
-        df.columns = df.columns.astype(str).str.strip()
-        df['data_convertida'] = pd.to_datetime(df[COLUNAS["data"]], errors='coerce')
+            df['Entrega no Domingo'] = (
+                (df['data_convertida'].dt.dayofweek == 6) &
+                (df[COLUNAS["assinatura"]].astype(str).str.strip() == "Recebimento com assinatura normal")
+            )
 
-        df['Entrega no Domingo'] = (
-            (df['data_convertida'].dt.dayofweek == 6) &
-            (df[COLUNAS["assinatura"]].astype(str).str.strip() == "Recebimento com assinatura normal")
-        )
-
-        df = adicionar_coordenador(df)
-        dfs.append(df)
+            df = adicionar_coordenador(df)
+            dfs.append(df)
+        except Exception as e:
+            logging.error(f"❌ Erro ao processar {os.path.basename(caminho)}: {e}")
 
     if not dfs:
         logging.error("❌ Nenhum DataFrame carregado.")
@@ -222,7 +224,6 @@ if __name__ == "__main__":
 
             analisar_entregas_consolidado(df_consolidado, caminho_saida)
 
-            # 📊 Resumo final no console
             logging.info(f"""
 📊 Resumo Final:
 • Pedidos: {df_consolidado[COLUNAS["pedido"]].nunique()}

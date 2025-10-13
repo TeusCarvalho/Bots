@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Script de Processamento - Sem Movimentação
-- Aplica regras de status e trânsito
-- Filtra apenas registros de Regional "GP" e Bases válidas
-- Gera relatórios em Excel (todos os pacotes válidos)
-- Monta card no Feishu apenas com pacotes 5+ dias (mostrando só 5 piores)
-"""
 
 import pandas as pd
 import os
