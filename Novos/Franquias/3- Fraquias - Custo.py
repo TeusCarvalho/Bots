@@ -1,4 +1,5 @@
-# Custo e Arbitragem
+# -*- coding: utf-8 -*-
+# Custo e Arbitragem - versão automática
 
 import pandas as pd
 import os
@@ -16,20 +17,12 @@ COORDENADOR_WEBHOOKS = {
     "Franquias": "https://open.feishu.cn/open-apis/bot/v2/hook/328a86ed-6c6f-4b61-acc4-aa33bd1b8254"
 }
 
-# --- NOVO LINK PARA O CARD ---
+# --- LINK PARA CARD ---
 LINK_RELATORIO = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/EtbZs3AZ0_BHtx7KGJOAVGcBvxaAJM-8vINYH7PJG43W-w?e=Su1J2P"
 
-# --- PASTAS E ARQUIVOS ---
-base_directory = r'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\Custo'
-file_name = 'Minha responsabilidade.xls'
-file_path = os.path.join(base_directory, file_name)
-
-output_file_name = 'Minha_responsabilidade_atualizada.xlsx'
-
-# 🔹 Agora salva diretamente na pasta de Franquias\Custo
-output_file_path = os.path.join(r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Custo", output_file_name)
-
-coordenador_file_path = r'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx'
+# --- PASTAS ---
+BASE_DIR = r'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\Custo'
+OUTPUT_FILE = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Custo\Minha_responsabilidade_atualizada.xlsx"
 
 # --- BASES PERMITIDAS ---
 BASES_PERMITIDAS = [
@@ -44,7 +37,7 @@ BASES_PERMITIDAS = [
 ]
 
 # --- COLUNAS ESPERADAS ---
-column_names = [
+COLUMN_NAMES = [
     'Número de declaração', 'Remessa', 'Tipo de produto', 'Tipo de anomalia primária',
     'Tipo de anomalia secundária', 'Dias de atraso', 'Status de arbitragem', 'Base remetente',
     'Regional Remetente', 'Declarante', 'Declarante No.', 'Data de declaração',
@@ -65,8 +58,8 @@ column_names = [
     'Etapa de decisão de responsabilidade'
 ]
 
-# --- CRIAR CARD INTERATIVO ---
 def create_feishu_card_payload(title: str, body: str) -> dict:
+    """Monta o card interativo do Feishu."""
     return {
         "msg_type": "interactive",
         "card": {
@@ -92,44 +85,46 @@ def create_feishu_card_payload(title: str, body: str) -> dict:
         }
     }
 
+# --- ENCONTRAR O ARQUIVO MAIS RECENTE ---
+def get_latest_file(folder: str):
+    files = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(('.xls', '.xlsx'))]
+    if not files:
+        return None
+    return max(files, key=os.path.getmtime)
+
 # --- PROCESSAMENTO ---
-if not os.path.exists(file_path):
-    print(f"Erro: O arquivo '{file_path}' não foi encontrado.")
+latest_file = get_latest_file(BASE_DIR)
+
+if not latest_file:
+    print("⚠️ Nenhum arquivo encontrado na pasta de entrada.")
 else:
     try:
-        df = pd.read_excel(file_path, header=None, names=column_names)
-        print("Dados carregados com sucesso!")
+        print(f"📂 Lendo arquivo: {os.path.basename(latest_file)}")
+        df = pd.read_excel(latest_file, header=None, names=COLUMN_NAMES)
 
-        # 🔄 Remover pedidos com traço na coluna Remessa
+        # 🔹 Remover remessas com traço
         if 'Remessa' in df.columns:
             df = df[~df['Remessa'].astype(str).str.contains('-')]
 
-        # Normalizar bases específicas
+        # 🔹 Normalizar base
         if 'Base responsável' in df.columns:
             df['Base responsável'] = df['Base responsável'].astype(str).str.strip()
-            df['Base responsável'] = df['Base responsável'].replace({
-                "VHL -RO": "F VHL-RO"
-            })
+            df['Base responsável'] = df['Base responsável'].replace({"VHL -RO": "F VHL-RO"})
 
-        # Filtrar só regionais GP
+        # 🔹 Filtrar regionais GP e bases permitidas
         df = df[df['Regional responsável'] == 'GP']
-
-        # Filtrar só bases permitidas
         df = df[df['Base responsável'].isin(BASES_PERMITIDAS)]
 
-        # --- SEPARAR POR BASE ---
+        # --- AGRUPAR E CALCULAR ---
         resumo_bases = df.groupby('Base responsável').agg(
             Qtd_Pedidos=('Remessa', 'count'),
             Valor_Total=('Valor a pagar (yuan)', 'sum')
         ).reset_index().sort_values(by="Valor_Total", ascending=False)
 
-        # Valor total geral
         valor_total_geral = resumo_bases['Valor_Total'].sum()
-
-        # Pegar top 5 piores bases
         top5 = resumo_bases.head(5)
 
-        # Montar mensagem com TOP 5 + valor total
+        # --- MONTAR MENSAGEM ---
         data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
         mensagem = f"📊 **Relatório de Resarcimento - TOP 5 Piores Bases**\n📅 Data de geração: {data_geracao}\n\n"
 
@@ -138,22 +133,21 @@ else:
 
         mensagem += f"\n💰 **Valor Total Geral:** R$ {format_currency(valor_total_geral)}"
 
-        # Criar payload
+        # --- ENVIAR CARD ---
         payload = create_feishu_card_payload("📊 Relatório de Resarcimento - Franquias", mensagem)
-
-        # Enviar para o Webhook de Franquias
         webhook_url = COORDENADOR_WEBHOOKS.get("Franquias")
+
         if webhook_url:
             resp = requests.post(webhook_url, headers={"Content-Type": "application/json"}, data=json.dumps(payload))
             if resp.status_code == 200:
-                print(f"✅ Card enviado para Franquias")
+                print(f"✅ Card enviado com sucesso para Franquias")
             else:
-                print(f"⚠️ Erro {resp.status_code} ao enviar para Franquias: {resp.text}")
+                print(f"⚠️ Erro {resp.status_code}: {resp.text}")
 
-        # --- SALVAR PLANILHA ---
-        os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
-        df.to_excel(output_file_path, index=False)
-        print(f"📎 Arquivo salvo em {output_file_path}")
+        # --- SALVAR ---
+        os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+        df.to_excel(OUTPUT_FILE, index=False)
+        print(f"📎 Arquivo salvo em: {OUTPUT_FILE}")
 
     except Exception as e:
-        print(f"Ocorreu um erro ao processar o arquivo: {e}")
+        print(f"❌ Erro ao processar: {e}")

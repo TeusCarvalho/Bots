@@ -1,27 +1,56 @@
 # -*- coding: utf-8 -*-
+"""
+Script de cálculo de fretes - Melhor Envio (Sandbox + Produção)
+---------------------------------------------------------------
+✅ Alterna automaticamente entre ambientes de teste e produção.
+✅ Totalmente compatível com a documentação oficial:
+   https://docs.melhorenvio.com.br/reference/calculo-de-fretes-por-produtos
+✅ Testa o primeiro envio antes de processar o restante.
+✅ Interrompe se houver falha de conexão ou autenticação.
+
+Autor: bb-assistente 😎
+"""
 
 import pandas as pd
 import requests
 import json
 import time
-import socket
-import dns.resolver  # dnspython
+import sys
+from datetime import datetime
 from requests.exceptions import RequestException
 
-# ===================== CONFIGURAÇÕES =====================
+# ============================================================
+# ⚙️ CONFIGURAÇÕES GERAIS
+# ============================================================
+
+# Caminhos dos arquivos
 ARQUIVO_ENTRADA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Melhor Envio\modelo_upload_envios.xls"
 ARQUIVO_SAIDA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Melhor Envio\Fretes_Calculados.xlsx"
+ARQUIVO_LOG = "melhor_envio.log"
 
-TOKEN_API = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiZjFiMDQyNWM3N2YwM2ZjM2JmMzQ4NjY5OTcwN2Y1ODgzZDFiNDI4Nzk5ZmNjMGRlNTYyMzdmYTQwMDdmMWQ0YjhlM2VjYjlkOWQ0NGJkZjkiLCJpYXQiOjE3NjAzODE3MDEuODM2NTEsIm5iZiI6MTc2MDM4MTcwMS44MzY1MTIsImV4cCI6MTc5MTkxNzcwMS44MjQzODcsInN1YiI6ImEwMWIwYzliLTg3ZjMtNDZlOC1iODNjLTUyOGQ4NzVlOWRmNCIsInNjb3BlcyI6WyJjYXJ0LXJlYWQiLCJjYXJ0LXdyaXRlIiwiY29tcGFuaWVzLXJlYWQiLCJjb21wYW5pZXMtd3JpdGUiLCJjb3Vwb25zLXJlYWQiLCJjb3Vwb25zLXdyaXRlIiwibm90aWZpY2F0aW9ucy1yZWFkIiwib3JkZXJzLXJlYWQiLCJwcm9kdWN0cy1yZWFkIiwicHJvZHVjdHMtZGVzdHJveSIsInByb2R1Y3RzLXdyaXRlIiwicHVyY2hhc2VzLXJlYWQiLCJzaGlwcGluZy1jYWxjdWxhdGUiLCJzaGlwcGluZy1jYW5jZWwiLCJzaGlwcGluZy1jaGVja291dCIsInNoaXBwaW5nLWNvbXBhbmllcyIsInNoaXBwaW5nLWdlbmVyYXRlIiwic2hpcHBpbmctcHJldmlldyIsInNoaXBwaW5nLXByaW50Iiwic2hpcHBpbmctc2hhcmUiLCJzaGlwcGluZy10cmFja2luZyIsImVjb21tZXJjZS1zaGlwcGluZyIsInRyYW5zYWN0aW9ucy1yZWFkIiwidXNlcnMtcmVhZCIsInVzZXJzLXdyaXRlIiwid2ViaG9va3MtcmVhZCIsIndlYmhvb2tzLXdyaXRlIiwid2ViaG9va3MtZGVsZXRlIiwidGRlYWxlci13ZWJob29rIl19.siTWnWDspdZb8g8e745oH8xpg7krDEzDiDHoCJOkE88NbtIyLSW3fqBq_eBUvq0l9zS-YCgn12EtWWxyejqHtZWJ2_PW0bV6bA3e9WDYy_U0f-QY0D1dk-CuIVeFWLHJqbccmRP13y-Yr01D0YYMSWh0cWkcFpJrt5pmR01bxDnu2SAttu9ZMBkj43ZTSLX1peOcF7VCx0zk9mFnK6KRzsboOGnQ0HrXp46o0fAO6pbALk7en22x4XmLfGpmhvHKlRVbXcWRTPxJ5ueyJl6XPguJQ9fdbfckwCRoCJBaXM_7YPDpWk3lnBhEhTA5G51Dy2B33i8Zhrlm5TLInTHndl1mxMdKhJPTkt090j7jsbi-JcDiPEZQic6Q4bvsGnPDXnNHaRO1jcux-OdcEaVFb9KLNaI-QAcjbS4U_48zo6sKNpteaUDJkMgJqiRgFabAxakkO4Vnijd9Rs3L3DY7bwAPK46CPxRgvGnUhTbDXGA-HQkzwQ4SsxM9Fjs8qvdQvsENJNLSKiwNqk4OiecaIdgXvXpuMplvG532_iFIP1_aEiwqwaUCWdStbHs1YgVE3iNlaufyJXFpba9HjAS7-R_N0xr49s3SkRpmWmOgSfH92GUC8JdXzKiLB1jEBEwlNBYZtyUInIgupOZisViN_cskqwQ6qPtg_fmH6ZZL_To"
+# Ambiente de execução
+# 👉 Mude para "sandbox" ou "producao"
+AMBIENTE = "sandbox"
 
-URL_HOST = "api.melhorenvio.com.br"
-URL_PATH = "/api/v2/me/shipment/calculate"
-URL_FULL = f"https://{URL_HOST}{URL_PATH}"
+# Tokens de acesso (copie o seu do painel do Melhor Envio)
+TOKEN_SANDBOX = "SEU_TOKEN_SANDBOX_AQUI"
+TOKEN_PRODUCAO = "SEU_TOKEN_PRODUCAO_AQUI"
 
-# fallback IPs (se precisar)
-FALLBACK_IPS = ["104.21.17.35", "172.67.214.35"]
-
+# CEP de origem padrão
 CEP_ORIGEM = "70000000"
+
+# ============================================================
+# 🌐 CONFIGURAÇÃO DO AMBIENTE
+# ============================================================
+
+if AMBIENTE.lower() == "sandbox":
+    URL_BASE = "https://sandbox.melhorenvio.com.br"
+    TOKEN_API = TOKEN_SANDBOX
+else:
+    URL_BASE = "https://api.melhorenvio.com.br"
+    TOKEN_API = TOKEN_PRODUCAO
+
+URL_CALCULO = f"{URL_BASE}/api/v2/me/shipment/calculate"
 
 HEADERS = {
     "Authorization": f"Bearer {TOKEN_API}",
@@ -29,198 +58,141 @@ HEADERS = {
     "Accept": "application/json"
 }
 
-# PROXIES: se usar proxy corporativo, preencha aqui ("http://user:pass@host:port")
-PROXIES = {"http": None, "https": None}
+TIMEOUT = 15
 
-# timeout (s)
-TIMEOUT = 12
+# ============================================================
+# 🧠 FUNÇÕES AUXILIARES
+# ============================================================
 
-# ===================== FUNÇÕES AUXILIARES =====================
+def log(msg):
+    """Imprime e salva no arquivo de log"""
+    print(msg)
+    with open(ARQUIVO_LOG, "a", encoding="utf-8") as f:
+        f.write(f"{datetime.now():%H:%M:%S} - {msg}\n")
 
-def resolve_system(hostname):
-    """Tenta resolver usando o resolver do sistema (socket). Retorna lista de IPs ou []"""
+def try_post(payload, verify=True):
+    """Envia requisição POST para o Melhor Envio"""
     try:
-        infos = socket.getaddrinfo(hostname, None)
-        ips = sorted({i[4][0] for i in infos})
-        return ips
-    except Exception:
-        return []
+        resp = requests.post(URL_CALCULO, headers=HEADERS,
+                             data=json.dumps(payload), timeout=TIMEOUT, verify=verify)
+        try:
+            return resp.status_code, resp.json(), resp.text
+        except Exception:
+            return resp.status_code, None, resp.text
+    except RequestException as e:
+        return None, None, str(e)
 
-def resolve_google(hostname):
-    """Tenta resolver usando Google DNS via dnspython. Retorna lista de IPs ou []"""
-    try:
-        resolver = dns.resolver.Resolver()
-        resolver.nameservers = ['8.8.8.8', '8.8.4.4']
-        answers = resolver.resolve(hostname, 'A', lifetime=5)
-        ips = [r.to_text() for r in answers]
-        return ips
-    except Exception:
-        return []
+def testar_primeira_requisicao(payload_teste):
+    """Testa o primeiro envio antes de processar tudo"""
+    log(f"🧠 Testando ambiente {AMBIENTE.upper()} com primeira requisição...")
+    status, j, txt = try_post(payload_teste, verify=True)
 
-def try_post(url, headers, payload, proxies=None, verify=True, extra_host_header=None, timeout=TIMEOUT):
-    """Faz POST com requests. Se extra_host_header for fornecido, adiciona 'Host' no headers."""
-    h = headers.copy()
-    if extra_host_header:
-        h['Host'] = extra_host_header
-    resp = requests.post(url, headers=h, data=json.dumps(payload), proxies=proxies, timeout=timeout, verify=verify)
-    try:
-        return resp.status_code, resp.json(), resp.text
-    except Exception:
-        return resp.status_code, None, resp.text
+    if status == 200:
+        log("✅ Conexão e autenticação bem-sucedidas.")
+        return True
+    elif status == 401:
+        log("❌ Erro 401: Token inválido ou expirado.")
+    elif status == 403:
+        log("❌ Erro 403: Acesso negado. Verifique permissões da conta.")
+    elif status == 404:
+        log("❌ Erro 404: Endpoint não encontrado (verifique URL).")
+    elif status:
+        log(f"⚠️ Erro {status}: {txt[:300]}")
+    else:
+        log(f"❌ Falha de conexão: {txt[:200]}")
+    log("🚫 Encerrando script após falha inicial.")
+    return False
 
-# ===================== LÓGICA PRINCIPAL =====================
+# ============================================================
+# 🚀 LÓGICA PRINCIPAL
+# ============================================================
 
 def calcular_fretes():
-    print("🚀 Lendo planilha...")
+    log(f"🚀 Iniciando cálculo de fretes no ambiente: {AMBIENTE.upper()}")
     try:
-        df = pd.read_excel(ARQUIVO_ENTRADA, engine='xlrd')
-    except FileNotFoundError:
-        print(f"❌ Arquivo não encontrado: {ARQUIVO_ENTRADA}")
-        return
+        df = pd.read_excel(ARQUIVO_ENTRADA, engine="xlrd")
     except Exception as e:
-        print("❌ Erro ao abrir planilha:", e)
-        return
+        log(f"❌ Erro ao abrir planilha: {e}")
+        sys.exit(1)
+
+    if df.empty:
+        log("⚠️ Planilha vazia. Encerrando.")
+        sys.exit(1)
+
+    # Cria payload do primeiro item
+    primeira = df.iloc[0]
+    payload_teste = {
+        "from": {"postal_code": CEP_ORIGEM},
+        "to": {"postal_code": str(primeira.get("CEP DESTINO", "")).zfill(8)},
+        "products": [
+            {
+                "id": "teste_1",
+                "width": float(primeira.get("LARGURA (CM)", 1)),
+                "height": float(primeira.get("ALTURA (CM)", 1)),
+                "length": float(primeira.get("COMPRIMENTO (CM)", 1)),
+                "weight": float(primeira.get("PESO (KG)", 0.1)),
+                "insurance_value": float(primeira.get("VALOR SEGURADO", 0.0)),
+                "quantity": 1
+            }
+        ],
+        "options": {"receipt": False, "own_hand": False}
+    }
+
+    # Testa a primeira requisição
+    if not testar_primeira_requisicao(payload_teste):
+        sys.exit(1)
+
+    log(f"✅ Ambiente {AMBIENTE.upper()} validado com sucesso. Iniciando envios...\n")
 
     resultados = []
     total = len(df)
-    # tenta resolver DNS do sistema
-    sys_ips = resolve_system(URL_HOST)
-    print(f"🔎 Resolução (sistema): {sys_ips or 'nenhum'}")
-
-    if not sys_ips:
-        google_ips = resolve_google(URL_HOST)
-        print(f"🔎 Resolução (Google DNS): {google_ips or 'nenhum'}")
-    else:
-        google_ips = []
-
     for idx, row in df.iterrows():
         i = idx + 1
-        print(f"\n📦 ({i}/{total}) Preparando envio...")
-        # prepara payload usando colunas informadas
-        ar = str(row.get("AVISO DE RECEBIMENTO (AR)", "")).strip().lower() in ["sim", "s", "1", "true"]
-        mp = str(row.get("MÃO PRÓPRIA (MP)", "")).strip().lower() in ["sim", "s", "1", "true"]
+        log(f"📦 ({i}/{total}) Calculando envio...")
 
         payload = {
             "from": {"postal_code": CEP_ORIGEM},
-            "to": {"postal_code": str(row.get("CEP DESTINO", "")).zfill(8)},
+            "to": {"postal_code": str(row.get('CEP DESTINO', '')).zfill(8)},
             "products": [
                 {
                     "id": f"item_{i}",
-                    "width": float(row.get("LARGURA (CM)", 1) or 0.1),
-                    "height": float(row.get("ALTURA (CM)", 1) or 0.1),
-                    "length": float(row.get("COMPRIMENTO (CM)", 1) or 0.1),
-                    "weight": float(row.get("PESO (KG)", 0.1) or 0.1),
-                    "insurance_value": float(row.get("VALOR SEGURADO", 0.0) or 0.0),
+                    "width": float(row.get("LARGURA (CM)", 1)),
+                    "height": float(row.get("ALTURA (CM)", 1)),
+                    "length": float(row.get("COMPRIMENTO (CM)", 1)),
+                    "weight": float(row.get("PESO (KG)", 0.1)),
+                    "insurance_value": float(row.get("VALOR SEGURADO", 0.0)),
                     "quantity": 1
                 }
             ],
-            "options": {"receipt": ar, "own_hand": mp}
+            "options": {"receipt": False, "own_hand": False}
         }
 
-        # 1) tenta a URL normal (nome)
-        try:
-            status, j, txt = try_post(URL_FULL, HEADERS, payload, proxies=PROXIES, verify=True)
-            if status == 200:
-                print(f"✅ Obtido via DNS normal ({URL_HOST}) - {len(j or [])} opções")
-                for c in (j or []):
-                    resultados.append({
-                        "Ambiente": "Produção(DNS)",
-                        "CEP_ORIGEM": CEP_ORIGEM,
-                        "CEP_DESTINO": payload["to"]["postal_code"],
-                        "Transportadora": c.get("company", {}).get("name"),
-                        "Serviço": c.get("name"),
-                        "Preço (R$)": c.get("price"),
-                        "Prazo (dias úteis)": c.get("delivery_time"),
-                        "Peso (kg)": payload["products"][0]["weight"],
-                        "Valor Segurado": payload["products"][0]["insurance_value"],
-                        "AR": "Sim" if ar else "Não",
-                        "MP": "Sim" if mp else "Não"
-                    })
-                time.sleep(0.4)
-                continue
-            else:
-                print(f"⚠️ Resposta via DNS: {status} — {txt[:200]}")
-        except RequestException as e:
-            print(f"❌ Falha na requisição via DNS: {e}")
+        status, j, txt = try_post(payload, verify=True)
 
-        # 2) tenta Google DNS ips (se houver)
-        attempted_ips = []
-        if google_ips:
-            for ip in google_ips:
-                attempted_ips.append(ip)
-                url_ip = f"https://{ip}{URL_PATH}"
-                try:
-                    # usa Host header para SNI/Host virtual
-                    status, j, txt = try_post(url_ip, HEADERS, payload, proxies=PROXIES, verify=False, extra_host_header=URL_HOST)
-                    if status == 200:
-                        print(f"✅ Obtido via Google DNS IP {ip} (verify=False) - {len(j or [])} opções")
-                        for c in (j or []):
-                            resultados.append({
-                                "Ambiente": f"Produção(IP {ip})",
-                                "CEP_ORIGEM": CEP_ORIGEM,
-                                "CEP_DESTINO": payload["to"]["postal_code"],
-                                "Transportadora": c.get("company", {}).get("name"),
-                                "Serviço": c.get("name"),
-                                "Preço (R$)": c.get("price"),
-                                "Prazo (dias úteis)": c.get("delivery_time"),
-                                "Peso (kg)": payload["products"][0]["weight"],
-                                "Valor Segurado": payload["products"][0]["insurance_value"],
-                                "AR": "Sim" if ar else "Não",
-                                "MP": "Sim" if mp else "Não"
-                            })
-                        break
-                    else:
-                        print(f"⚠️ Resposta via IP {ip}: {status} — {txt[:200]}")
-                except RequestException as e:
-                    print(f"❌ Falha via IP {ip}: {e}")
-
-        # 3) tenta os FALLBACK_IPS predefinidos
-        if not google_ips:
-            ips_to_try = FALLBACK_IPS
+        if status == 200 and isinstance(j, list):
+            log(f"✅ Frete calculado com sucesso ({len(j)} opções).")
+            for c in j:
+                resultados.append({
+                    "Ambiente": AMBIENTE.capitalize(),
+                    "CEP_DESTINO": payload["to"]["postal_code"],
+                    "Transportadora": c.get("company", {}).get("name"),
+                    "Serviço": c.get("name"),
+                    "Preço (R$)": c.get("custom_price") or c.get("price"),
+                    "Prazo (dias úteis)": c.get("custom_delivery_time") or c.get("delivery_time")
+                })
         else:
-            ips_to_try = [ip for ip in google_ips if ip not in attempted_ips] + FALLBACK_IPS
+            log(f"⚠️ Falha no cálculo ({status}): {txt[:250]}")
 
-        success = False
-        for ip in ips_to_try:
-            try:
-                url_ip = f"https://{ip}{URL_PATH}"
-                status, j, txt = try_post(url_ip, HEADERS, payload, proxies=PROXIES, verify=False, extra_host_header=URL_HOST)
-                if status == 200:
-                    print(f"✅ Obtido via IP fallback {ip} (verify=False) - {len(j or [])} opções")
-                    for c in (j or []):
-                        resultados.append({
-                            "Ambiente": f"Produção(IP {ip})",
-                            "CEP_ORIGEM": CEP_ORIGEM,
-                            "CEP_DESTINO": payload["to"]["postal_code"],
-                            "Transportadora": c.get("company", {}).get("name"),
-                            "Serviço": c.get("name"),
-                            "Preço (R$)": c.get("price"),
-                            "Prazo (dias úteis)": c.get("delivery_time"),
-                            "Peso (kg)": payload["products"][0]["weight"],
-                            "Valor Segurado": payload["products"][0]["insurance_value"],
-                            "AR": "Sim" if ar else "Não",
-                            "MP": "Sim" if mp else "Não"
-                        })
-                    success = True
-                    break
-                else:
-                    print(f"⚠️ Resposta via IP {ip}: {status} — {txt[:200]}")
-            except RequestException as e:
-                print(f"❌ Falha via IP {ip}: {e}")
+        time.sleep(0.4)
 
-        if not success:
-            print("🚫 Não foi possível consultar frete (DNS e IPs falharam).")
-
-        time.sleep(0.6)
-
-    # Exportar resultados
     if resultados:
-        df_saida = pd.DataFrame(resultados)
-        df_saida.to_excel(ARQUIVO_SAIDA, index=False)
-        print(f"\n✅ Concluído! Planilha salva em:\n{ARQUIVO_SAIDA}")
+        pd.DataFrame(resultados).to_excel(ARQUIVO_SAIDA, index=False)
+        log(f"\n✅ Concluído! Planilha salva em:\n{ARQUIVO_SAIDA}")
     else:
-        print("\n⚠️ Nenhum frete foi calculado. Verifique rede/proxy/token.")
+        log("🚫 Nenhum frete foi calculado com sucesso.")
 
-# ===================== EXECUÇÃO =====================
+# ============================================================
+# ▶️ EXECUÇÃO
+# ============================================================
 if __name__ == "__main__":
     calcular_fretes()
