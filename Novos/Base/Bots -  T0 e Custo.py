@@ -5,7 +5,7 @@ import pandas as pd
 import requests
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # --- Arquivos processados ---
 RELATORIO_CUSTOS = Path(r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Relatorios\Custos\Relatorio_Custos.xlsx")
@@ -16,7 +16,6 @@ LINK_CUSTOS = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carv
 LINK_T0 = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/EgPls3u4i9FIlul4oyiV4BoBi8RUXLNub8W9oyKwL1sI2w?e=OO3v34"
 
 # --- Webhooks separados ---
-# Ctrl + / - para enviar somente o T0
 COORDENADOR_WEBHOOKS_CUSTOS = {
     "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/1f3f48d7-b60c-45c1-87ee-6cc8ab9f6467",
     "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/b448a316-f146-49d0-9f0a-90b1f086b8a7",
@@ -25,9 +24,9 @@ COORDENADOR_WEBHOOKS_CUSTOS = {
     "Odária Fereira": "https://open.feishu.cn/open-apis/bot/v2/hook/4cfd01be-defa-4adb-936e-6bfbee5326a6",
     "Rodrigo Castro": "https://open.feishu.cn/open-apis/bot/v2/hook/e3e31e14-79ab-4a95-8a2d-be99e1fc9b10",
     "Orlean Nascimento": "https://open.feishu.cn/open-apis/bot/v2/hook/9ce83b77-04ad-4558-ab83-39929b30f092",
-    "Jose Marlon":"https://open.feishu.cn/open-apis/bot/v2/hook/d624dcc1-73c7-4d36-8f63-5c43d0e5259b",
-    "Emerson Silva":"https://open.feishu.cn/open-apis/bot/v2/hook/eb777d25-f454-4db7-9364-edf95ee37063",
-    "Marcos Caique":"https://open.feishu.cn/open-apis/bot/v2/hook/99557a7f-ca4e-4ede-b9e5-ccd7ad85b96a"
+    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/d624dcc1-73c7-4d36-8f63-5c43d0e5259b",
+    "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/eb777d25-f454-4db7-9364-edf95ee37063",
+    "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/99557a7f-ca4e-4ede-b9e5-ccd7ad85b96a"
 }
 
 COORDENADOR_WEBHOOKS_T0 = {
@@ -39,11 +38,11 @@ COORDENADOR_WEBHOOKS_T0 = {
     "Rodrigo Castro": "https://open.feishu.cn/open-apis/bot/v2/hook/606ed22b-dc49-451d-9bfe-0a8829dbe76e",
     "Orlean Nascimento": "https://open.feishu.cn/open-apis/bot/v2/hook/840f79b0-1eff-42fe-aae0-433c9edbad80",
     "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/95c8e4d2-27aa-4811-b6bf-ebf99cdfd42d",
-    "Emerson Silva":"https://open.feishu.cn/open-apis/bot/v2/hook/63751a67-efe8-40e4-b841-b290a4819836",
-    "Marcos Caique":"https://open.feishu.cn/open-apis/bot/v2/hook/3ddc5962-2d32-4b2d-92d9-a4bc95ac3393"
+    "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/63751a67-efe8-40e4-b841-b290a4819836",
+    "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/3ddc5962-2d32-4b2d-92d9-a4bc95ac3393"
 }
 
-# --- Função utilitária ---
+# --- Funções utilitárias ---
 def format_currency(value):
     try:
         formatted_value = f"{value:,.2f}"
@@ -102,6 +101,7 @@ print("==============================")
 if RELATORIO_CUSTOS.exists():
     try:
         df_custos = pd.read_excel(RELATORIO_CUSTOS)
+        data_relatorio = (datetime.now() - timedelta(days=1)).strftime("%d/%m/%Y")  # dia anterior (fechamento)
 
         for coord in df_custos['Coordenadores'].dropna().unique():
             df_coord = df_custos[df_custos['Coordenadores'] == coord]
@@ -110,6 +110,7 @@ if RELATORIO_CUSTOS.exists():
             valor_total = df_coord['Valor a pagar (yuan)'].sum()
 
             body = f"📊 **Relatório de Custo e Arbitragem**\n"
+            body += f"📅 **Data do relatório:** {data_relatorio}\n"
             body += f"👤 **Coordenador:** {coord}\n"
             body += f"📦 **Qtd Pedidos:** {qtd_pedidos}\n"
             body += f"💰 **Valor Total (R$):** {format_currency(valor_total)}\n\n"
@@ -143,10 +144,20 @@ print("==============================")
 
 if RELATORIO_T0.exists():
     try:
-        # garante que 'Coordenadores' seja índice
         df_t0_resumo = pd.read_excel(RELATORIO_T0, sheet_name="ResumoNumerico", index_col=0)
         df_t0_dados = pd.read_excel(RELATORIO_T0, sheet_name="Dados_Completos")
 
+        # --- Extrai a data real da coluna ---
+        if "Horário bipagem de recebimento" in df_t0_dados.columns:
+            df_t0_dados["Horário bipagem de recebimento"] = pd.to_datetime(
+                df_t0_dados["Horário bipagem de recebimento"], errors="coerce"
+            )
+            ultima_data = df_t0_dados["Horário bipagem de recebimento"].dropna().max()
+            data_relatorio_t0 = ultima_data.strftime("%d/%m/%Y") if pd.notna(ultima_data) else (datetime.now() - timedelta(days=1)).strftime("%d/%m/%Y")
+        else:
+            data_relatorio_t0 = (datetime.now() - timedelta(days=1)).strftime("%d/%m/%Y")
+
+        # --- Envio por coordenador ---
         for coord in df_t0_resumo.index:
             if coord not in COORDENADOR_WEBHOOKS_T0:
                 print(f"⚠ Coordenador {coord} não tem webhook configurado, pulando.")
@@ -155,6 +166,7 @@ if RELATORIO_T0.exists():
             row = df_t0_resumo.loc[coord]
 
             body = f"📊 **Relatório T-0**\n"
+            body += f"📅 **Data do relatório:** {data_relatorio_t0}\n"
             body += f"👤 **Coordenador:** {coord}\n"
             body += f"📦 **Total Pedidos:** {int(row['TOTAL GERAL'])}\n"
             body += f"✅ **SLA Geral:** {row['SLA (%)']:.2f}%\n\n"
@@ -167,6 +179,7 @@ if RELATORIO_T0.exists():
                     entregues=('Status de Entrega', lambda x: (x == "ENTREGUE").sum())
                 )
             )
+
             if not df_base.empty:
                 df_base["SLA (%)"] = (df_base["entregues"] / df_base["pedidos"]) * 100
                 top_bases = df_base.sort_values("SLA (%)", ascending=True).head(4)
