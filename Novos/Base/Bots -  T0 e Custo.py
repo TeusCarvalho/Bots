@@ -147,17 +147,30 @@ if RELATORIO_T0.exists():
         df_t0_resumo = pd.read_excel(RELATORIO_T0, sheet_name="ResumoNumerico", index_col=0)
         df_t0_dados = pd.read_excel(RELATORIO_T0, sheet_name="Dados_Completos")
 
-        # --- Extrai a data real da coluna ---
+        # ======================================================
+        # 🕒 PEGAR PRIMEIRA DATA DA COLUNA (GERALMENTE DIA ANTERIOR)
+        # ======================================================
         if "Horário bipagem de recebimento" in df_t0_dados.columns:
             df_t0_dados["Horário bipagem de recebimento"] = pd.to_datetime(
-                df_t0_dados["Horário bipagem de recebimento"], errors="coerce"
+                df_t0_dados["Horário bipagem de recebimento"],
+                format="%Y-%m-%d %H:%M:%S",
+                errors="coerce"
             )
-            ultima_data = df_t0_dados["Horário bipagem de recebimento"].dropna().max()
-            data_relatorio_t0 = ultima_data.strftime("%d/%m/%Y") if pd.notna(ultima_data) else (datetime.now() - timedelta(days=1)).strftime("%d/%m/%Y")
+
+            primeira_data = df_t0_dados["Horário bipagem de recebimento"].dropna().min()
+
+            if pd.notna(primeira_data):
+                data_relatorio_t0 = primeira_data.strftime("%d/%m/%Y")
+            else:
+                data_relatorio_t0 = (datetime.now() - timedelta(days=1)).strftime("%d/%m/%Y")
         else:
             data_relatorio_t0 = (datetime.now() - timedelta(days=1)).strftime("%d/%m/%Y")
 
-        # --- Envio por coordenador ---
+        print(f"📅 Data do relatório T-0 detectada: {data_relatorio_t0}")
+
+        # ======================================================
+        # 📤 ENVIO DOS CARDS
+        # ======================================================
         for coord in df_t0_resumo.index:
             if coord not in COORDENADOR_WEBHOOKS_T0:
                 print(f"⚠ Coordenador {coord} não tem webhook configurado, pulando.")
@@ -165,11 +178,13 @@ if RELATORIO_T0.exists():
 
             row = df_t0_resumo.loc[coord]
 
-            body = f"📊 **Relatório T-0**\n"
-            body += f"📅 **Data do relatório:** {data_relatorio_t0}\n"
-            body += f"👤 **Coordenador:** {coord}\n"
-            body += f"📦 **Total Pedidos:** {int(row['TOTAL GERAL'])}\n"
-            body += f"✅ **SLA Geral:** {row['SLA (%)']:.2f}%\n\n"
+            body = (
+                f"📊 **Relatório T-0**\n"
+                f"📅 **Data do relatório:** {data_relatorio_t0}\n"
+                f"👤 **Coordenador:** {coord}\n"
+                f"📦 **Total Pedidos:** {int(row['TOTAL GERAL'])}\n"
+                f"✅ **SLA Geral:** {row['SLA (%)']:.2f}%\n\n"
+            )
 
             df_coord = df_t0_dados[df_t0_dados['Coordenadores'] == coord]
             df_base = (
@@ -183,11 +198,9 @@ if RELATORIO_T0.exists():
             if not df_base.empty:
                 df_base["SLA (%)"] = (df_base["entregues"] / df_base["pedidos"]) * 100
                 top_bases = df_base.sort_values("SLA (%)", ascending=True).head(4)
-
-                if not top_bases.empty:
-                    body += "🔻 **Top 4 Piores Bases:**\n"
-                    for base, dados in top_bases.iterrows():
-                        body += f"- {base}: {dados['SLA (%)']:.2f}% ({dados['pedidos']} pedidos)\n"
+                body += "🔻 **Top 4 Piores Bases:**\n"
+                for base, dados in top_bases.iterrows():
+                    body += f"- {base}: {dados['SLA (%)']:.2f}% ({dados['pedidos']} pedidos)\n"
             else:
                 body += "✅ Nenhuma base problemática encontrada.\n"
 
