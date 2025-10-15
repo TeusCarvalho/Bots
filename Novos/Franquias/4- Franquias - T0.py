@@ -24,7 +24,7 @@ CAMINHO_RELATORIO_COMPARTILHADO = Path(
 LINK_RELATORIO = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/Ek3KdqMIdX5EodE-3JwCQnsBAMiJ574BsxAR--oYBNN0-g?e=v83LYG"
 
 # --- Webhook único ---
-WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b"
+WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/18eed487-c172-4b86-95cf-bfbe1cd21df1"
 
 # --- Bases que devem ser enviadas ---
 BASES_PERMITIDAS = [
