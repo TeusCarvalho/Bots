@@ -20,12 +20,14 @@ LINK_PASTA = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carva
 # Lista de bases válidas (edite aqui para acrescentar/remover)
 BASES_VALIDAS = [
     "F AGL-GO","F ALV-AM","F ALX-AM","F AMB-MS","F ANP-GO","F APG - GO","F ARQ - RO",
-    "F BAO-PA","F BSL-AC","F CDN-AM","F CGR - MS","F CGR 02-MS","F CHR-AM","F CMV-MT",
-    "F CNC-PA","F CNF-MT","F DOM -PA","F DOU-MS","F ELD-PA","F FMA-GO","F GAI-TO",
-    "F GRP-TO","F GYN - GO","F GYN 02-GO","F GYN 03-GO","F IGA-PA","F ITI-PA",
-    "F JCD-PA","F MCP 02-AP","F MCP-AP","F OCD-GO","F ORL-PA","F PCA-PA","F PDR-GO",
-    "F PGM-PA","F PON-GO","F PVH-RO","F PVL-MT","F RDC -PA","F RVD - GO","F SEN-GO",
-    "F SFX-PA","F TGT-DF","F TLA-PA","F TRD-GO","F TUR-PA","F VHL-RO","F VLP-GO","F XIG-PA"
+    "F BAO-PA","F BSB - DF","F BSB-DF","F BSL-AC","F CDN-AM","F CGR - MS","F CGR 02-MS",
+    "F CHR-AM","F CMV-MT","F CNC-PA","F CNF-MT","F DOM -PA","F DOU-MS","F ELD-PA",
+    "F FMA-GO","F GAI-TO","F GRP-TO","F GYN - GO","F GYN 02-GO","F GYN 03-GO",
+    "F IGA-PA","F ITI -PA","F ITI-PA","F JCD-PA","F MCP 02-AP","F MCP-AP","F OCD - GO",
+    "F OCD-GO","F ORL-PA","F PCA-PA","F PDR-GO","F PGM-PA","F PLN-DF","F PON-GO",
+    "F PVH-RO","F PVH 02-RO","F PVL-MT","F RDC -PA","F RVD - GO","F SEN-GO",
+    "F SFX-PA","F TGT-DF","F TGT -DF","F TLA-PA","F TRD-GO","F TUR-PA",
+    "F VHL-RO","F VLP-GO","F XIG-PA","F CEI-DF","F CEI -DF"
 ]
 
 
