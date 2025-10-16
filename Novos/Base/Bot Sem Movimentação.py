@@ -1,12 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Script de relatório automático - Sem Movimentação (5+ dias)
-
-Objetivo:
-- Processar relatórios de pedidos sem movimentação há mais de 5 dias
-- Comparar com o último relatório anterior armazenado na pasta "Arquivo Morto"
-- Enviar cards formatados no Feishu, um card por coordenador
-"""
 
 import requests
 import json
