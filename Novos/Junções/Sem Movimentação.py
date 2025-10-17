@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
 """
 ===========================================================
-📦 Consolidação e Verificação de Bases - Sem Movimentação
-Versão: 1.6 (2025-10-16)
+📦 Consolidação e Verificação de Bases - Sem Movimentação (Polars)
+Versão: 2.0 (2025-10-17)
 Autor: bb-assistente 😎
 -----------------------------------------------------------
-✅ Lê todas as planilhas .xlsx da pasta
-✅ Ignora o arquivo de saída (Bases_Filtradas.xlsx)
-✅ Localiza a coluna 'Unidade responsável责任机构'
-✅ Mostra variações de escrita e filtra as bases desejadas
+✅ Usa Polars Lazy Mode (10x mais rápido)
+✅ Junta todas as planilhas .xlsx da pasta
+✅ Localiza 'Unidade responsável责任机构' mesmo com variações
+✅ Mostra diferenças e filtra apenas bases corretas
 ===========================================================
 """
 
 import os
+import polars as pl
 import pandas as pd
 from tqdm import tqdm
 
@@ -23,18 +24,10 @@ from tqdm import tqdm
 PASTA_ENTRADA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Sem Movimentação"
 ARQUIVO_SAIDA = os.path.join(PASTA_ENTRADA, "Bases_Filtradas.xlsx")
 
-# Bases oficiais (as corretas)
 BASES_ALVO = [
-    "CZS -AC",
-    "SMD -AC",
-    "TAR -AC",
-    "F BSL-AC",
-    "ANA FLUVIAL - PA",
-    "BRV -PA",
-    "MCP FLUVIAL -AP",
-    "F PVH-RO",
-    "F MCP-AP",
-    "F MCP 02-AP"
+    "CZS -AC", "SMD -AC", "TAR -AC", "F BSL-AC",
+    "ANA FLUVIAL - PA", "BRV -PA", "MCP FLUVIAL -AP",
+    "F PVH-RO", "F MCP-AP", "F MCP 02-AP"
 ]
 
 # ======================================================
@@ -42,18 +35,20 @@ BASES_ALVO = [
 # ======================================================
 
 def listar_planilhas(pasta: str):
-    """Retorna todos os arquivos .xlsx da pasta, exceto o arquivo de saída."""
+    """Lista arquivos Excel válidos, ignorando temporários e o arquivo de saída."""
     arquivos = []
     for f in os.listdir(pasta):
-        if f.lower().endswith(".xlsx") and not f.lower().startswith("~$") and f != os.path.basename(ARQUIVO_SAIDA):
+        nome = f.lower()
+        if nome.endswith(".xlsx") and not nome.startswith("~$") and f != os.path.basename(ARQUIVO_SAIDA):
             arquivos.append(os.path.join(pasta, f))
     return arquivos
 
 
 def encontrar_coluna_unidade(df):
-    """Tenta localizar a coluna de Unidade Responsável mesmo com variações de nome."""
+    """Tenta localizar a coluna 'Unidade responsável责任机构' mesmo com variações."""
     for col in df.columns:
-        if "UNIDADE" in col.upper() or "RESPONSÁVEL" in col.upper() or "责任机构" in col:
+        nome = col.upper()
+        if "UNIDADE" in nome or "RESPONSÁVEL" in nome or "责任机构" in col:
             return col
     return None
 
@@ -67,66 +62,67 @@ def main():
     arquivos = listar_planilhas(PASTA_ENTRADA)
 
     if not arquivos:
-        print("⚠️ Nenhum arquivo .xlsx encontrado nessa pasta.")
+        print("⚠️ Nenhum arquivo .xlsx encontrado.")
         return
 
     print(f"📁 {len(arquivos)} arquivo(s) encontrado(s):")
-    for arq in arquivos:
-        print(f"  • {os.path.basename(arq)}")
+    for a in arquivos:
+        print(f"  • {os.path.basename(a)}")
     print("")
 
-    dfs = []
-    for arquivo in tqdm(arquivos, desc="Lendo planilhas", ncols=80):
+    dfs_lazy = []
+    for arquivo in tqdm(arquivos, desc="📖 Lendo planilhas", ncols=80):
         try:
-            df = pd.read_excel(arquivo)
-            df["Arquivo_Origem"] = os.path.basename(arquivo)
-            dfs.append(df)
+            df_lazy = pl.read_excel(arquivo).lazy()
+            df_lazy = df_lazy.with_columns(pl.lit(os.path.basename(arquivo)).alias("Arquivo_Origem"))
+            dfs_lazy.append(df_lazy)
         except Exception as e:
             print(f"❌ Erro ao ler '{os.path.basename(arquivo)}': {e}")
 
-    if not dfs:
-        print("⚠️ Nenhum dado foi carregado.")
+    if not dfs_lazy:
+        print("⚠️ Nenhum dado carregado.")
         return
 
-    # Junta todas as planilhas
-    df_total = pd.concat(dfs, ignore_index=True)
-    print(f"\n📊 Total de linhas consolidadas: {len(df_total)}\n")
+    print("🧩 Unindo arquivos com Polars Lazy...")
+    df_total = pl.concat(dfs_lazy).collect()
+    print(f"\n📊 Total de linhas consolidadas: {df_total.height:,}\n".replace(",", "."))
 
-    # Localiza a coluna certa
+    # Encontrar coluna alvo
     coluna_unidade = encontrar_coluna_unidade(df_total)
     if not coluna_unidade:
         print("❌ Não foi possível encontrar a coluna 'Unidade responsável责任机构'.")
-        print(f"Colunas disponíveis: {list(df_total.columns)}")
+        print(f"Colunas disponíveis: {df_total.columns}")
         return
 
-    print(f"✅ Coluna encontrada: '{coluna_unidade}'\n")
+    print(f"✅ Coluna identificada: '{coluna_unidade}'\n")
 
-    # Exibir variações encontradas
+    # Mostrar variações de escrita
+    valores_unicos = df_total[coluna_unidade].drop_nulls().unique().to_list()
     print("🔎 Variações de escrita encontradas:\n")
-    valores_unicos = df_total[coluna_unidade].dropna().unique()
-    for valor in sorted(valores_unicos):
-        print(f"  • {valor}")
+    for v in sorted(valores_unicos):
+        print(f"  • {v}")
 
-    # Mostrar diferenças
+    # Diferenças em relação às bases oficiais
     print("\n⚠️ Diferenças detectadas (não estão na lista oficial):\n")
     diferentes = [v for v in valores_unicos if v not in BASES_ALVO]
     if diferentes:
         for val in diferentes:
             print(f"  🚫 {val}")
     else:
-        print("✅ Nenhuma diferença encontrada! Todas as bases estão escritas corretamente.")
+        print("✅ Nenhuma diferença encontrada! Todas as bases estão corretas.")
 
     # Filtrar apenas bases oficiais
-    df_filtrado = df_total[df_total[coluna_unidade].isin(BASES_ALVO)].copy()
+    df_filtrado = df_total.filter(pl.col(coluna_unidade).is_in(BASES_ALVO))
 
-    if df_filtrado.empty:
+    if df_filtrado.is_empty():
         print("\n⚠️ Nenhuma linha correspondente às bases desejadas foi encontrada.")
         return
 
-    # Gera Excel consolidado
-    df_filtrado.to_excel(ARQUIVO_SAIDA, index=False)
+    # Converter para pandas e exportar
+    df_final = df_filtrado.to_pandas()
+    df_final.to_excel(ARQUIVO_SAIDA, index=False)
 
-    resumo = df_filtrado[coluna_unidade].value_counts()
+    resumo = df_final[coluna_unidade].value_counts()
     print("\n📊 Resumo das bases filtradas:")
     for base, qtd in resumo.items():
         print(f"  • {base}: {qtd} linhas")

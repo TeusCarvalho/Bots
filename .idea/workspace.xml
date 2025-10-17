@@ -6,7 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="git commit">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/Local_Para_Teste.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Local_Para_Teste.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Novos/Base de Dados/Comparação.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Junções/Comparação.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Novos/Base de Dados/GP.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Junções/GP.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Novos/Base de Dados/Sem Movimentação - Para Junção.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Junções/Sem Movimentação - Para Junção.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Novos/Base de Dados/Sem Movimentação.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Junções/Sem Movimentação.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -249,7 +252,7 @@
       <workItem from="1760632819029" duration="7988000" />
       <workItem from="1760698897288" duration="17160000" />
       <workItem from="1760726480666" duration="2000" />
-      <workItem from="1760728482845" duration="1098000" />
+      <workItem from="1760728482845" duration="1739000" />
     </task>
     <task id="LOCAL-00001" summary="git commit">
       <option name="closed" value="true" />
@@ -395,7 +398,15 @@
       <option name="project" value="LOCAL" />
       <updated>1760722922201</updated>
     </task>
-    <option name="localTasksCounter" value="19" />
+    <task id="LOCAL-00019" summary="git commit">
+      <option name="closed" value="true" />
+      <created>1760729794822</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1760729794822</updated>
+    </task>
+    <option name="localTasksCounter" value="20" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -432,7 +443,7 @@
     <SUITE FILE_PATH="coverage/Bots$Franquias.coverage" NAME="Franquias Coverage Results" MODIFIED="1759767240118" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$4__Fraquias___Custo.coverage" NAME="4- Fraquias - Custo Coverage Results" MODIFIED="1760012397836" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
     <SUITE FILE_PATH="coverage/Bots$2__Custo.coverage" NAME="2- Custo Coverage Results" MODIFIED="1760705702658" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
-    <SUITE FILE_PATH="coverage/Bots$Local_Para_Teste.coverage" NAME="Local_Para_Teste Coverage Results" MODIFIED="1760729565856" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
+    <SUITE FILE_PATH="coverage/Bots$Local_Para_Teste.coverage" NAME="Local_Para_Teste Coverage Results" MODIFIED="1760729711416" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$Bot_Sem_Movimentação.coverage" NAME="Bot Sem Movimentação Coverage Results" MODIFIED="1760723987286" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
     <SUITE FILE_PATH="coverage/Bots$1_2__T___0.coverage" NAME="1-2. T - 0 Coverage Results" MODIFIED="1758745529672" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bots$LangChain.coverage" NAME="LangChain Coverage Results" MODIFIED="1758631529437" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
