@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import logging
+import time
 from datetime import datetime
 from tqdm import tqdm
 import pandas as pd
@@ -28,143 +29,200 @@ logging.getLogger().handlers = [handler]
 logging.getLogger().setLevel(logging.INFO)
 
 # ===========================================================
-# Configuração de Colunas
+# Colunas principais
 # ===========================================================
 COLUNAS = {
-    "coordenador": "Coordenador",
     "motorista": "Responsável pela entrega",
     "pedido": "Número de pedido JMS",
     "assinatura": "Marca de assinatura",
-    "data": "Tempo de entrega",
-    "base": "Base de entrega"
+    "tempo_entrega": "Tempo de entrega",
+    "horario_entrega": "Horário da entrega",
+    "base": "Base de entrega",
+    "coordenador": "Coordenador"
 }
 
 # ===========================================================
-# Funções Principais
+# Funções auxiliares
 # ===========================================================
-
 def encontrar_arquivos_por_prefixo(pasta, prefixo):
     arquivos = []
     try:
-        for nome_arquivo in os.listdir(pasta):
-            if nome_arquivo.startswith(prefixo) and nome_arquivo.endswith('.xlsx'):
-                arquivos.append(os.path.join(pasta, nome_arquivo))
+        for nome in os.listdir(pasta):
+            if nome.startswith(prefixo) and nome.endswith(".xlsx"):
+                arquivos.append(os.path.join(pasta, nome))
         if arquivos:
             logging.info(f"✅ {len(arquivos)} arquivo(s) encontrado(s) com prefixo '{prefixo}'")
         else:
-            logging.error(f"❌ Nenhum arquivo Excel começando com '{prefixo}' foi encontrado na pasta '{pasta}'.")
-        return arquivos
-    except FileNotFoundError:
-        logging.error(f"❌ O diretório especificado não foi encontrado: {pasta}")
-        return []
+            logging.warning(f"⚠️ Nenhum arquivo encontrado com prefixo '{prefixo}'")
+    except Exception as e:
+        logging.error(f"❌ Erro ao procurar arquivos: {e}")
+    return arquivos
 
-def ler_arquivo_excel_inteligente(caminho):
-    """Decide entre Pandas e Polars conforme o tamanho do arquivo."""
+
+def ler_excel_inteligente(caminho):
+    """Usa Pandas ou Polars dependendo do tamanho."""
     tamanho_mb = os.path.getsize(caminho) / (1024 ** 2)
     nome = os.path.basename(caminho)
-
     try:
         if tamanho_mb > 100:
             logging.info(f"⚙️ [{nome}] Usando Polars Lazy Mode ({tamanho_mb:.1f} MB)...")
             df = pl.read_excel(caminho).lazy().collect().to_pandas()
         else:
-            logging.info(f"📄 [{nome}] Usando Pandas (arquivo leve: {tamanho_mb:.1f} MB)")
+            logging.info(f"📄 [{nome}] Usando Pandas ({tamanho_mb:.1f} MB)")
             df = pd.read_excel(caminho)
         return df
     except Exception as e:
         logging.error(f"❌ Erro ao ler {nome}: {e}")
         return None
 
+
 def adicionar_coordenador(df):
+    """Adiciona coordenador e UF a partir da base de referência."""
     caminho_ref = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
     if not os.path.exists(caminho_ref):
-        logging.error("❌ Planilha de referência não encontrada.")
+        logging.error("❌ Base de coordenadores não encontrada.")
         return df
 
-    df_ref = pd.read_excel(caminho_ref)
+    ref = pd.read_excel(caminho_ref)
     col_base_ref = "Nome da base"
     col_uf_ref = "UF"
-    col_coord_ref = next((c for c in df_ref.columns if "coordenador" in c.lower()), None)
+    col_coord_ref = next((c for c in ref.columns if "coordenador" in c.lower()), None)
 
-    if not col_coord_ref or col_base_ref not in df_ref.columns or col_uf_ref not in df_ref.columns:
-        logging.error("❌ Colunas de referência não identificadas.")
+    if not all(col in ref.columns for col in [col_base_ref, col_uf_ref]) or not col_coord_ref:
+        logging.error("❌ Colunas necessárias ausentes na base de referência.")
         return df
 
-    df_ref[col_base_ref] = df_ref[col_base_ref].astype(str).str.strip().str.upper()
+    ref[col_base_ref] = ref[col_base_ref].astype(str).str.strip().str.upper()
     df[COLUNAS["base"]] = df[COLUNAS["base"]].astype(str).str.strip().str.upper()
 
-    df = df.merge(
-        df_ref[[col_base_ref, col_coord_ref, col_uf_ref]],
-        left_on=COLUNAS["base"],
-        right_on=col_base_ref,
-        how="left"
-    )
+    df = df.merge(ref[[col_base_ref, col_uf_ref, col_coord_ref]],
+                  left_on=COLUNAS["base"], right_on=col_base_ref, how="left")
 
     df.rename(columns={col_coord_ref: COLUNAS["coordenador"], col_uf_ref: "UF"}, inplace=True)
-    df[COLUNAS["coordenador"]] = df[COLUNAS["coordenador"]].fillna("Coordenador não encontrado")
     df["UF"] = df["UF"].fillna("UF não encontrado")
-
+    df[COLUNAS["coordenador"]] = df[COLUNAS["coordenador"]].fillna("Coordenador não encontrado")
     return df
 
-def processar_varios_arquivos(lista_arquivos):
-    dfs = []
-    logging.info("📊 Iniciando leitura dos arquivos...")
 
-    for caminho in tqdm(lista_arquivos, desc="🔍 Processando", colour="green"):
-        df = ler_arquivo_excel_inteligente(caminho)
+def processar_arquivos(lista_arquivos):
+    """Processa e gera coluna de entrega válida no domingo."""
+    dfs = []
+    for caminho in tqdm(lista_arquivos, desc="📦 Lendo planilhas", colour="green"):
+        df = ler_excel_inteligente(caminho)
         if df is None:
             continue
 
-        try:
-            df.columns = df.columns.astype(str).str.strip()
-            df['data_convertida'] = pd.to_datetime(df[COLUNAS["data"]], errors='coerce')
+        df.columns = df.columns.astype(str).str.strip()
 
-            df['Entrega no Domingo'] = (
-                (df['data_convertida'].dt.dayofweek == 6) &
-                (df[COLUNAS["assinatura"]].astype(str).str.strip() == "Recebimento com assinatura normal")
-            )
+        # Converte colunas de data/hora
+        df["tempo_entrega_dt"] = pd.to_datetime(df.get(COLUNAS["tempo_entrega"]), errors="coerce")
+        df["horario_entrega_dt"] = pd.to_datetime(df.get(COLUNAS["horario_entrega"]), errors="coerce")
 
-            df = adicionar_coordenador(df)
-            dfs.append(df)
-        except Exception as e:
-            logging.error(f"❌ Erro ao processar {os.path.basename(caminho)}: {e}")
+        # Cria coluna de "Entrega válida no domingo"
+        df["Entrega válida no domingo"] = (
+            (df["tempo_entrega_dt"].dt.dayofweek == 6)
+            & (df["horario_entrega_dt"].notna())
+            & (df[COLUNAS["assinatura"]].astype(str).str.strip() == "Recebimento com assinatura normal")
+        )
+
+        # Adiciona coordenador e UF
+        df = adicionar_coordenador(df)
+        dfs.append(df)
 
     if not dfs:
-        logging.error("❌ Nenhum DataFrame carregado.")
         return None
+    return pd.concat(dfs, ignore_index=True)
 
-    df_final = pd.concat(dfs, ignore_index=True)
-    logging.info(f"✅ Total de registros consolidados: {len(df_final)}")
-    return df_final
 
-def analisar_entregas_consolidado(df, caminho_saida):
-    # (igual ao seu código original — sem alteração)
-    ...
+# ===========================================================
+# Geração do relatório final
+# ===========================================================
+def gerar_relatorio(df, caminho_saida):
+    """Cria resumo geral e por UF — usando 'Base de entrega' para bases únicas."""
+    try:
+        total_pedidos = len(df)
+        total_motoristas = df[COLUNAS["motorista"]].nunique()
+        total_domingo = df["Entrega válida no domingo"].sum()
+        total_bases = df[COLUNAS["base"]].nunique()
+
+        # --- Sempre mostra resumo no terminal ---
+        logging.info(f"""
+📊 RESUMO GERAL:
+• Total de pedidos: {total_pedidos:,}
+• Motoristas únicos: {total_motoristas:,}
+• Entregas válidas no domingo: {total_domingo:,}
+• Bases distintas (geral): {total_bases:,}
+""")
+
+        # --- Se o arquivo for muito grande, não salva ---
+        if total_pedidos > 500_000:
+            logging.warning("⚠️ Base muito grande — relatório não salvo em Excel para evitar lentidão.")
+            return
+
+        # --- Resumo por UF ---
+        resumo_uf = (
+            df.groupby("UF")
+            .agg({
+                COLUNAS["pedido"]: "count",
+                COLUNAS["motorista"]: pd.Series.nunique,
+                COLUNAS["base"]: pd.Series.nunique,  # usa Base de entrega
+                "Entrega válida no domingo": "sum"
+            })
+            .reset_index()
+            .rename(columns={
+                COLUNAS["pedido"]: "Total de Pedidos Recebidos",
+                COLUNAS["motorista"]: "Motoristas Únicos",
+                COLUNAS["base"]: "Bases Distintas (Base de entrega)",
+                "Entrega válida no domingo": "Entregas válidas no domingo"
+            })
+            .sort_values("UF")
+        )
+
+        # --- Resumo geral ---
+        resumo_geral = pd.DataFrame({
+            "Métrica": [
+                "Total de pedidos recebidos",
+                "Motoristas únicos (geral)",
+                "Entregas válidas no domingo (geral)",
+                "Bases distintas (Base de entrega)"
+            ],
+            "Quantidade": [total_pedidos, total_motoristas, total_domingo, total_bases]
+        })
+
+        # --- Exportar para Excel ---
+        with pd.ExcelWriter(caminho_saida, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Detalhes")
+            resumo_uf.to_excel(writer, index=False, sheet_name="Resumo por UF")
+            resumo_geral.to_excel(writer, index=False, sheet_name="Resumo Geral")
+
+        logging.info(f"💾 Arquivo salvo com sucesso em:\n📍 {caminho_saida}")
+
+    except Exception as e:
+        logging.error(f"❌ Erro ao gerar relatório: {e}")
+
 
 # ===========================================================
 # Execução Principal
 # ===========================================================
 if __name__ == "__main__":
-    PREFIXO_DO_ARQUIVO = "Exportar carta de porte de entrega"
-    caminho_da_pasta = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Motorista"
+    inicio = time.time()
 
-    arquivos_encontrados = encontrar_arquivos_por_prefixo(caminho_da_pasta, PREFIXO_DO_ARQUIVO)
+    PREFIXO = "Exportar carta de porte de entrega"
+    PASTA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Motorista"
 
-    if arquivos_encontrados:
-        df_consolidado = processar_varios_arquivos(arquivos_encontrados)
-
-        if df_consolidado is not None:
-            agora = datetime.now().strftime("%Y%m%d_%H%M%S")
-            caminho_saida = os.path.join(caminho_da_pasta, f"Analise_Consolidada_{agora}.xlsx")
-
-            analisar_entregas_consolidado(df_consolidado, caminho_saida)
-
-            logging.info(f"""
-📊 Resumo Final:
-• Pedidos: {df_consolidado[COLUNAS["pedido"]].nunique()}
-• Coordenadores: {df_consolidado[COLUNAS["coordenador"]].nunique()}
-• Bases: {df_consolidado[COLUNAS["base"]].nunique()}
-• Motoristas únicos: {df_consolidado[COLUNAS["motorista"]].nunique()}
-""")
+    arquivos = encontrar_arquivos_por_prefixo(PASTA, PREFIXO)
+    if not arquivos:
+        logging.error("❌ Nenhum arquivo encontrado.")
     else:
-        logging.error("❌ Nenhum arquivo válido foi encontrado.")
+        df = processar_arquivos(arquivos)
+        if df is not None:
+            agora = datetime.now().strftime("%Y%m%d_%H%M%S")
+            caminho_saida = os.path.join(PASTA, f"Analise_Consolidada_{agora}.xlsx")
+            gerar_relatorio(df, caminho_saida)
+        else:
+            logging.error("❌ Nenhum dado processado.")
+
+    fim = time.time()
+    duracao = fim - inicio
+    minutos, segundos = divmod(duracao, 60)
+    logging.info(f"⏱️ Tempo total de execução: {int(minutos)}m {int(segundos)}s")
