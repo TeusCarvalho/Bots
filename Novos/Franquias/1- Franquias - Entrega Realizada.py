@@ -34,7 +34,7 @@ PASTA_SAIDA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\
 DATA_HOJE = datetime.now().strftime("%Y%m%d")
 ARQUIVO_SAIDA = os.path.join(PASTA_SAIDA, f"Resumo_Consolidado_{DATA_HOJE}.xlsx")
 
-WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/cd68fbd4-1f55-47c2-a7a6-2e7bad6c3d1d"
+WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/92a82aea-9b5c-4e3d-9169-8d4753ecef38"
 LINK_PASTA = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/EvIP3oIiLJRAqcB1SZ_1nmYBXLIYSJkIns5Pf_Xz2OqY_w?e=OEXsJN"
 
 # ==========================================================
