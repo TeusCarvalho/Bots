@@ -46,10 +46,10 @@ COL_TRANSITO = 'Trânsito'
 
 # Colunas para mapeamento de coordenadores
 COLUNA_CHAVE_PRINCIPAL = 'Unidade responsável'
-COLUNA_CHAVE_MAPEAMENTO = 'Nome da base'  # ATUALIZADO: De 'Nova Base'
-COLUNA_INFO_COORDENADOR = 'Coordenadores'  # ATUALIZADO: De 'Coordenador'
+COLUNA_CHAVE_MAPEAMENTO = 'Nome da base'
+COLUNA_INFO_COORDENADOR = 'Coordenadores'
 COLUNA_INFO_FILIAL = 'Filial'
-NOVA_COLUNA_COORDENADOR = 'Coordenadores'  # ATUALIZADO: Para consistência no relatório final
+NOVA_COLUNA_COORDENADOR = 'Coordenadores'
 NOVA_COLUNA_FILIAL = 'Filial'
 
 # --- 5. Listas para Regras de Negócio ---
@@ -91,16 +91,7 @@ logging.basicConfig(
 # ==============================================================================
 
 def encontrar_arquivo_principal(pasta: str, inicio_nome: str) -> Optional[str]:
-    """
-    Busca por um arquivo Excel em uma pasta que comece com um determinado nome.
-
-    Args:
-        pasta (str): O caminho da pasta onde a busca será realizada.
-        inicio_nome (str): O prefixo do nome do arquivo a ser encontrado.
-
-    Returns:
-        Optional[str]: O caminho completo do arquivo encontrado ou None se não for encontrado.
-    """
+    """Busca por um arquivo Excel em uma pasta que comece com um determinado nome."""
     try:
         for nome_arquivo in os.listdir(pasta):
             if nome_arquivo.startswith(inicio_nome) and nome_arquivo.endswith(('.xlsx', '.xls')):
@@ -109,39 +100,46 @@ def encontrar_arquivo_principal(pasta: str, inicio_nome: str) -> Optional[str]:
     except FileNotFoundError:
         logging.error(f"A pasta de leitura '{pasta}' não foi encontrada.")
         return None
-
     logging.warning(f"Nenhum arquivo começando com '{inicio_nome}' foi encontrado em '{pasta}'.")
     return None
 
 
 def carregar_planilhas_de_pasta(caminho_pasta: str, descricao_tqdm: str) -> pl.DataFrame:
-    """
-    Lê todos os arquivos Excel de uma pasta e consolida seus dados em um único DataFrame.
-
-    Args:
-        caminho_pasta (str): O caminho da pasta contendo os arquivos Excel.
-        descricao_tqdm (str): Texto a ser exibido na barra de progresso.
-
-    Returns:
-        pl.DataFrame: Um DataFrame consolidado ou um DataFrame vazio em caso de erro.
-    """
+    """Lê todos os arquivos Excel de uma pasta e consolida seus dados."""
     lista_dfs = []
     nome_pasta = os.path.basename(caminho_pasta)
     logging.info(f"Lendo planilhas da pasta: {nome_pasta}")
-
     try:
         arquivos = [f for f in os.listdir(caminho_pasta) if f.endswith(('.xlsx', '.xls'))]
         if not arquivos:
             logging.warning(f"Nenhum arquivo Excel encontrado na pasta '{nome_pasta}'.")
             return pl.DataFrame()
 
+        colunas_referencia = None
         for arquivo in tqdm(arquivos, desc=descricao_tqdm):
             caminho_completo = os.path.join(caminho_pasta, arquivo)
             try:
-                # Lê todas as abas do arquivo e as adiciona à lista
-                abas = pl.read_excel(caminho_completo, sheet_name=None)
-                for nome_aba, df_aba in abas.items():
+                df_aba = pl.read_excel(caminho_completo)
+                if df_aba.height == 0:
+                    continue
+
+                if colunas_referencia is None:
+                    colunas_referencia = df_aba.columns
+                    logging.info(
+                        f"Esquema de colunas de referência definido com {len(colunas_referencia)} colunas a partir do arquivo '{arquivo}'.")
                     lista_dfs.append(df_aba)
+                    continue
+
+                colunas_faltantes = [col for col in colunas_referencia if col not in df_aba.columns]
+                if colunas_faltantes:
+                    logging.warning(
+                        f"Arquivo '{arquivo}' está faltando {len(colunas_faltantes)} colunas. Colunas adicionadas com nulos: {colunas_faltantes}")
+                    for col in colunas_faltantes:
+                        df_aba = df_aba.with_columns(pl.lit(None).alias(col))
+
+                df_alinhado = df_aba.select(colunas_referencia)
+                lista_dfs.append(df_alinhado)
+
             except Exception as e:
                 logging.error(f"Falha ao ler o arquivo '{arquivo}' da pasta '{nome_pasta}': {e}")
                 continue
@@ -166,34 +164,22 @@ def carregar_planilhas_de_pasta(caminho_pasta: str, descricao_tqdm: str) -> pl.D
 # ==============================================================================
 
 def aplicar_regras_transito(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Aplica regras de negócio para definir o status de 'Trânsito' dos pacotes.
-
-    Args:
-        df (pl.DataFrame): DataFrame com os dados dos pacotes.
-
-    Returns:
-        pl.DataFrame: DataFrame com a nova coluna 'Trânsito' preenchida.
-    """
+    """Aplica regras de negócio para definir o status de 'Trânsito' dos pacotes."""
     logging.info("Aplicando regras de trânsito...")
     if COL_BASE_RECENTE not in df.columns:
         logging.warning(f"Coluna '{COL_BASE_RECENTE}' não encontrada. As regras de trânsito não serão aplicadas.")
         df = df.with_columns(pl.lit("COLUNA DE BASE RECENTE NÃO ENCONTRADA").alias(COL_TRANSITO))
         return df
 
-    # Condições base para as regras
     cond_em_transito = pl.col(COL_ULTIMA_OPERACAO) == "发件扫描/Bipe de expedição"
     is_fluxo_inverso = pl.col(COL_BASE_RECENTE).is_in(BASES_FLUXO_INVERSO) & pl.col(COL_REGIONAL).is_in(
         DESTINOS_FLUXO_INVERSO)
     origem_sc_bre = pl.col(COL_BASE_RECENTE) == 'SC BRE'
     destino_pvh = pl.col(COL_REGIONAL).str.contains('PVH-RO', literal=False)
-
-    # Condições de prazo
     prazo_fluxo_inverso_estourado = pl.col(COL_DIAS_PARADO) >= 3
     prazo_5_dias_estourado = pl.col(COL_DIAS_PARADO) >= 5
     prazo_3_dias_estourado = pl.col(COL_DIAS_PARADO) >= 3
 
-    # Aplicando as regras com with_columns e when/then/otherwise
     df = df.with_columns(
         pl.when(cond_em_transito & is_fluxo_inverso & prazo_fluxo_inverso_estourado)
         .then("VERIFICAR COM TRANSPORTE: VEÍCULO NÃO CHEGOU (FLUXO INVERSO)")
@@ -214,30 +200,18 @@ def aplicar_regras_transito(df: pl.DataFrame) -> pl.DataFrame:
         .otherwise("")
         .alias(COL_TRANSITO)
     )
-
     logging.info("Regras de trânsito aplicadas com sucesso.")
     return df
 
 
 def aplicar_regras_status(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Aplica regras de negócio agrupadas por categoria para definir o 'Status'.
-    """
+    """Aplica regras de negócio agrupadas por categoria para definir o 'Status'."""
     logging.info("Aplicando regras de status...")
-
     is_problematico = pl.col(COL_ULTIMA_OPERACAO) == "问题件扫描/Bipe de pacote problemático"
     is_envio_errado_cd = pl.col(COL_BASE_RECENTE).is_in(BASES_CD) & pl.col(COL_REGIONAL).is_in(BASES_CD)
+    df = df.with_columns(pl.col(COL_ULTIMA_OPERACAO).str.to_uppercase().alias(COL_STATUS))
 
-    # Inicializa a coluna de status com o valor padrão
-    df = df.with_columns(
-        pl.col(COL_ULTIMA_OPERACAO).str.to_uppercase().alias(COL_STATUS)
-    )
-
-    # ================================================================
     # 1. PROBLEMÁTICOS
-    # ================================================================
-
-    # Extravio
     df = df.with_columns(
         pl.when(is_problematico & (pl.col(COL_NOME_PROBLEMATICO) == "Extravio.interno.内部遗失"))
         .then("PEDIDO EXTRAVIADO")
@@ -246,21 +220,15 @@ def aplicar_regras_status(df: pl.DataFrame) -> pl.DataFrame:
         .then("ALERTA DE EXTRAVIO: ABRIR CHAMADO INTERNO (HÁ MAIS DE 3 DIAS)")
         .when(is_problematico & (pl.col(COL_NOME_PROBLEMATICO) == "Encomenda.expedido.mas.não.chegou.有发未到件"))
         .then("ATENÇÃO: RISCO DE EXTRAVIO (AGUARDANDO CHEGADA)")
-        .otherwise(pl.col(COL_STATUS))
-        .alias(COL_STATUS)
+        .otherwise(pl.col(COL_STATUS)).alias(COL_STATUS)
     )
-
-    # Retidos
     df = df.with_columns(
         pl.when(is_problematico & (pl.col(COL_NOME_PROBLEMATICO) == "retidos.留仓") & (pl.col(COL_DIAS_PARADO) >= 3))
         .then("ATENÇÃO: PACOTE RETIDO NO PISO (HÁ MAIS DE 3 DIAS)")
         .when(is_problematico & (pl.col(COL_NOME_PROBLEMATICO) == "retidos.留仓"))
         .then("ATENÇÃO: PACOTE RETIDO NO PISO")
-        .otherwise(pl.col(COL_STATUS))
-        .alias(COL_STATUS)
+        .otherwise(pl.col(COL_STATUS)).alias(COL_STATUS)
     )
-
-    # Endereço
     df = df.with_columns(
         pl.when(is_problematico & pl.col(COL_NOME_PROBLEMATICO).is_in([
             "Endereço.incorreto地址信息错误", "Impossibilidade.de.chegar.no.endereço.informado客户地址无法进入",
@@ -273,11 +241,8 @@ def aplicar_regras_status(df: pl.DataFrame) -> pl.DataFrame:
             "Endereço.incompleto地址信息不详",
             "Impossibilidade.de.chegar.no.endereço.informado.de.coleta.客户地址无法进入C"]))
         .then("ATENÇÃO: AGUARDANDO DEVOLUÇÃO (ENDEREÇO/ACESSO INCORRETO)")
-        .otherwise(pl.col(COL_STATUS))
-        .alias(COL_STATUS)
+        .otherwise(pl.col(COL_STATUS)).alias(COL_STATUS)
     )
-
-    # Tentativas de entrega / ausência
     df = df.with_columns(
         pl.when(is_problematico & (pl.col(
             COL_NOME_PROBLEMATICO) == "Ausência.de.destinatário.nas.várias.tentativas.de.entrega多次派送客户不在"))
@@ -287,11 +252,8 @@ def aplicar_regras_status(df: pl.DataFrame) -> pl.DataFrame:
         .then("ATENÇÃO: DEVOLVER À BASE (AUSÊNCIA, HÁ MAIS DE 2 DIAS)")
         .when(is_problematico & (pl.col(COL_NOME_PROBLEMATICO) == "Ausência.do.destinatário客户不在"))
         .then("ATENÇÃO: DEVOLUÇÃO À BASE PENDENTE (AUSÊNCIA)")
-        .otherwise(pl.col(COL_STATUS))
-        .alias(COL_STATUS)
+        .otherwise(pl.col(COL_STATUS)).alias(COL_STATUS)
     )
-
-    # Recusa / mudança de endereço
     df = df.with_columns(
         pl.when(is_problematico & pl.col(COL_NOME_PROBLEMATICO).is_in([
             "Recusa.de.recebimento.pelo.cliente.(destinatário)无理由拒收",
@@ -301,11 +263,8 @@ def aplicar_regras_status(df: pl.DataFrame) -> pl.DataFrame:
             "Recusa.de.recebimento.pelo.cliente.(destinatário)无理由拒收",
             "O.destinatário.mudou.o.endereço.收件人搬家"]))
         .then("ATENÇÃO: DEVOLUÇÃO À BASE PENDENTE (RECUSA/MUDANÇA DE ENDEREÇO)")
-        .otherwise(pl.col(COL_STATUS))
-        .alias(COL_STATUS)
+        .otherwise(pl.col(COL_STATUS)).alias(COL_STATUS)
     )
-
-    # Outros problemáticos (embalagem, triagem, incompletos, anomalias, devolução aprovada etc.)
     df = df.with_columns(
         pl.when(is_problematico & pl.col(COL_NOME_PROBLEMATICO).is_in(
             ["Pacote.fora.do.padrão.三边尺寸超限", "Embalagem.não.conforme.包装不规范"]))
@@ -320,32 +279,26 @@ def aplicar_regras_status(df: pl.DataFrame) -> pl.DataFrame:
         .then("ATENÇÃO: ANOMALIA EM ANÁLISE")
         .when(is_problematico & (pl.col(COL_NOME_PROBLEMATICO) == "Devolução.退回件"))
         .then("ENVIAR PARA SC/DC (DEVOLUÇÃO APROVADA)")
-        .otherwise(pl.col(COL_STATUS))
-        .alias(COL_STATUS)
+        .otherwise(pl.col(COL_STATUS)).alias(COL_STATUS)
     )
 
-    # ================================================================
     # 2. OPERAÇÕES NORMAIS
-    # ================================================================
     df = df.with_columns(
-        pl.when((pl.col(COL_ULTIMA_OPERACAO) == "出仓扫描/Bipe de saída para entrega") &
-                (pl.col(COL_REGIONAL).is_in(FRANQUIAS)) & (pl.col(COL_DIAS_PARADO) >= 2))
+        pl.when((pl.col(COL_ULTIMA_OPERACAO) == "出仓扫描/Bipe de saída para entrega") & (
+            pl.col(COL_REGIONAL).is_in(FRANQUIAS)) & (pl.col(COL_DIAS_PARADO) >= 2))
         .then("ATRASO NA ENTREGA (FRANQUIA)")
-        .when((pl.col(COL_ULTIMA_OPERACAO) == "出仓扫描/Bipe de saída para entrega") &
-              (pl.col(COL_REGIONAL).is_in(FRANQUIAS)))
+        .when((pl.col(COL_ULTIMA_OPERACAO) == "出仓扫描/Bipe de saída para entrega") & (
+            pl.col(COL_REGIONAL).is_in(FRANQUIAS)))
         .then("EM ROTA DE ENTREGA (FRANQUIA)")
-        .when((pl.col(COL_ULTIMA_OPERACAO) == "出仓扫描/Bipe de saída para entrega") &
-              (~pl.col(COL_REGIONAL).is_in(FRANQUIAS)) & (pl.col(COL_DIAS_PARADO) >= 2))
+        .when((pl.col(COL_ULTIMA_OPERACAO) == "出仓扫描/Bipe de saída para entrega") & (
+            ~pl.col(COL_REGIONAL).is_in(FRANQUIAS)) & (pl.col(COL_DIAS_PARADO) >= 2))
         .then("ATENÇÃO: ATRASO NA ENTREGA (BASE PRÓPRIA)")
         .when((pl.col(COL_ULTIMA_OPERACAO) == "出仓扫描/Bipe de saída para entrega"))
         .then("EM ROTA DE ENTREGA (BASE PRÓPRIA)")
-        .otherwise(pl.col(COL_STATUS))
-        .alias(COL_STATUS)
+        .otherwise(pl.col(COL_STATUS)).alias(COL_STATUS)
     )
 
-    # ================================================================
     # 3. ENVIO ERRADO (CDs)
-    # ================================================================
     df = df.with_columns(
         pl.when(is_envio_errado_cd & (
                     pl.col(COL_NOME_PROBLEMATICO) == "Mercadorias.do.cliente.não.estão.completas.客户货物未备齐"))
@@ -354,10 +307,8 @@ def aplicar_regras_status(df: pl.DataFrame) -> pl.DataFrame:
         .then("VERIFICAR 3 TENTATIVAS DE ENTREGA. SE OK, SOLICITAR DEVOLUÇÃO. SENÃO, REALIZAR NOVA TENTATIVA.")
         .when(is_envio_errado_cd)
         .then("ENVIO ERRADO - ENTRE CDs")
-        .otherwise(pl.col(COL_STATUS))
-        .alias(COL_STATUS)
+        .otherwise(pl.col(COL_STATUS)).alias(COL_STATUS)
     )
-
     logging.info("Regras aplicadas com sucesso.")
     return df
 
@@ -366,39 +317,32 @@ def calcular_multa(df: pl.DataFrame) -> pl.DataFrame:
     if df.height == 0:
         logging.info("Nenhum pacote com 6+ dias para cálculo de multa.")
         return df
-
     logging.info("Calculando multa para pacotes com 6 ou mais dias parados...")
-
-    # Define as condições e os valores correspondentes para a multa com base nas novas regras.
-    # A ordem é importante, da condição mais restritiva (maior número de dias) para a menos.
     df = df.with_columns(
-        pl.when(pl.col(COL_DIAS_PARADO) >= 30)
-        .then(30)
-        .when(pl.col(COL_DIAS_PARADO).is_between(14, 29))
-        .then(14)
-        .when(pl.col(COL_DIAS_PARADO).is_between(10, 13))
-        .then(10)
-        .when(pl.col(COL_DIAS_PARADO).is_between(7, 9))
-        .then(7)
-        .when(pl.col(COL_DIAS_PARADO) == 6)
-        .then(6)
-        .when(pl.col(COL_DIAS_PARADO) == 5)
-        .then(5)
-        .when(pl.col(COL_DIAS_PARADO) == 4)
-        .then(4)
-        .when(pl.col(COL_DIAS_PARADO) == 3)
-        .then(3)
-        .when(pl.col(COL_DIAS_PARADO) == 2)
-        .then(2)
-        .otherwise(0)
-        .alias(COL_MULTA)
+        pl.when(pl.col(COL_DIAS_PARADO) >= 30).then(30)
+        .when(pl.col(COL_DIAS_PARADO).is_between(14, 29)).then(14)
+        .when(pl.col(COL_DIAS_PARADO).is_between(10, 13)).then(10)
+        .when(pl.col(COL_DIAS_PARADO).is_between(7, 9)).then(7)
+        .when(pl.col(COL_DIAS_PARADO) == 6).then(6)
+        .when(pl.col(COL_DIAS_PARADO) == 5).then(5)
+        .when(pl.col(COL_DIAS_PARADO) == 4).then(4)
+        .when(pl.col(COL_DIAS_PARADO) == 3).then(3)
+        .when(pl.col(COL_DIAS_PARADO) == 2).then(2)
+        .otherwise(0).alias(COL_MULTA)
     )
-
     logging.info("Multa calculada por item.")
     return df
 
 
 def processar_dados(df_main: pl.DataFrame, df_problematicos: pl.DataFrame, df_devolucao: pl.DataFrame) -> pl.DataFrame:
+    """
+    Função principal de processamento que orquestra a junção de dados e a aplicação de regras.
+    FLUXO:
+    1. Inicia com os dados do arquivo 'Sem Movimentação'.
+    2. Enriquece com dados de 'Pacotes Problematicos'.
+    3. Enriquece com dados de 'Devolução'.
+    4. Aplica todas as regras de negócio (cálculo de dias, status, trânsito).
+    """
     colunas_necessarias = [COL_REMESSA, COL_ULTIMA_OPERACAO, COL_REGIONAL, COL_NOME_PROBLEMATICO, COL_HORA_OPERACAO,
                            COL_BASE_RECENTE]
     if not all(col in df_main.columns for col in colunas_necessarias):
@@ -406,110 +350,74 @@ def processar_dados(df_main: pl.DataFrame, df_problematicos: pl.DataFrame, df_de
         logging.critical(f"O arquivo principal não contém as colunas obrigatórias: {colunas_faltantes}.")
         return pl.DataFrame()
 
-    df = df_main.clone()
-    df = df.with_columns(
-        pl.col(COL_REMESSA).cast(pl.Utf8)
-    )
+    # Passo 1: Iniciar com o DataFrame principal (Sem Movimentação)
+    df = df_main.clone().with_columns(pl.col(COL_REMESSA).cast(pl.Utf8))
+    logging.info(f"Processamento iniciado com {len(df)} registros da planilha principal.")
 
-    # 1. Processar e mesclar dados de Pacotes Problemáticos
+    # Passo 2: Juntar com dados de Pacotes Problemáticos
     if df_problematicos.height > 0:
+        logging.info("Enriquecendo dados com informações de pacotes problemáticos...")
         df_problematicos = df_problematicos.with_columns(
             pl.col('Número de pedido JMS').cast(pl.Utf8),
             pl.col('Tempo de digitalização').str.to_datetime(strict=False)
-        )
-        df_problematicos = df_problematicos.sort('Tempo de digitalização').filter(
-            pl.col('Número de pedido JMS').is_not_null()
-        )
-        summary = df_problematicos.groupby('Número de pedido JMS').agg([
-            pl.count().alias('Qtd_Problematicas'),
+        ).sort('Tempo de digitalização').filter(pl.col('Número de pedido JMS').is_not_null())
+
+        summary = df_problematicos.group_by('Número de pedido JMS').agg([
+            pl.len().alias('Qtd_Problematicas'),
             pl.last('Tipo de nível II de pacote problemático').alias('Ultima_Problematica_Detalhada')
         ])
         df = df.join(summary, left_on=COL_REMESSA, right_on='Número de pedido JMS', how='left')
+        df = df.with_columns(
+            pl.col('Ultima_Problematica_Detalhada').fill_null('-').alias('Última Problemática Detalhada'),
+            pl.col('Qtd_Problematicas').fill_null(0).cast(pl.Int32).alias('Qtd Problemáticas')
+        )
         logging.info("Dados de pacotes problemáticos integrados.")
 
-    df = df.with_columns(
-        pl.col('Ultima_Problematica_Detalhada').fill_null('-').alias('Última Problemática Detalhada'),
-        pl.col('Qtd_Problematicas').fill_null(0).cast(pl.Int32).alias('Qtd Problemáticas')
-    )
-
-    # 2. Processar e mesclar dados de Devoluções
-    df = df.with_columns(
-        pl.lit('DEVOLUÇÃO NÃO SOLICITADA').alias(COL_DEVOLUCAO)
-    )
-
+    # Passo 3: Juntar com dados de Devolução
+    df = df.with_columns(pl.lit('DEVOLUÇÃO NÃO SOLICITADA').alias(COL_DEVOLUCAO))
     if df_devolucao.height > 0:
-        df_devolucao = df_devolucao.with_columns(
-            pl.col('Número de pedido JMS').cast(pl.Utf8)
-        )
+        logging.info("Enriquecendo dados com informações de devolução...")
+        df_devolucao = df_devolucao.with_columns(pl.col('Número de pedido JMS').cast(pl.Utf8))
         mapa_traducao = {'待审核': 'EM PROCESSO DE APROVAÇÃO', '驳回': 'PEDIDO DE DEVOLUÇÃO RECUSADO',
                          '已审核': 'DEVOLUÇÃO APROVADA'}
         df_devolucao = df_devolucao.with_columns(
-            pl.col('Estado de solicitação').map_dict(mapa_traducao).alias('Status_Traduzido')
-        )
-        df_devolucao_info = df_devolucao.filter(
-            pl.col('Status_Traduzido').is_not_null()
-        ).select(['Número de pedido JMS', 'Status_Traduzido']).unique(
-            subset=['Número de pedido JMS'], keep='last'
-        )
+            pl.col('Estado de solicitação').replace(mapa_traducao).alias('Status_Traduzido'))
+        df_devolucao_info = df_devolucao.filter(pl.col('Status_Traduzido').is_not_null()).select(
+            ['Número de pedido JMS', 'Status_Traduzido']).unique(subset=['Número de pedido JMS'], keep='last')
         df = df.join(df_devolucao_info, left_on=COL_REMESSA, right_on='Número de pedido JMS', how='left')
-        df = df.with_columns(
-            pl.coalesce([pl.col('Status_Traduzido'), pl.col(COL_DEVOLUCAO)]).alias(COL_DEVOLUCAO)
-        ).drop(['Número de pedido JMS', 'Status_Traduzido'])
+        df = df.with_columns(pl.coalesce([pl.col('Status_Traduzido'), pl.col(COL_DEVOLUCAO)]).alias(COL_DEVOLUCAO))
+
+        # CORREÇÃO: Remover apenas a coluna 'Status_Traduzido', que foi a coluna temporária adicionada.
+        df = df.drop('Status_Traduzido')
         logging.info("Dados de devolução integrados.")
 
-    # 3. Cálculo de Dias Parado (antes das regras)
-    logging.info("Calculando dias parados...")
+    # Passo 4: Aplicar as regras de negócio
+    logging.info("Aplicando regras de negócio no DataFrame consolidado...")
+    df = df.with_columns(pl.col(COL_HORA_OPERACAO).str.to_datetime(strict=False))
     df = df.with_columns(
-        pl.col(COL_HORA_OPERACAO).str.to_datetime(strict=False)
-    )
-    df = df.with_columns(
-        (datetime.now() - pl.col(COL_HORA_OPERACAO)).dt.days().fill_null(0).cast(pl.Int32).alias(COL_DIAS_PARADO)
-    )
-
-    # 4. Aplicação de Regras de Negócio
+        (datetime.now() - pl.col(COL_HORA_OPERACAO)).dt.days().fill_null(0).cast(pl.Int32).alias(COL_DIAS_PARADO))
     df = aplicar_regras_status(df)
     df = aplicar_regras_transito(df)
 
-    # 5. Ajustes Finais e Priorização de Status
+    # Ajustes finais de status
     df = df.with_columns(
-        pl.when(pl.col(COL_DEVOLUCAO) != 'DEVOLUÇÃO NÃO SOLICITADA')
-        .then(pl.col(COL_DEVOLUCAO))
-        .otherwise(pl.col(COL_STATUS))
-        .alias(COL_STATUS)
+        pl.when(pl.col(COL_DEVOLUCAO) != 'DEVOLUÇÃO NÃO SOLICITADA').then(pl.col(COL_DEVOLUCAO)).otherwise(
+            pl.col(COL_STATUS)).alias(COL_STATUS)
     )
-
     cond_aprovado_em_rota = (pl.col(COL_STATUS) == 'DEVOLUÇÃO APROVADA') & (
-            pl.col(COL_ULTIMA_OPERACAO) == "出仓扫描/Bipe de saída para entrega")
-    df = df.with_columns(
-        pl.when(cond_aprovado_em_rota)
-        .then('DEVOLUÇÃO APROVADA, MAS O PACOTE ESTÁ EM ROTA')
-        .otherwise(pl.col(COL_STATUS))
-        .alias(COL_STATUS)
-    )
-
-    # Limpa a coluna 'Trânsito' para status de devolução aprovada
+                pl.col(COL_ULTIMA_OPERACAO) == "出仓扫描/Bipe de saída para entrega")
+    df = df.with_columns(pl.when(cond_aprovado_em_rota).then('DEVOLUÇÃO APROVADA, MAS O PACOTE ESTÁ EM ROTA').otherwise(
+        pl.col(COL_STATUS)).alias(COL_STATUS))
     condicao_aprovado = pl.col(COL_STATUS).is_in(
         ['DEVOLUÇÃO APROVADA', 'DEVOLUÇÃO APROVADA, MAS O PACOTE ESTÁ EM ROTA'])
-    df = df.with_columns(
-        pl.when(condicao_aprovado)
-        .then('')
-        .otherwise(pl.col(COL_TRANSITO))
-        .alias(COL_TRANSITO)
-    )
+    df = df.with_columns(pl.when(condicao_aprovado).then('').otherwise(pl.col(COL_TRANSITO)).alias(COL_TRANSITO))
 
     df = df.rename({COL_REGIONAL: COLUNA_CHAVE_PRINCIPAL})
 
-    # Reordenar colunas para melhor visualização no relatório final
-    ordem_colunas = [
-        COL_REMESSA, COLUNA_CHAVE_PRINCIPAL, COL_DIAS_PARADO, COL_ULTIMA_OPERACAO,
-        COL_HORA_OPERACAO, COL_STATUS, COL_TRANSITO, COL_DEVOLUCAO,
-        'Qtd Problemáticas', 'Última Problemática Detalhada'
-    ]
-
-    # Obter colunas que não estão na ordem_colunas
+    # Reordenar colunas para melhor visualização
+    ordem_colunas = [COL_REMESSA, COLUNA_CHAVE_PRINCIPAL, COL_DIAS_PARADO, COL_ULTIMA_OPERACAO, COL_HORA_OPERACAO,
+                     COL_STATUS, COL_TRANSITO, COL_DEVOLUCAO, 'Qtd Problemáticas', 'Última Problemática Detalhada']
     colunas_existentes = [col for col in df.columns if col not in ordem_colunas]
-
-    # Selecionar colunas na ordem desejada
     df = df.select(ordem_colunas + colunas_existentes)
 
     return df
@@ -519,7 +427,6 @@ def adicionar_info_coordenador(df_principal: pl.DataFrame) -> pl.DataFrame:
     if df_principal.height == 0:
         logging.warning("DataFrame de entrada está vazio. Pulando adição de coordenadores.")
         return df_principal
-
     try:
         logging.info(f"Lendo arquivo de mapeamento: {os.path.basename(ARQUIVO_MAPEAMENTO_COORDENADORES)}")
         df_mapeamento = pl.read_excel(ARQUIVO_MAPEAMENTO_COORDENADORES)
@@ -530,21 +437,15 @@ def adicionar_info_coordenador(df_principal: pl.DataFrame) -> pl.DataFrame:
     except Exception as e:
         logging.error(f"Ocorreu um erro ao ler o arquivo de mapeamento: {e}. O processo será interrompido.")
         raise
-
-    # Cria dicionários de mapeamento para performance
     mapa_coordenador = dict(zip(df_mapeamento[COLUNA_CHAVE_MAPEAMENTO], df_mapeamento[COLUNA_INFO_COORDENADOR]))
     mapa_filial = dict(zip(df_mapeamento[COLUNA_CHAVE_MAPEAMENTO], df_mapeamento[COLUNA_INFO_FILIAL]))
-
     logging.info("Adicionando informações de Coordenador e Filial...")
-
     df_principal = df_principal.with_columns(
         pl.col(COLUNA_CHAVE_PRINCIPAL).map_dict(mapa_coordenador, default='NÃO ENCONTRADO').alias(
             NOVA_COLUNA_COORDENADOR),
         pl.col(COLUNA_CHAVE_PRINCIPAL).map_dict(mapa_filial, default='NÃO ENCONTRADA').alias(NOVA_COLUNA_FILIAL)
     )
-
     logging.info("Informações de coordenador e filial adicionadas.")
-
     return df_principal
 
 
@@ -555,28 +456,17 @@ def salvar_relatorios(df_final: pl.DataFrame, pasta_saida: str):
     if df_final.height == 0:
         logging.warning("⚠️ Nenhum dado para salvar relatórios.")
         return
-
     data_hoje = datetime.now().strftime("%Y-%m-%d")
+    resumo = {"0-4 dias": df_final.filter(pl.col(COL_DIAS_PARADO) <= 4).height,
+              "5+ dias": df_final.filter(pl.col(COL_DIAS_PARADO) >= 5).height, "Total": df_final.height}
+    logging.info(f"📊 Resumo Dias Parados: {resumo}")
 
-    # 🔍 Debug: resumo por faixa de dias
-    try:
-        resumo = {
-            "0-4 dias": df_final.filter(pl.col(COL_DIAS_PARADO) <= 4).height,
-            "5+ dias": df_final.filter(pl.col(COL_DIAS_PARADO) >= 5).height,
-            "Total": df_final.height
-        }
-        logging.info(f"📊 Resumo Dias Parados: {resumo}")
-    except Exception as e:
-        logging.error(f"Erro ao gerar resumo de debug: {e}")
-
-    # 1. Relatório 0–4 dias
     df_0_4 = df_final.filter(pl.col(COL_DIAS_PARADO) <= 4)
     if df_0_4.height > 0:
         arquivo_0_4 = os.path.join(pasta_saida, f"Relatório Sem Movimentação (0-4 dias)_{data_hoje}.xlsx")
         df_0_4.write_excel(arquivo_0_4)
         logging.info(f"Relatório 0-4 dias salvo: {arquivo_0_4}")
 
-    # 2. Relatório 5+ dias
     df_5_plus = df_final.filter(pl.col(COL_DIAS_PARADO) >= 5)
     if df_5_plus.height > 0:
         df_5_plus = calcular_multa(df_5_plus)
@@ -586,7 +476,6 @@ def salvar_relatorios(df_final: pl.DataFrame, pasta_saida: str):
     else:
         logging.warning("⚠️ Nenhum pedido encontrado com 5+ dias parados.")
 
-    # 3. Relatório Mercadorias incompletas
     df_incompletos = df_final.filter(pl.col(COL_NOME_PROBLEMATICO) == "Mercadorias.que.chegam.incompletos货未到齐")
     if df_incompletos.height > 0:
         arquivo_incompletos = os.path.join(pasta_saida, f"Relatório Mercadorias incompletas_{data_hoje}.xlsx")
@@ -598,44 +487,23 @@ def salvar_relatorios(df_final: pl.DataFrame, pasta_saida: str):
 # --- FUNÇÃO PARA MOVER RELATÓRIOS ANTIGOS PARA ARQUIVO MORTO ---
 # ==============================================================================
 def mover_para_arquivo_morto(pasta_origem: str, pasta_destino: str):
-    """
-    Move relatórios antigos para a pasta de Arquivo Morto.
-    - Mantém apenas o relatório mais recente do dia atual.
-    - Move todos os demais (antigos e duplicados do dia) para o Arquivo Morto.
-    """
-    if not os.path.exists(pasta_destino):
-        os.makedirs(pasta_destino)
-
+    if not os.path.exists(pasta_destino): os.makedirs(pasta_destino)
     hoje = datetime.now().strftime("%Y-%m-%d")
-
-    # Lista todos os arquivos Excel
     arquivos = [f for f in os.listdir(pasta_origem) if f.endswith(('.xlsx', '.xls'))]
-
-    # Separa os arquivos do dia atual
     arquivos_hoje = [f for f in arquivos if hoje in f]
-
-    # Ordena os arquivos de hoje por data de modificação (último é o mais novo)
     arquivos_hoje.sort(key=lambda f: os.path.getmtime(os.path.join(pasta_origem, f)))
-
-    # Mantém só o mais novo do dia, manda os outros para o Arquivo Morto
     if len(arquivos_hoje) > 1:
         for arquivo in arquivos_hoje[:-1]:
             try:
-                caminho_arquivo = os.path.join(pasta_origem, arquivo)
-                destino_final = os.path.join(pasta_destino, arquivo)
-                shutil.move(caminho_arquivo, destino_final)
-                logging.info(f"📦 Arquivo duplicado de hoje movido: {arquivo}")
+                shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo)); logging.info(
+                    f"📦 Arquivo duplicado de hoje movido: {arquivo}")
             except Exception as e:
                 logging.error(f"Erro ao mover o arquivo {arquivo}: {e}")
-
-    # Move todos os arquivos que não são de hoje
     for arquivo in arquivos:
         if arquivo not in arquivos_hoje:
             try:
-                caminho_arquivo = os.path.join(pasta_origem, arquivo)
-                destino_final = os.path.join(pasta_destino, arquivo)
-                shutil.move(caminho_arquivo, destino_final)
-                logging.info(f"📦 Arquivo antigo movido para Arquivo Morto: {arquivo}")
+                shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo)); logging.info(
+                    f"📦 Arquivo antigo movido para Arquivo Morto: {arquivo}")
             except Exception as e:
                 logging.error(f"Erro ao mover o arquivo {arquivo}: {e}")
 
@@ -644,24 +512,34 @@ def mover_para_arquivo_morto(pasta_origem: str, pasta_destino: str):
 # --- MAIN ---
 # ==============================================================================
 def main():
+    """
+    Função principal que executa o fluxo completo do script.
+    1. Carrega todos os dados de entrada.
+    2. Processa e junta os dados na função 'processar_dados'.
+    3. Adiciona informações de coordenadores.
+    4. Salva os relatórios finais.
+    """
     logging.info("--- INICIANDO PROCESSO DE GERAÇÃO DE RELATÓRIOS ---")
 
+    # 1. CARREGAR DADOS
     caminho_arquivo_original = encontrar_arquivo_principal(PATH_INPUT_MAIN, FILENAME_START_MAIN)
     if not caminho_arquivo_original:
         logging.critical("Arquivo principal não encontrado. Processo interrompido.")
         return
-
     df_main = pl.read_excel(caminho_arquivo_original)
     df_problematicos = carregar_planilhas_de_pasta(PATH_INPUT_PROBLEMATICOS, "Consolidando problemáticos")
     df_devolucao = carregar_planilhas_de_pasta(PATH_INPUT_DEVOLUCAO, "Consolidando devoluções")
 
+    # 2. PROCESSAR DADOS (Juntar e Aplicar Regras)
     df_final = processar_dados(df_main, df_problematicos, df_devolucao)
+
+    # 3. ADICIONAR INFO COORDENADOR
     df_final = adicionar_info_coordenador(df_final)
 
-    # 🆕 mover relatórios antigos antes de salvar novos
+    # 4. MOVER RELATÓRIOS ANTIGOS E SALVAR NOVOS
     mover_para_arquivo_morto(PATH_OUTPUT_REPORTS, PATH_OUTPUT_ARQUIVO_MORTO)
-
     salvar_relatorios(df_final, PATH_OUTPUT_REPORTS)
+
     logging.info("--- PROCESSO CONCLUÍDO COM SUCESSO! ---")
 
 
