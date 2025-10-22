@@ -1,14 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
------------------------------------------------------------
-✅ Detecta automaticamente o arquivo Excel na pasta
-✅ Ignora arquivos gerados pelo próprio script (Minha_responsabilidade*, Relatorio_*)
-✅ Filtra Regionais GP
-✅ Calcula custo estimado e remove remessas -000~-999
-✅ Gera resumo geral e por coordenador (ordenado)
-✅ Cria cópia automática se arquivo estiver aberto
-===========================================================
-"""
 
 import pandas as pd
 import os
