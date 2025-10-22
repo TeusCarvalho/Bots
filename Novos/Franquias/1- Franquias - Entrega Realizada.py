@@ -54,9 +54,8 @@ BASES_VALIDAS = [
     "F ORL-PA", "F PCA-PA", "F PDR-GO", "F PGM-PA", "F PLN-DF", "F PON-GO",
     "F POS-GO", "F PVH 02-RO", "F PVH-RO", "F PVL-MT", "F RDC -PA", "F RVD - GO",
     "F SEN-GO", "F SFX-PA", "F TGA-MT", "F TGT-DF", "F TLA-PA", "F TRD-GO",
-    "F TUR-PA", "F VHL-RO", "F VLP-GO", "F XIG-PA",
-    # Bases adicionadas que estavam faltando
-    "F TRM-AM", "F STM-PA", "F JPN 02-RO", "F CAC-RO"
+    "F TUR-PA", "F VHL-RO", "F VLP-GO", "F XIG-PA","F TRM-AM", "F STM-PA",
+    "F JPN 02-RO", "F CAC-RO"
 ]
 
 

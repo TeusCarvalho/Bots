@@ -1,65 +1,29 @@
 # -*- coding: utf-8 -*-
-# Custo e Arbitragem - versão automática
+# 🚀 Custo e Arbitragem - versão Polars Lazy ⚡ (corrigida e definitiva)
 
-import pandas as pd
+import polars as pl
 import os
 import requests
 import json
 from datetime import datetime
 
-def format_currency(value):
+pl.Config.set_tbl_rows(10)  # evita prints gigantes no terminal
+
+# ============================================================
+# ⚙️ Funções auxiliares
+# ============================================================
+
+def format_currency(value: float) -> str:
     """Formata número em formato BRL"""
-    formatted_value = f"{value:,.2f}"
-    return formatted_value.replace(",", "X").replace(".", ",").replace("X", ".")
+    try:
+        formatted_value = f"{value:,.2f}"
+        return formatted_value.replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return "0,00"
 
-# --- CONFIGURAÇÕES ---
-COORDENADOR_WEBHOOKS = {
-    "Franquias": "https://open.feishu.cn/open-apis/bot/v2/hook/328a86ed-6c6f-4b61-acc4-aa33bd1b8254"
-}
-
-# --- LINK PARA CARD ---
-LINK_RELATORIO = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/EtbZs3AZ0_BHtx7KGJOAVGcBvxaAJM-8vINYH7PJG43W-w?e=Su1J2P"
-
-# --- PASTAS ---
-BASE_DIR = r'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\Custo'
-OUTPUT_FILE = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Custo\Minha_responsabilidade_atualizada.xlsx"
-
-# --- BASES PERMITIDAS ---
-BASES_PERMITIDAS = [
-    "F BSB - DF", "F BSB-DF", "F FMA-GO", "F TGT-DF", "F VLP-GO", "F AGL-GO",
-    "F ANP-GO", "F APG - GO", "F GYN - GO", "F GYN 02-GO", "F OCD - GO", "F OCD-GO",
-    "F PDR-GO", "F PON-GO", "F RVD - GO", "F SEN-GO", "F TRD-GO", "F ARQ - RO",
-    "F PVH-RO", "F VHL-RO", "F CMV-MT", "F CNF-MT", "F PVL-MT", "F AMB-MS",
-    "F CGR - MS", "F CGR 02-MS", "F DOU-MS", "F ALV-AM", "F ALX-AM", "F BAO-PA",
-    "F CDN-AM", "F CHR-AM", "F DOM -PA", "F GAI-TO", "F GRP-TO", "F ITI -PA",
-    "F ITI-PA", "F JCD-PA", "F MCP-AP", "F ORL-PA", "F PCA-PA", "F PGM-PA",
-    "F RDC -PA", "F SFX-PA", "F TLA-PA", "F TUR-PA", "F MCP 02-AP"
-]
-
-# --- COLUNAS ESPERADAS ---
-COLUMN_NAMES = [
-    'Número de declaração', 'Remessa', 'Tipo de produto', 'Tipo de anomalia primária',
-    'Tipo de anomalia secundária', 'Dias de atraso', 'Status de arbitragem', 'Base remetente',
-    'Regional Remetente', 'Declarante', 'Declarante No.', 'Data de declaração',
-    'Origem da Solicitação', 'Regional de declaração', 'Data de recebimento da arbitragem',
-    'Data de distribuição da arbitragem', 'Data de decisão de arbitragem', 'Data de contestação',
-    'Data da última edição', 'Data de distribuição da contestação', 'Data de decisão da contestação',
-    'Data de processamento de retorno', 'Valor do item', 'Processador de arbitragem',
-    'Processador de contestação', 'Tipo de produto', 'Conteúdo do pacote',
-    'Descrição de anomalia', 'Data de fechamento', 'Tipo de decisão', 'Base responsável',
-    'Regional responsável', 'Valor a pagar (yuan)', 'Taxa de manuseio (yuan)',
-    'Valor da arbitragem (yuan)', 'Base de liquidação financeira',
-    'Comentários de decisão de arbitragem', 'Comentários de decisão de contestação',
-    'Processador de retorno', 'Comentário de processamento de retorno', 'Tempo de processamento de retorno',
-    'Resposta da parte responsável', 'Fonte', 'Origem do Pedido', 'Hora de envio',
-    'Horário de coleta', 'Horário de Previsão de Entrega SLA Cadeia',
-    'Responsável pela entrega', 'Horário da entrega', 'Peso cobrável',
-    'Tempo restante de processamento', 'Número do cliente', 'Nome do cliente',
-    'Etapa de decisão de responsabilidade'
-]
 
 def create_feishu_card_payload(title: str, body: str) -> dict:
-    """Monta o card interativo do Feishu."""
+    """Monta o card interativo do Feishu"""
     return {
         "msg_type": "interactive",
         "card": {
@@ -85,14 +49,50 @@ def create_feishu_card_payload(title: str, body: str) -> dict:
         }
     }
 
-# --- ENCONTRAR O ARQUIVO MAIS RECENTE ---
+
 def get_latest_file(folder: str):
+    """Retorna o arquivo mais recente de uma pasta"""
     files = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(('.xls', '.xlsx'))]
     if not files:
         return None
     return max(files, key=os.path.getmtime)
 
-# --- PROCESSAMENTO ---
+
+# ============================================================
+# 🧩 CONFIGURAÇÕES
+# ============================================================
+
+COORDENADOR_WEBHOOKS = {
+    "Franquias": "https://open.feishu.cn/open-apis/bot/v2/hook/328a86ed-6c6f-4b61-acc4-aa33bd1b8254"
+}
+
+LINK_RELATORIO = (
+    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/"
+    "matheus_carvalho_jtexpressdf_onmicrosoft_com/"
+    "EtbZs3AZ0_BHtx7KGJOAVGcBvxaAJM-8vINYH7PJG43W-w?e=Su1J2P"
+)
+
+BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\Custo"
+OUTPUT_FILE = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Custo\Minha_responsabilidade_atualizada.xlsx"
+
+BASES_PERMITIDAS = [
+    "F AGL-GO", "F ALV-AM", "F ALX-AM", "F AMB-MS", "F ANP-GO", "F APG - GO",
+    "F ARQ - RO", "F BAO-PA", "F BSB - DF", "F BSB-DF", "F BSL-AC", "F CDN-AM",
+    "F CEI-DF", "F CGR - MS", "F CGR 02-MS", "F CHR-AM", "F CMV-MT", "F CNC-PA",
+    "F CNF-MT", "F DOM -PA", "F DOU-MS", "F ELD-PA", "F FMA-GO", "F GAI-TO",
+    "F GRP-TO", "F GYN - GO", "F GYN 02-GO", "F GYN 03-GO", "F IGA-PA", "F ITI -PA",
+    "F ITI-PA", "F JCD-PA", "F MCP 02-AP", "F MCP-AP", "F OCD - GO", "F OCD-GO",
+    "F ORL-PA", "F PCA-PA", "F PDR-GO", "F PGM-PA", "F PLN-DF", "F PON-GO",
+    "F POS-GO", "F PVH 02-RO", "F PVH-RO", "F PVL-MT", "F RDC -PA", "F RVD - GO",
+    "F SEN-GO", "F SFX-PA", "F TGA-MT", "F TGT-DF", "F TLA-PA", "F TRD-GO",
+    "F TUR-PA", "F VHL-RO", "F VLP-GO", "F XIG-PA", "F TRM-AM", "F STM-PA",
+    "F JPN 02-RO", "F CAC-RO"
+]
+
+# ============================================================
+# 🚀 PROCESSAMENTO PRINCIPAL
+# ============================================================
+
 latest_file = get_latest_file(BASE_DIR)
 
 if not latest_file:
@@ -100,54 +100,74 @@ if not latest_file:
 else:
     try:
         print(f"📂 Lendo arquivo: {os.path.basename(latest_file)}")
-        df = pd.read_excel(latest_file, header=None, names=COLUMN_NAMES)
 
-        # 🔹 Remover remessas com traço
-        if 'Remessa' in df.columns:
-            df = df[~df['Remessa'].astype(str).str.contains('-')]
+        # 🧠 Lê o Excel em modo Lazy (com inferência flexível)
+        lazy_df = pl.read_excel(latest_file, infer_schema_length=1000).lazy()
 
-        # 🔹 Normalizar base
-        if 'Base responsável' in df.columns:
-            df['Base responsável'] = df['Base responsável'].astype(str).str.strip()
-            df['Base responsável'] = df['Base responsável'].replace({"VHL -RO": "F VHL-RO"})
+        # 🔹 Normalização e filtragem
+        if "Base responsável" in lazy_df.columns:
+            lazy_df = (
+                lazy_df
+                .with_columns([
+                    pl.col("Remessa").cast(pl.Utf8).alias("Remessa"),
+                    pl.col("Base responsável").cast(pl.Utf8).str.strip_chars().alias("Base responsável"),
+                    pl.col("Regional responsável").cast(pl.Utf8).alias("Regional responsável"),
+                    pl.col("Valor a pagar (yuan)").cast(pl.Float64).alias("Valor a pagar (yuan)")
+                ])
+                .filter(~pl.col("Remessa").str.contains("-"))
+                .with_columns(
+                    pl.when(pl.col("Base responsável") == "VHL -RO")
+                    .then(pl.lit("F VHL-RO"))  # 👈 uso de pl.lit() resolve o erro
+                    .otherwise(pl.col("Base responsável"))
+                    .alias("Base responsável")
+                )
+                .filter(pl.col("Regional responsável") == "GP")
+                .filter(pl.col("Base responsável").is_in(BASES_PERMITIDAS))
+            )
+        else:
+            print("⚠️ Coluna 'Base responsável' não encontrada. Pulando normalização.")
 
-        # 🔹 Filtrar regionais GP e bases permitidas
-        df = df[df['Regional responsável'] == 'GP']
-        df = df[df['Base responsável'].isin(BASES_PERMITIDAS)]
+        # 📊 Agrupamento Lazy
+        resumo_bases = (
+            lazy_df
+            .group_by("Base responsável")
+            .agg([
+                pl.count("Remessa").alias("Qtd_Pedidos"),
+                pl.col("Valor a pagar (yuan)").sum().alias("Valor_Total")
+            ])
+            .sort("Valor_Total", descending=True)
+        )
 
-        # --- AGRUPAR E CALCULAR ---
-        resumo_bases = df.groupby('Base responsável').agg(
-            Qtd_Pedidos=('Remessa', 'count'),
-            Valor_Total=('Valor a pagar (yuan)', 'sum')
-        ).reset_index().sort_values(by="Valor_Total", ascending=False)
+        resumo_bases = resumo_bases.collect()
 
-        valor_total_geral = resumo_bases['Valor_Total'].sum()
+        valor_total_geral = resumo_bases["Valor_Total"].sum()
         top5 = resumo_bases.head(5)
 
-        # --- MONTAR MENSAGEM ---
+        # ============================================================
+        # 💬 MENSAGEM PARA FEISHU
+        # ============================================================
         data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
-        mensagem = f"📊 **Relatório de Resarcimento - TOP 5 Piores Bases**\n📅 Data de geração: {data_geracao}\n\n"
-
-        for _, row in top5.iterrows():
+        mensagem = f"📊 **Relatório de Resarcimento - TOP 5 Piores Bases**\n📅 {data_geracao}\n\n"
+        for row in top5.iter_rows(named=True):
             mensagem += f"🔴 {row['Base responsável']} - {row['Qtd_Pedidos']} pedidos - R$ {format_currency(row['Valor_Total'])}\n"
+        mensagem += f"\n💰 **Total Geral:** R$ {format_currency(valor_total_geral)}"
 
-        mensagem += f"\n💰 **Valor Total Geral:** R$ {format_currency(valor_total_geral)}"
-
-        # --- ENVIAR CARD ---
+        # ============================================================
+        # 📤 ENVIAR CARD FEISHU
+        # ============================================================
         payload = create_feishu_card_payload("📊 Relatório de Resarcimento - Franquias", mensagem)
         webhook_url = COORDENADOR_WEBHOOKS.get("Franquias")
-
         if webhook_url:
             resp = requests.post(webhook_url, headers={"Content-Type": "application/json"}, data=json.dumps(payload))
-            if resp.status_code == 200:
-                print(f"✅ Card enviado com sucesso para Franquias")
-            else:
-                print(f"⚠️ Erro {resp.status_code}: {resp.text}")
+            print("✅ Card enviado com sucesso!" if resp.status_code == 200 else f"⚠️ Erro {resp.status_code}: {resp.text}")
 
-        # --- SALVAR ---
+        # ============================================================
+        # 💾 SALVAR RESULTADO FINAL
+        # ============================================================
+        df_final = lazy_df.collect()
         os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-        df.to_excel(OUTPUT_FILE, index=False)
-        print(f"📎 Arquivo salvo em: {OUTPUT_FILE}")
+        df_final.write_excel(OUTPUT_FILE)
+        print(f"📎 Arquivo salvo com sucesso: {OUTPUT_FILE}")
 
     except Exception as e:
         print(f"❌ Erro ao processar: {e}")
