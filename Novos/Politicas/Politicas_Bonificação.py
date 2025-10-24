@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-📊 Política de Bonificação - v2.4.6
+📊 Política de Bonificação - v2.5.0
 Autor: bb-assistente 😎
 Descrição:
-- Corrige o cálculo de Ressarcimento usando a coluna real
-  "Quantidade entregue com assinatura" da Coleta + Expedição.
-- Soma automaticamente todas as ocorrências da base.
-- Gera relatório consolidado e formatado em Excel.
+- Corrige geração da coluna "Diferença (h)" mesmo sem base antiga.
+- Corrige cálculo tipo SEERRO no ressarcimento.
+- Mantém Taxa_SemMov com 4 casas decimais no Excel.
+- Exibe apenas as 5 melhores bases.
 """
 
 import os
@@ -58,7 +58,6 @@ def read_excel_silent(path):
 # 📦 Indicadores individuais
 # ==========================================================
 def coleta_expedicao():
-    """Soma total de coleta, expedição e entregas com assinatura."""
     arquivos = [f for f in os.listdir(DIR_COLETA) if f.endswith(".xlsx")]
     dfs = []
     for arq in tqdm(arquivos, desc="🟦 Lendo Coleta + Expedição", colour="blue"):
@@ -119,7 +118,6 @@ def taxa_t0():
     return df_group.select(["Nome da base", "SLA (%)"])
 
 def ressarcimento_por_pacote(df_coleta_assinatura: pl.DataFrame):
-    """Calcula o ressarcimento total com base na quantidade real de entregas com assinatura."""
     f = latest_excel(DIR_RESS)
     if not f:
         return pl.DataFrame()
@@ -132,12 +130,10 @@ def ressarcimento_por_pacote(df_coleta_assinatura: pl.DataFrame):
     df = df.group_by("Base responsável").agg(pl.sum("Valor a pagar (R$)").alias("Valor Total (R$)"))
     df = df.rename({"Base responsável": "Nome da base"})
 
-    # Junta com a quantidade real de entregas com assinatura
     if not df_coleta_assinatura.is_empty():
         df = df.join(df_coleta_assinatura.select(["Nome da base", "Qtd Entregue Assinatura"]), on="Nome da base", how="left")
 
-    df = df.fill_null(0)
-    return df
+    return df.fill_null(0)
 
 def pacotes_sem_mov():
     f = latest_excel(DIR_SEMMOV)
@@ -213,57 +209,40 @@ def consolidar():
     df_ress = ressarcimento_por_pacote(df_coleta)
     df_sem = pacotes_sem_mov()
 
-    print("\n🔍 Diagnóstico das bases:")
-    for nome, df in {
-        "Coleta+Expedição": df_coleta,
-        "T0": df_t0,
-        "Shipping Atual": df_ship_atual,
-        "Shipping Antiga": df_ship_antiga,
-        "Ressarcimento": df_ress,
-        "Sem Movimentação": df_sem,
-    }.items():
-        if df.is_empty():
-            print(f"⚠️ {nome} está vazia.")
-        elif "Nome da base" not in df.columns:
-            print(f"⚠️ {nome} sem coluna 'Nome da base' — colunas: {df.columns}")
-
-    if "Nome da base" not in df_coleta.columns or "Nome da base" not in df_t0.columns:
-        raise SystemExit("❌ Erro crítico: Coleta+Expedição ou T0 sem 'Nome da base'.")
-
-    # Shipping
+    # --- Shipping ---
     if not df_ship_atual.is_empty() and not df_ship_antiga.is_empty():
-        df_ship = df_ship_atual.join(df_ship_antiga, on="Nome da base", how="inner")
-        df_ship = df_ship.with_columns(
-            (pl.col("Média Atual (h)") - pl.col("Média Antiga (h)")).alias("Diferença (h)")
-        )
-        df_ship = df_ship.with_columns(
-            pl.when(pl.col("Diferença (h)") <= -0.5).then(pl.lit("Desafio"))
-            .when(pl.col("Diferença (h)") < 0).then(pl.lit("Meta"))
-            .when(pl.col("Diferença (h)") <= 0.5).then(pl.lit("Mínimo"))
-            .otherwise(pl.lit("Fora")).alias("Status Shipping")
+        df_ship = (
+            df_ship_atual.join(df_ship_antiga, on="Nome da base", how="left")
+            .with_columns((pl.col("Média Atual (h)") - pl.col("Média Antiga (h)").fill_null(0)).alias("Diferença (h)"))
         )
     else:
-        print("⚠️ ShippingTime atual ou antigo vazio — colunas ignoradas.")
-        df_ship = pl.DataFrame({"Nome da base": [], "Média Atual (h)": [], "Média Antiga (h)": [], "Diferença (h)": [], "Status Shipping": []})
+        df_ship = df_ship_atual.with_columns(pl.lit(0).alias("Diferença (h)"))
 
+    # --- Junções seguras ---
     dfs = [df_coleta, df_t0, df_ship, df_ress, df_sem]
-    df_final = dfs[0]
+    df_final = df_coleta
     for next_df in dfs[1:]:
         if not next_df.is_empty() and "Nome da base" in next_df.columns:
             df_final = df_final.join(next_df, on="Nome da base", how="left")
 
     df = df_final.fill_null(0)
 
-    # Cálculos finais
+    # 💰 Ressarcimento tipo SEERRO
     df = df.with_columns([
-        ((pl.when(pl.col("Total Coleta+Entrega") > 0)
-         .then(pl.col("Valor Total (R$)") / pl.col("Qtd Entregue Assinatura") / dias_do_mes)
-         .otherwise(0))).alias("Ressarcimento por Pacote (R$)"),
-        (pl.when(pl.col("Total Coleta+Entrega") > 0)
-         .then(pl.col("Qtd Sem Mov") / pl.col("Total Coleta+Entrega"))
-         .otherwise(0)).alias("Taxa_SemMov")
+        (
+            pl.when(pl.col("Qtd Entregue Assinatura") > 0)
+            .then(pl.col("Valor Total (R$)") / pl.col("Qtd Entregue Assinatura"))
+            .otherwise(pl.col("Valor Total (R$)"))
+        ).alias("Ressarcimento por Pacote (R$)"),
+
+        (
+            pl.when(pl.col("Total Coleta+Entrega") > 0)
+            .then(pl.col("Qtd Sem Mov") / dias_do_mes / pl.col("Total Coleta+Entrega"))
+            .otherwise(0)
+        ).alias("Taxa_SemMov")
     ])
 
+    # 🧾 Pontuação total
     df = df.with_columns(
         (pl.sum_horizontal([
             pl.when(pl.col("SLA (%)") >= 0.95).then(100).otherwise(0),
@@ -300,6 +279,7 @@ def main():
         workbook = writer.book
 
         fmt_percent = workbook.add_format({"num_format": "0.00%", "align": "center"})
+        fmt_taxa = workbook.add_format({"num_format": "0.0000%", "align": "center"})
         fmt_number = workbook.add_format({"num_format": "#,##0.00", "align": "center"})
         fmt_money = workbook.add_format({"num_format": '"R$"#,##0.00', "align": "center"})
         fmt_int = workbook.add_format({"num_format": "0", "align": "center"})
@@ -307,7 +287,9 @@ def main():
 
         for i, col in enumerate(df_pd.columns):
             width = max(df_pd[col].astype(str).map(len).max(), len(col)) + 2
-            if col in ["SLA (%)", "Taxa_SemMov"]:
+            if col == "Taxa_SemMov":
+                ws.set_column(i, i, 14, fmt_taxa)
+            elif col in ["SLA (%)"]:
                 ws.set_column(i, i, 14, fmt_percent)
             elif "(R$)" in col:
                 ws.set_column(i, i, 14, fmt_money)
@@ -319,6 +301,11 @@ def main():
                 ws.set_column(i, i, width, fmt_text)
 
     print(f"✅ Relatório final gerado com sucesso!\n📂 {out_path}")
+
+    # 🏆 Exibe Top 5 melhores bases
+    top5 = df_pd.nlargest(5, "Pontuação_Total")[["Nome da base", "Pontuação_Total", "SLA (%)", "Ressarcimento por Pacote (R$)", "Taxa_SemMov"]]
+    print("\n🏆 Top 5 Melhores Bases:")
+    print(top5.to_string(index=False))
 
 # ==========================================================
 if __name__ == "__main__":
