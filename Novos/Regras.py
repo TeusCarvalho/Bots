@@ -357,9 +357,10 @@ def processar_dados(df_main: pl.DataFrame, df_problematicos: pl.DataFrame, df_de
     # Passo 2: Juntar com dados de Pacotes Problemáticos
     if df_problematicos.height > 0:
         logging.info("Enriquecendo dados com informações de pacotes problemáticos...")
+        # CORREÇÃO 1: Adicionado .cast(pl.Utf8) antes de .str.to_datetime() para evitar erro se a coluna já for datetime.
         df_problematicos = df_problematicos.with_columns(
             pl.col('Número de pedido JMS').cast(pl.Utf8),
-            pl.col('Tempo de digitalização').str.to_datetime(strict=False)
+            pl.col('Tempo de digitalização').cast(pl.Utf8).str.to_datetime(strict=False)
         ).sort('Tempo de digitalização').filter(pl.col('Número de pedido JMS').is_not_null())
 
         summary = df_problematicos.group_by('Número de pedido JMS').agg([
@@ -393,7 +394,8 @@ def processar_dados(df_main: pl.DataFrame, df_problematicos: pl.DataFrame, df_de
 
     # Passo 4: Aplicar as regras de negócio
     logging.info("Aplicando regras de negócio no DataFrame consolidado...")
-    df = df.with_columns(pl.col(COL_HORA_OPERACAO).str.to_datetime(strict=False))
+    # CORREÇÃO 2: Adicionado .cast(pl.Utf8) antes de .str.to_datetime() para evitar erro se a coluna já for datetime.
+    df = df.with_columns(pl.col(COL_HORA_OPERACAO).cast(pl.Utf8).str.to_datetime(strict=False))
     df = df.with_columns(
         (datetime.now() - pl.col(COL_HORA_OPERACAO)).dt.days().fill_null(0).cast(pl.Int32).alias(COL_DIAS_PARADO))
     df = aplicar_regras_status(df)

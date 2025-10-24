@@ -1,16 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-===========================================================
-📦 Consolidação e Verificação de Bases - Sem Movimentação (Polars)
-Versão: 2.0 (2025-10-17)
-Autor: bb-assistente 😎
------------------------------------------------------------
-✅ Usa Polars Lazy Mode (10x mais rápido)
-✅ Junta todas as planilhas .xlsx da pasta
-✅ Localiza 'Unidade responsável责任机构' mesmo com variações
-✅ Mostra diferenças e filtra apenas bases corretas
-===========================================================
-"""
 
 import os
 import polars as pl
@@ -27,7 +15,8 @@ ARQUIVO_SAIDA = os.path.join(PASTA_ENTRADA, "Bases_Filtradas.xlsx")
 BASES_ALVO = [
     "CZS -AC", "SMD -AC", "TAR -AC", "F BSL-AC",
     "ANA FLUVIAL - PA", "BRV -PA", "MCP FLUVIAL -AP",
-    "F PVH-RO", "F MCP-AP", "F MCP 02-AP"
+    "F PVH-RO", "F MCP-AP", "F MCP 02-AP", "STM FLUVIAL -PA" ,"ITT -PA",
+    "MAO FLUVIAL -AM"
 ]
 
 # ======================================================
