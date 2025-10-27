@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-# 🚀 Sem Movimentação — versão Polars Lazy ⚡ (compatível com Polars 1.11+ e Python 3.13)
+# 🚀 Sem Movimentação — versão Polars Lazy ⚡ (corrigida contra overflow)
+# Compatível com Polars 1.11+ e Python 3.13
 
 import polars as pl
 import os
@@ -106,16 +107,43 @@ def carregar_relatorio_anterior(pasta: str) -> Optional[pl.DataFrame]:
     return pl.read_excel(arquivo_mais_recente)
 
 def comparar_relatorios(df_atual: pl.DataFrame, df_anterior: Optional[pl.DataFrame]):
-    atual = df_atual.group_by(COL_BASE_RECENTE).count().rename({"count": "QtdAtual"})
+    atual = (
+        df_atual
+        .group_by(COL_BASE_RECENTE)
+        .count()
+        .rename({"count": "QtdAtual"})
+        .with_columns(pl.col("QtdAtual").cast(pl.Int64))
+    )
+
     if df_anterior is not None:
-        anterior = df_anterior.group_by(COL_BASE_RECENTE).count().rename({"count": "QtdAnterior"})
+        df_anterior = df_anterior.unique(subset=[COL_REMESSA])
+        anterior = (
+            df_anterior
+            .group_by(COL_BASE_RECENTE)
+            .count()
+            .rename({"count": "QtdAnterior"})
+            .with_columns(pl.col("QtdAnterior").cast(pl.Int64))
+        )
         df_comp = atual.join(anterior, on=COL_BASE_RECENTE, how="outer").fill_null(0)
     else:
         df_comp = atual.with_columns(pl.lit(0).alias("QtdAnterior"))
-    df_comp = df_comp.with_columns((pl.col("QtdAtual") - pl.col("QtdAnterior")).alias("Diferenca"))
+
+    df_comp = df_comp.with_columns([
+        pl.col("QtdAtual").cast(pl.Int64),
+        pl.col("QtdAnterior").cast(pl.Int64),
+        (pl.col("QtdAtual") - pl.col("QtdAnterior")).cast(pl.Int64).alias("Diferenca")
+    ])
+
     qtd_total = int(df_comp["QtdAtual"].sum())
     variacao_total = int(df_comp["Diferenca"].sum())
-    piores = df_comp.sort("QtdAtual", descending=True).head(5).select([COL_BASE_RECENTE, "QtdAtual"])
+
+    piores = (
+        df_comp
+        .sort("QtdAtual", descending=True)
+        .head(5)
+        .select([COL_BASE_RECENTE, "QtdAtual"])
+    )
+
     piores_list = [(r[COL_BASE_RECENTE], int(r["QtdAtual"])) for r in piores.iter_rows(named=True)]
     return qtd_total, variacao_total, piores_list
 
@@ -169,7 +197,7 @@ def main():
 
     df_lazy = df_lazy.filter(pl.col(COL_BASE_RECENTE).is_in(BASES_VALIDAS))
 
-    # 🕒 Calcular dias parado (corrigido)
+    # 🕒 Calcular dias parado
     df_lazy = df_lazy.with_columns([
         pl.col(COL_HORA_OPERACAO).cast(pl.Datetime).alias(COL_HORA_OPERACAO),
         (pl.lit(datetime.now()) - pl.col(COL_HORA_OPERACAO)).dt.total_days().fill_null(0).cast(pl.Int64).alias(COL_DIAS_PARADO)
@@ -187,7 +215,7 @@ def main():
     output_path = os.path.join(PATH_OUTPUT_REPORTS, f"Relatório_SemMovimentação_Completo_{data_hoje}.xlsx")
     df_final.write_excel(output_path)
 
-    # Filtro para 5+ dias
+    # Filtro 5+ dias
     df_card = df_final.filter(pl.col(COL_DIAS_PARADO) >= 5)
 
     # Comparar e gerar card
