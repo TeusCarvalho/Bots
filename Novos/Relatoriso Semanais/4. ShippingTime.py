@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-📦 Comparativo Shipping Time Semanal — versão robusta final
+📦 Comparativo Shipping Time Semanal — versão robusta final + filtro UF + ofensores detalhados
 ---------------------------------------------------------------
 - Corrige tipos numéricos automaticamente
 - Usa PDD de Entrega como base
 - Calcula Etapas 6, 7, 8 e Tempo Total
 - Gera comparativo limpo e compatível
+- Mantém apenas UFs especificadas em 'Estado de Entrega'
+- Mostra TOP ofensores (Etapas 7 e 8) com valores e variação
 """
 
 import polars as pl
@@ -20,6 +22,9 @@ warnings.filterwarnings("ignore")
 BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Semanal\1. Shipping Time"
 OUTPUT_DIR = os.path.join(BASE_DIR, "Output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# =================== UF PERMITIDAS ===================
+UFS_PERMITIDAS = ["PA", "MT", "GO", "AM", "MS", "RO", "TO", "DF", "RR", "AC", "AP"]
 
 # =================== FUNÇÕES ===================
 
@@ -57,12 +62,20 @@ def ler_todos_excel(pasta):
     df_final = df_final.with_columns([pl.col(c).cast(pl.Utf8, strict=False) for c in df_final.columns])
     return df_final
 
+def filtrar_por_uf(df):
+    if "Estado de Entrega" not in df.columns:
+        print("⚠️ Coluna 'Estado de Entrega' não encontrada — mantendo todas as linhas.")
+        return df
+    df = df.filter(pl.col("Estado de Entrega").is_in(UFS_PERMITIDAS))
+    print(f"✅ Linhas mantidas apenas das UFs: {', '.join(UFS_PERMITIDAS)}")
+    return df
+
 def limpar_coluna_num(df, col):
     """Limpa strings e converte para float."""
     return (
         df[col]
-        .str.replace_all(r"[^\d,.\-]", "")  # remove letras e símbolos
-        .str.replace(",", ".")               # vírgula -> ponto
+        .str.replace_all(r"[^\d,.\-]", "")
+        .str.replace(",", ".")
         .cast(pl.Float64, strict=False)
         .fill_null(0)
         .fill_nan(0)
@@ -78,14 +91,12 @@ def calcular_tempo_medio(df):
         if col not in df.columns:
             df = df.with_columns(pl.lit(0).alias(col))
 
-    # limpa e converte valores
     df = df.with_columns([
         limpar_coluna_num(df, col6).alias(col6),
         limpar_coluna_num(df, col7).alias(col7),
         limpar_coluna_num(df, col8).alias(col8)
     ])
 
-    # soma total
     df = df.with_columns([
         (pl.col(col6) + pl.col(col7) + pl.col(col8)).alias("Tempo Total (h)")
     ])
@@ -105,7 +116,6 @@ def calcular_tempo_medio(df):
 def gerar_comparativo(semana_ant, semana_atual):
     comp = semana_ant.join(semana_atual, on="Base Entrega", how="outer", suffix="_Atual")
 
-    # converte possíveis strings em float antes da subtração
     for etapa in ["Etapa 6", "Etapa 7", "Etapa 8", "Tempo Total"]:
         comp = comp.with_columns([
             pl.col(f"{etapa} (h)").cast(pl.Float64, strict=False).alias(f"{etapa} (h)"),
@@ -133,6 +143,31 @@ def resumo_final(semana_ant, semana_atual):
             print(f"- {nome}: {media_at:.2f}h ({arrow}{abs(diff):.2f}h)")
     print("")
 
+def mostrar_top_ofensores(comp, etapa="Etapa 7 (h)", top_n=10):
+    """Mostra bases que pioraram mais na etapa informada com valores detalhados."""
+    base_col = "Base Entrega"
+    atual_col = f"{etapa}_Atual"
+    ant_col = etapa
+    delta_col = f"{etapa.split(' (')[0]} Δ (h)"
+
+    if not all(c in comp.columns for c in [base_col, ant_col, atual_col, delta_col]):
+        print(f"⚠️ Colunas necessárias não encontradas para {etapa}.")
+        return
+
+    ofensores = (
+        comp.select([base_col, ant_col, atual_col, delta_col])
+        .drop_nulls(delta_col)
+        .sort(delta_col, descending=True)
+        .head(top_n)
+    )
+
+    print(f"\n🔥 Top {top_n} Ofensores — {etapa}:")
+    print(f"{'Base Entrega':<25} {'Ant. (h)':>10} {'Atu. (h)':>10} {'Δ (h)':>10}")
+    print("-" * 60)
+    for row in ofensores.iter_rows():
+        base, ant, atual, delta = row
+        print(f"{base:<25} {ant:>10.2f} {atual:>10.2f} {delta:>10.2f}")
+
 # =================== EXECUÇÃO ===================
 
 def main():
@@ -153,6 +188,10 @@ def main():
         print("❌ Não foi possível ler uma das semanas.")
         return
 
+    # 🔍 Filtro de UF
+    df_atual = filtrar_por_uf(df_atual)
+    df_ant = filtrar_por_uf(df_ant)
+
     print("\n⏳ Calculando médias por base (PDD de Entrega)...")
     semana_atual = calcular_tempo_medio(df_atual)
     semana_anterior = calcular_tempo_medio(df_ant)
@@ -161,9 +200,13 @@ def main():
     comparativo = gerar_comparativo(semana_anterior, semana_atual)
     resumo_final(semana_anterior, semana_atual)
 
+    # 🔥 Mostrar ofensores detalhados
+    mostrar_top_ofensores(comparativo, "Etapa 7 (h)", top_n=10)
+    mostrar_top_ofensores(comparativo, "Etapa 8 (h)", top_n=10)
+
     output_excel = os.path.join(OUTPUT_DIR, "Comparativo_ShippingTime.xlsx")
     comparativo.write_excel(output_excel)
-    print(f"✅ Comparativo salvo em:\n{output_excel}\n")
+    print(f"\n✅ Comparativo salvo em:\n{output_excel}\n")
 
 
 if __name__ == "__main__":

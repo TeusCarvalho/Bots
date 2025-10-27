@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-💰 Processamento de Custos - v2.2
-Com separação de valores por tipo de anomalia
+💰 Processamento de Custos - v2.3
+Com separação de valores e quantidade por tipo de anomalia
 """
 
 import pandas as pd
@@ -12,7 +12,7 @@ from datetime import datetime
 # ⚙️ CONFIGURAÇÕES
 # ======================================================
 
-BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Custo"
+BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Semanal\4. Ressarcimentos"
 OUTPUT_PATH = os.path.join(BASE_DIR, "Minha_responsabilidade_atualizada.xlsx")
 
 # ======================================================
@@ -105,6 +105,8 @@ try:
     valor_total = df["Valor a pagar (R$)"].sum() if "Valor a pagar (R$)" in df.columns else 0
 
     valores_por_tipo = {}
+    quantidades_por_tipo = {}
+
     if "Tipo de anomalia primária" in df.columns:
         tipos_interesse = [
             "AVARIA 破损",
@@ -112,10 +114,9 @@ try:
             "Reivindicações rápidas/投诉理赔"
         ]
         for tipo in tipos_interesse:
-            valores_por_tipo[tipo] = df.loc[
-                df["Tipo de anomalia primária"].astype(str).str.contains(tipo, na=False, case=False),
-                "Valor a pagar (R$)"
-            ].sum()
+            filtro = df["Tipo de anomalia primária"].astype(str).str.contains(tipo, na=False, case=False)
+            valores_por_tipo[tipo] = df.loc[filtro, "Valor a pagar (R$)"].sum()
+            quantidades_por_tipo[tipo] = filtro.sum()
 
     # ------------------------------------------------------
     # 🕒 Data de processamento
@@ -139,21 +140,23 @@ try:
     # ------------------------------------------------------
     # 📊 Resumo final no terminal
     # ------------------------------------------------------
-    print("\n" + "="*55)
+    print("\n" + "="*60)
     print("📊 RESUMO DO PROCESSAMENTO")
-    print("="*55)
-    print(f"📄 Linhas originais:           {total_inicial:,}".replace(",", "."))
-    print(f"✅ Linhas após limpeza:       {len(df):,}".replace(",", "."))
-    print(f"🗑️  Linhas removidas (-000~999): {linhas_removidas:,}".replace(",", "."))
-    print(f"💴 Total geral (R$):          {format_currency(valor_total)}\n")
+    print("="*60)
+    print(f"📄 Linhas originais:              {total_inicial:,}".replace(",", "."))
+    print(f"✅ Linhas após limpeza:          {len(df):,}".replace(",", "."))
+    print(f"🗑️  Linhas removidas (-000~999):  {linhas_removidas:,}".replace(",", "."))
+    print(f"💴 Total geral (R$):             {format_currency(valor_total)}\n")
 
-    print("💥 Valores por tipo de anomalia:")
-    for tipo, valor in valores_por_tipo.items():
-        print(f"   - {tipo}: R$ {format_currency(valor)}")
+    print("💥 Valores e quantidades por tipo de anomalia:")
+    for tipo in valores_por_tipo.keys():
+        valor = valores_por_tipo[tipo]
+        qtd = quantidades_por_tipo[tipo]
+        print(f"   - {tipo}: R$ {format_currency(valor)}  |  {qtd:,} pedidos".replace(",", "."))
 
-    print(f"\n🕒 Data de processamento:     {data_atual}")
-    print(f"💾 Arquivo salvo em:          {OUTPUT_PATH}")
-    print("="*55 + "\n")
+    print(f"\n🕒 Data de processamento:        {data_atual}")
+    print(f"💾 Arquivo salvo em:             {OUTPUT_PATH}")
+    print("="*60 + "\n")
 
 except Exception as e:
     print(f"\n❌ Erro ao processar o arquivo:\n{e}")

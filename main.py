@@ -10,7 +10,7 @@ SCRIPTS = {
     "1": ("📦 Sem Movimentação", os.path.join(BASE_PATH, "Comparação.py")),
     "2": ("💰 Custo e Arbitragem", os.path.join(BASE_PATH, "Custo_Arbitragem.py")),
     "3": ("⏱️ T-0", os.path.join(BASE_PATH, "Resumo_Semanal.py")),
-    "4": ("📊 ShippingTime", os.path.join(BASE_PATH, "ShippingTime.py")),
+    "4": ("📊 ShippingTime", os.path.join(BASE_PATH, "4. ShippingTime.py")),
     "5": ("✅ Entrega Realizada – Dia", os.path.join(BASE_PATH, "Entrega_Realizada.py")),
     "6": ("📂 Mover Arquivos Antigos", os.path.join(BASE_PATH, "Mover_Antigos.py")),
 }
