@@ -1,17 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-📊 Política de Bonificação - v2.6.1
+📊 Política de Bonificação - v2.7.5 FINAL
 Autor: bb-assistente 😎
 
-Novidades v2.6.1:
-- Mantém SLA (T-0) sem contagens de pedidos (só %).
-- Shipping Time com Atual, Anterior e Diferença (variação).
-- Ressarcimentos com valores e Atingimento calculado por fórmula.
-- Sem Movimentação com Taxa e Atingimento por fórmula.
-- Coluna "Elegibilidade" por fórmula (usa SLA e Diferença do ST).
-- Coluna "Total da bonificação" por fórmula (usa Elegibilidade, Atingimentos).
-- Cabeçalho Excel idêntico ao print (vermelho/cinza + data).
-- Lê TODOS os arquivos de Sem Movimentação (GP/PA + aging 6–7–10–14–30).
+Correções/Features:
+- Joins "full" seguros com normalização da chave ("Nome da base").
+- Remove sufixos indesejados ("_left", "_right") da chave antes/depois dos joins.
+- Shipping Time: variação em horas (Atual - Anterior).
+- Sem Movimentação: GP/PA + aging (6/7/10/14/30), lendo TODOS arquivos.
+- Excel sem fórmulas (colunas de atingimento/eligibilidade vazias).
 """
 
 import os
@@ -42,11 +39,74 @@ os.makedirs(DIR_OUT, exist_ok=True)
 # ⚙️ Utilitários
 # ==========================================================
 def _normalize_base(df: pl.DataFrame) -> pl.DataFrame:
+    # garante coluna chave única e trim
+    df = _fix_key_cols(df)
     if "Nome da base" in df.columns:
         df = df.with_columns(
             pl.col("Nome da base").cast(pl.Utf8, strict=False).str.strip_chars().alias("Nome da base")
         )
     return df
+
+def _fix_key_cols(df: pl.DataFrame) -> pl.DataFrame:
+    """Normaliza qualquer variante da chave para 'Nome da base' e remove duplicatas da chave."""
+    if df.is_empty():
+        return df
+    cols = df.columns
+    # candidatos que aparecem pós-join
+    key_aliases = [c for c in cols if c.startswith("Nome da base")]
+    if not key_aliases:
+        return df
+    # escolhe prioridade: exata > _left > _right > primeira
+    chosen = "Nome da base" if "Nome da base" in key_aliases else (
+        "Nome da base_left" if "Nome da base_left" in key_aliases else (
+            "Nome da base_right" if "Nome da base_right" in key_aliases else key_aliases[0]
+        )
+    )
+    if chosen != "Nome da base":
+        df = df.rename({chosen: "Nome da base"})
+    # drop demais variantes da chave
+    for c in key_aliases:
+        if c != "Nome da base" and c in df.columns:
+            df = df.drop(c)
+    return df
+
+def _safe_full_join(left: pl.DataFrame, right: pl.DataFrame) -> pl.DataFrame:
+    """Join 'full' robusto: normaliza chaves antes/depois e evita duplicações."""
+    if left.is_empty() and right.is_empty():
+        return pl.DataFrame()
+    left = _fix_key_cols(left)
+    right = _fix_key_cols(right)
+    if "Nome da base" not in left.columns and "Nome da base" in right.columns:
+        # se o left não tem a chave mas o right tem, inverte para manter a chave
+        left, right = right, left
+    if "Nome da base" not in left.columns:
+        # sem chave nos dois -> retorna concat (fallback)
+        return pl.concat([left, right], how="diagonal_relaxed").unique(maintain_order=True)
+
+    if "Nome da base" not in right.columns:
+        # right sem chave: retorna left como está
+        out = left
+    else:
+        out = left.join(right, on="Nome da base", how="full", suffix="_dup")
+    # normaliza pós-join
+    out = _fix_key_cols(out)
+    # remove colunas duplicadas com sufixo "_dup" geradas por overlaps não-chave
+    dup_cols = [c for c in out.columns if c.endswith("_dup")]
+    if dup_cols:
+        # regra simples: se já existe a versão "sem _dup", mantemos a sem _dup
+        keep = []
+        drop = []
+        for c in dup_cols:
+            base = c[:-4]
+            if base in out.columns:
+                drop.append(c)
+            else:
+                keep.append(c)  # só mantém se não existe base
+        if drop:
+            out = out.drop(drop)
+    # dedup por chave
+    out = out.unique(subset=["Nome da base"], keep="first")
+    return out
 
 def to_float(col):
     return pl.col(col).cast(pl.Float64, strict=False).fill_null(0).fill_nan(0)
@@ -60,7 +120,56 @@ def read_excel_silent(path):
             return pl.DataFrame()
 
 # ==========================================================
-# 🟦 Coleta + Expedição (usado p/ taxa sem mov)
+# 🟥 Sem Movimentação (multi-arquivos, GP/PA + aging)
+# ==========================================================
+def pacotes_sem_mov():
+    arquivos = [f for f in os.listdir(DIR_SEMMOV) if f.endswith((".xlsx", ".xls"))]
+    if not arquivos:
+        return pl.DataFrame()
+
+    dfs = []
+    for arq in tqdm(arquivos, desc="🟥 Lendo Sem Movimentação", colour="red"):
+        df = read_excel_silent(os.path.join(DIR_SEMMOV, arq))
+        if not df.is_empty():
+            dfs.append(df)
+    if not dfs:
+        return pl.DataFrame()
+
+    df = pl.concat(dfs, how="diagonal_relaxed")
+    # renomeia colunas PT/中文 → padrão
+    rename_map = {}
+    for c in df.columns:
+        if "责任所属代理区" in c or c == "Regional responsável":
+            rename_map[c] = "Regional responsável"
+        elif "责任机构" in c or c in ("Unidade responsável", "Unidade responsável责任机构"):
+            rename_map[c] = "Nome da base"
+        elif "Aging" in c:
+            rename_map[c] = "Aging"
+        elif "JMS" in c or "运单号" in c or c == "Número de pedido JMS 运单号":
+            rename_map[c] = "Remessa"
+    df = df.rename(rename_map)
+
+    obrig = ["Regional responsável", "Nome da base", "Aging", "Remessa"]
+    if not all(c in df.columns for c in obrig):
+        return pl.DataFrame()
+
+    df = df.filter(
+        (pl.col("Regional responsável").is_in(["GP", "PA"])) &
+        (pl.col("Aging").is_in([
+            "Exceed 6 days with no track",
+            "Exceed 7 days with no track",
+            "Exceed 10 days with no track",
+            "Exceed 14 days with no track",
+            "Exceed 30 days with no track"
+        ]))
+    )
+    df = _normalize_base(df)
+    # ✅ conta pela coluna "Número de pedido JMS 运单号" (renomeada para "Remessa")
+    df = df.group_by("Nome da base").agg(pl.count("Remessa").alias("Qtd Sem Mov"))
+    return df
+
+# ==========================================================
+# 🟦 Coleta + Expedição
 # ==========================================================
 def coleta_expedicao():
     arquivos = [f for f in os.listdir(DIR_COLETA) if f.endswith((".xlsx", ".xls"))]
@@ -92,7 +201,7 @@ def coleta_expedicao():
     )
 
 # ==========================================================
-# 🟨 T0 (SLA %)
+# 🟨 T0 (SLA)
 # ==========================================================
 def taxa_t0():
     arquivos = [f for f in os.listdir(DIR_T0) if f.endswith((".xlsx", ".xls"))]
@@ -128,57 +237,50 @@ def taxa_t0():
     )
 
 # ==========================================================
-# 📉 Shipping Time (Atual / Anterior / Diferença)
+# 📉 Shipping Time (Horas)
 # ==========================================================
-MAPA_ETAPAS = {
-    "Tempo trânsito SC Destino->Base Entrega": "Etapa 6 (Trânsito)",
-    "Tempo médio processamento Base Entrega": "Etapa 7 (Processamento)",
-    "Tempo médio Saída para Entrega->Entrega": "Etapa 8 (Saída p/ Entrega)"
-}
-
-def _prep_shipping(df: pl.DataFrame) -> pl.DataFrame:
+def _prep_shipping(df: pl.DataFrame, col_nome: str) -> pl.DataFrame:
     if df.is_empty():
         return df
-    col_base = "PDD de Entrega" if "PDD de Entrega" in df.columns else "Nome da base"
-    for c_antigo, c_padrao in MAPA_ETAPAS.items():
-        if c_antigo in df.columns:
-            df = df.rename({c_antigo: c_padrao})
-        elif c_padrao not in df.columns:
-            df = df.with_columns(pl.lit(0).alias(c_padrao))
-    for etapa in MAPA_ETAPAS.values():
-        df = df.with_columns(to_float(etapa))
-    df = df.with_columns(
-        (pl.col("Etapa 6 (Trânsito)") + pl.col("Etapa 7 (Processamento)") + pl.col("Etapa 8 (Saída p/ Entrega)"))
-        .alias("Soma Total (h)")
-    )
-    return (
-        df.group_by(col_base)
-        .agg(pl.mean("Soma Total (h)").alias("Média (h)"))
-        .rename({col_base: "Nome da base"})
-    )
+    base = "PDD de Entrega" if "PDD de Entrega" in df.columns else "Nome da base"
+    etapas = [
+        "Tempo trânsito SC Destino->Base Entrega",
+        "Tempo médio processamento Base Entrega",
+        "Tempo médio Saída para Entrega->Entrega"
+    ]
+    for e in etapas:
+        if e not in df.columns:
+            df = df.with_columns(pl.lit(0).alias(e))
+    df = df.with_columns([
+        to_float(etapas[0]), to_float(etapas[1]), to_float(etapas[2]),
+        (pl.col(etapas[0]) + pl.col(etapas[1]) + pl.col(etapas[2])).alias(col_nome)
+    ])
+    out = df.group_by(base).agg(pl.mean(col_nome)).rename({base: "Nome da base"})
+    return _normalize_base(out)
 
 def shippingtime_atual():
     arquivos = [f for f in os.listdir(DIR_SHIP) if f.endswith((".xlsx", ".xls"))]
     if not arquivos:
         return pl.DataFrame()
     df = read_excel_silent(os.path.join(DIR_SHIP, sorted(arquivos)[-1]))
-    return _prep_shipping(df).rename({"Média (h)": "S.T. Atual (h)"})
+    return _prep_shipping(df, "S.T. Atual (h)")
 
 def shippingtime_antiga():
     arquivos = [os.path.join(DIR_ANTIGA, f) for f in os.listdir(DIR_ANTIGA) if f.endswith((".xlsx", ".xls"))]
     if not arquivos:
         return pl.DataFrame()
     dfs = [read_excel_silent(f) for f in tqdm(arquivos, desc="📉 Lendo Base Antiga", colour="cyan")]
-    dfs = [df for df in dfs if not df.is_empty()]
+    dfs = [d for d in dfs if not d.is_empty()]
     if not dfs:
         return pl.DataFrame()
     df = pl.concat(dfs, how="diagonal_relaxed")
-    return _prep_shipping(df).rename({"Média (h)": "S.T. Anterior (h)"})
+    return _prep_shipping(df, "S.T. Anterior (h)")
+
 
 # ==========================================================
-# 💰 Ressarcimento por pacote (SEERRO)
+# 💰 Ressarcimento
 # ==========================================================
-def ressarcimento_por_pacote(df_coleta_assinatura):
+def ressarcimento_por_pacote(df_coleta):
     arquivos = [f for f in os.listdir(DIR_RESS) if f.endswith((".xlsx", ".xls"))]
     if not arquivos:
         return pl.DataFrame()
@@ -186,140 +288,80 @@ def ressarcimento_por_pacote(df_coleta_assinatura):
     if df.is_empty() or "Regional responsável" not in df.columns:
         return pl.DataFrame()
 
-    df = df.filter(pl.col("Regional responsável").cast(pl.Utf8, strict=False).str.to_uppercase() == "GP")
+    df = df.filter(pl.col("Regional responsável").str.to_uppercase() == "GP")
     df = df.with_columns(to_float("Valor a pagar (yuan)").alias("Custo total (R$)"))
     df = df.group_by("Base responsável").agg(pl.sum("Custo total (R$)").alias("Custo total (R$)"))
     df = df.rename({"Base responsável": "Nome da base"})
     df = _normalize_base(df)
 
-    if not df_coleta_assinatura.is_empty():
-        df = df.join(
-            df_coleta_assinatura.select(["Nome da base", "Qtd Entregue Assinatura"]),
-            on="Nome da base",
-            how="left"
+    if not df_coleta.is_empty():
+        df = _safe_full_join(
+            df,
+            df_coleta.select(["Nome da base", "Qtd Entregue Assinatura"])
         )
 
     df = df.fill_null(0).with_columns([
-        (
-            pl.when(pl.col("Qtd Entregue Assinatura") > 0)
-            .then(pl.col("Custo total (R$)") / pl.col("Qtd Entregue Assinatura"))
-            .otherwise(pl.col("Custo total (R$)"))
-        ).alias("Ressarcimento p/pct (R$)")
+        (pl.when(pl.col("Qtd Entregue Assinatura") > 0)
+         .then(pl.col("Custo total (R$)") / pl.col("Qtd Entregue Assinatura"))
+         .otherwise(pl.col("Custo total (R$)"))).alias("Ressarcimento p/pct (R$)")
     ])
+
+    # ✅ Corrigido: Custo total primeiro, depois Ressarcimento
     return df.select(["Nome da base", "Custo total (R$)", "Ressarcimento p/pct (R$)"])
-
-# ==========================================================
-# 🟥 Sem Movimentação (multi-arquivos, GP/PA + aging)
-# ==========================================================
-def pacotes_sem_mov():
-    arquivos = [f for f in os.listdir(DIR_SEMMOV) if f.endswith((".xlsx", ".xls"))]
-    if not arquivos:
-        return pl.DataFrame()
-
-    dfs = []
-    for arq in tqdm(arquivos, desc="🟥 Lendo Sem Movimentação", colour="red"):
-        df = read_excel_silent(os.path.join(DIR_SEMMOV, arq))
-        if not df.is_empty():
-            dfs.append(df)
-    if not dfs:
-        return pl.DataFrame()
-
-    df = pl.concat(dfs, how="diagonal_relaxed")
-    col_map = {
-        "Regional responsável责任所属代理区": "Regional responsável",
-        "Unidade responsável责任机构": "Nome da base",
-        "Aging超时类型": "Aging",
-        "Número de pedido JMS 运单号": "Remessa"
-    }
-    for o, n in col_map.items():
-        if o in df.columns:
-            df = df.rename({o: n})
-
-    obrigatorias = ["Regional responsável", "Nome da base", "Aging", "Remessa"]
-    if not all(c in df.columns for c in obrigatorias):
-        return pl.DataFrame()
-
-    df = df.filter(
-        (pl.col("Regional responsável").is_in(["GP", "PA"])) &
-        (pl.col("Aging").is_in([
-            "Exceed 6 days with no track",
-            "Exceed 7 days with no track",
-            "Exceed 10 days with no track",
-            "Exceed 14 days with no track",
-            "Exceed 30 days with no track"
-        ]))
-    )
-    df = _normalize_base(df)
-    df = df.group_by("Nome da base").agg(pl.count("Remessa").alias("Qtd Sem Mov"))
-    return df
 
 # ==========================================================
 # 🧮 Consolidação
 # ==========================================================
 def consolidar():
-    dias_do_mes = calendar.monthrange(datetime.now().year, datetime.now().month)[1]
+    dias = calendar.monthrange(datetime.now().year, datetime.now().month)[1]
 
     df_coleta = coleta_expedicao()
     df_t0 = taxa_t0()
-    df_st_atual = shippingtime_atual()
+    df_st_at = shippingtime_atual()
     df_st_ant = shippingtime_antiga()
     df_ress = ressarcimento_por_pacote(df_coleta)
     df_sem = pacotes_sem_mov()
 
-    # Shipping diff
-    if not df_st_atual.is_empty():
-        if not df_st_ant.is_empty():
-            df_st = (
-                df_st_atual.join(df_st_ant, on="Nome da base", how="left")
-                .with_columns((pl.col("S.T. Atual (h)") - pl.col("S.T. Anterior (h)").fill_null(0)).alias("Diferença (h)"))
-            )
-        else:
-            df_st = df_st_atual.with_columns(pl.lit(0).alias("Diferença (h)"))
+    # Shipping diff (horas) com join seguro
+    if not df_st_at.is_empty():
+        df_st = _safe_full_join(df_st_at, df_st_ant).with_columns(
+            (pl.col("S.T. Atual (h)") - pl.col("S.T. Anterior (h)").fill_null(0)).alias("Variação (h)")
+        )
     else:
         df_st = pl.DataFrame()
 
-    # Merge principal
-    df = df_t0
-    for dfx in [df_st, df_ress, df_sem, df_coleta]:
-        if not dfx.is_empty() and "Nome da base" in dfx.columns:
-            df = df.join(dfx, on="Nome da base", how="left")
+    # Join mestre com proteção total
+    df_final = _safe_full_join(df_t0, df_st)
+    df_final = _safe_full_join(df_final, df_ress)
+    df_final = _safe_full_join(df_final, df_sem)
+    df_final = _safe_full_join(df_final, df_coleta)
 
-    df = df.fill_null(0)
-
-    # Taxa Sem Mov (numérica; elegibilidade e atingimentos virão como fórmulas no Excel)
-    df = df.with_columns([
-        (
-            pl.when(pl.col("Total Coleta+Entrega") > 0)
-            .then(pl.col("Qtd Sem Mov") / dias_do_mes / pl.col("Total Coleta+Entrega"))
-            .otherwise(0)
-        ).alias("Taxa Sem Mov.")
+    df = df_final.fill_null(0).with_columns([
+        (pl.when(pl.col("Total Coleta+Entrega") > 0)
+         .then(pl.col("Qtd Sem Mov") / dias / pl.col("Total Coleta+Entrega"))
+         .otherwise(0)).alias("Taxa Sem Mov.")
     ])
 
-    # Seleção e ordem das colunas para o Excel (casam com cabeçalho)
+    # ordem amigável para export
     ordered = [
         "Nome da base",
         "SLA (%)",
         "S.T. Atual (h)",
         "S.T. Anterior (h)",
-        "Diferença (h)",
-        # "Elegibilidade" -> fórmula no Excel (col F)
-        "Custo total (R$)",
+        "Variação (h)",
         "Ressarcimento p/pct (R$)",
-        # "Atingimento (Ressarc.)" -> fórmula no Excel (col I)
+        "Custo total (R$)",
         "Qtd Sem Mov",
-        "Taxa Sem Mov.",        # "Atingimento (Sem Mov.)" -> fórmula no Excel (col L)
-        # "Total da bonificação" -> fórmula no Excel (col M)
+        "Taxa Sem Mov."
     ]
     # garante colunas ausentes
     for c in ordered:
         if c not in df.columns:
             df = df.with_columns(pl.lit(0).alias(c)) if c != "Nome da base" else df.with_columns(pl.lit("").alias(c))
-
-    df = df.select(ordered)
-    return df
+    return df.select(ordered)
 
 # ==========================================================
-# 💾 Exportar com cabeçalho e FÓRMULAS
+# 💾 Exportar (sem fórmulas)
 # ==========================================================
 def main():
     df = consolidar()
@@ -330,103 +372,50 @@ def main():
     out = os.path.join(DIR_OUT, f"Resumo_Politica_Bonificacao_{datetime.now():%Y%m%d_%H%M%S}.xlsx")
     df_pd = df.to_pandas()
 
-    # Mapeamento de colunas (A..M) conforme cabeçalho desejado
-    # A  Nome da base
-    # B  SLA (%)
-    # C  S.T. Atual (h)
-    # D  S.T. Anterior (h)
-    # E  Diferença (h)
-    # F  Elegibilidade               (FÓRMULA)
-    # G  Custo total (R$)
-    # H  Ressarcimento p/pct (R$)
-    # I  Atingimento (Ressarc.)      (FÓRMULA)
-    # J  Qtd Sem Mov
-    # K  Taxa Sem Mov.               (numérico)
-    # L  Atingimento (Sem Mov.)      (FÓRMULA)
-    # M  Total da bonificação        (FÓRMULA)
-
     with pd.ExcelWriter(out, engine="xlsxwriter") as writer:
-        # vamos escrever os dados SEM cabeçalho pandas e começar na linha 7 (1-based)
-        startrow = 6  # zero-based -> linha 7 do Excel
-        df_pd.to_excel(writer, sheet_name="Bonificação", startrow=startrow, startcol=0, header=False, index=False)
+        startrow = 6
+        df_pd.to_excel(writer, sheet_name="Bonificação", startrow=startrow, startcol=0, header=True, index=False)
 
-        wb = writer.book
-        ws = writer.sheets["Bonificação"]
-
-        # Formatos
+        wb, ws = writer.book, writer.sheets["Bonificação"]
         red  = wb.add_format({"bold": True, "font_color": "white", "align": "center", "valign": "vcenter", "bg_color": "#C00000", "border": 1})
         gray = wb.add_format({"bold": True, "font_color": "white", "align": "center", "valign": "vcenter", "bg_color": "#595959", "border": 1})
         center = wb.add_format({"align": "center", "valign": "vcenter"})
         fmt_percent_2 = wb.add_format({"num_format": "0.00%", "align": "center"})
-        fmt_percent_4 = wb.add_format({"num_format": "0.0000%", "align": "center"})
         fmt_money = wb.add_format({"num_format": '"R$"#,##0.00', "align": "center"})
         fmt_number = wb.add_format({"num_format": "#,##0.00", "align": "center"})
         fmt_int = wb.add_format({"num_format": "0", "align": "center"})
 
-        # Cabeçalho principal
-        ws.merge_range("A1:M1", "RESULTADOS DE INDICADORES", red)
-        ws.merge_range("A2:M2", f"Data de atualização: {datetime.now():%d/%m}", gray)
+        # Cabeçalhos
+        ws.merge_range("A1:I1", "RESULTADOS DE INDICADORES", red)
+        ws.merge_range("A2:I2", f"Data de atualização: {datetime.now():%d/%m}", gray)
 
-        # Cabeçalho duplo (linhas 5-6)
         ws.merge_range("A5:A6", "Nome da base", red)
-        ws.merge_range("B5:B6", "Taxa T0 (SLA)", red)
+        ws.merge_range("B5:B6", "SLA (%)", red)
 
         ws.merge_range("C5:E5", "Shipping Time", gray)
         ws.write("C6", "S.T. Atual (h)", red)
         ws.write("D6", "S.T. Anterior (h)", red)
-        ws.write("E6", "Diferença (h)", red)
+        ws.write("E6", "Variação (h)", red)
 
-        ws.merge_range("F5:F6", "Elegibilidade", red)
-
-        ws.merge_range("G5:I5", "Ressarcimentos", gray)
+        ws.merge_range("F5:G5", "Ressarcimentos", gray)
+        ws.write("F6", "Ressarcimento p/pct (R$)", red)
         ws.write("G6", "Custo total (R$)", red)
-        ws.write("H6", "Ressarcimento p/pct", red)
-        ws.write("I6", "Atingimento", red)
 
-        ws.merge_range("J5:L5", "Sem Movimentação", gray)
-        ws.write("J6", "Qtd Sem Mov", red)
-        ws.write("K6", "Taxa Sem Mov.", red)
-        ws.write("L6", "Atingimento", red)
+        ws.merge_range("H5:I5", "Sem Movimentação", gray)
+        ws.write("H6", "Qtd Sem Mov", red)
+        ws.write("I6", "Taxa Sem Mov.", red)
 
-        ws.merge_range("M5:M6", "Total da bonificação", red)
-
-        # Largura/formatos de colunas
+        # Larguras
         ws.set_column("A:A", 22, center)
         ws.set_column("B:B", 12, fmt_percent_2)
-        ws.set_column("C:D", 16, fmt_number)
-        ws.set_column("E:E", 14, fmt_number)
-        ws.set_column("F:F", 16, fmt_percent_2)
-        ws.set_column("G:G", 16, fmt_money)
-        ws.set_column("H:H", 18, fmt_money)
+        ws.set_column("C:E", 14, fmt_number)
+        ws.set_column("F:G", 16, fmt_money)
+        ws.set_column("H:H", 14, fmt_int)
         ws.set_column("I:I", 14, fmt_percent_2)
-        ws.set_column("J:J", 14, fmt_int)
-        ws.set_column("K:K", 14, fmt_percent_4)  # 4 casas para Taxa Sem Mov.
-        ws.set_column("L:L", 14, fmt_percent_2)
-        ws.set_column("M:M", 20, fmt_percent_2)
-
-        # Inserção das FÓRMULAS nas linhas de dados
-        n_rows = len(df_pd)
-        first_row = startrow + 1  # primeira linha de dados (1-based)
-        last_row = startrow + n_rows  # última linha de dados (1-based)
-
-        for r in range(first_row, last_row + 1):
-            # Elegibilidade (col F) -> =SE(E5<=-8;110%;SE(E5<=0;100%;SE(B5>=97%;110%;SE(B5>=95%;100%;0%))))
-            ws.write_formula(r - 1, 5, f'=SE(E{r}<=-8;110%;SE(E{r}<=0;100%;SE(B{r}>=97%;110%;SE(B{r}>=95%;100%;0%))))')
-
-            # Atingimento (Ressarc.) (col I) -> =SE(H5<=0,01;45%;SE(H5<=0,09;35%;SE(H5<=0,15;5%;0)))
-            ws.write_formula(r - 1, 8, f'=SE(H{r}<=0,01;45%;SE(H{r}<=0,09;35%;SE(H{r}<=0,15;5%;0)))')
-
-            # Atingimento (Sem Mov.) (col L) -> =SE(K5<=0,01%;45%;SE(K5<=0,05%;35%;SE(K5<=0,08%;5%;0)))
-            ws.write_formula(r - 1, 11, f'=SE(K{r}<=0,01%;45%;SE(K{r}<=0,05%;35%;SE(K{r}<=0,08%;5%;0)))')
-
-            # Total da bonificação (col M)
-            # =SE(F5<>0;SE(F5=110%;10%+I5+L5;I5+L5);0)
-            ws.write_formula(r - 1, 12, f'=SE(F{r}<>0;SE(F{r}=110%;10%+I{r}+L{r};I{r}+L{r});0)')
-
-        print(f"✅ Fórmulas aplicadas de A{first_row}:M{last_row}")
 
     print(f"✅ Relatório final gerado!\n📂 {out}")
 
 # ==========================================================
 if __name__ == "__main__":
     main()
+
