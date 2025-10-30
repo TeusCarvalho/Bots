@@ -5,9 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="git commit">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/Franquias/sla_processor.log" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Franquias/sla_processor.log" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/Politicas/Politicas_Bonificação.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Politicas/Politicas_Bonificação.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Novos/Franquias/2- Franquias - Regras_Sem Movimentação.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Franquias/2- Franquias - Regras_Sem Movimentação.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -293,7 +291,7 @@
       <workItem from="1761771451666" duration="771000" />
       <workItem from="1761824683559" duration="1138000" />
       <workItem from="1761829313046" duration="16456000" />
-      <workItem from="1761855844006" duration="316000" />
+      <workItem from="1761855844006" duration="618000" />
     </task>
     <task id="LOCAL-00001" summary="git commit">
       <option name="closed" value="true" />
@@ -607,7 +605,15 @@
       <option name="project" value="LOCAL" />
       <updated>1761825843291</updated>
     </task>
-    <option name="localTasksCounter" value="40" />
+    <task id="LOCAL-00040" summary="git commit">
+      <option name="closed" value="true" />
+      <created>1761856427965</created>
+      <option name="number" value="00040" />
+      <option name="presentableId" value="LOCAL-00040" />
+      <option name="project" value="LOCAL" />
+      <updated>1761856427965</updated>
+    </task>
+    <option name="localTasksCounter" value="41" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

@@ -1,12 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-📦 Sem Movimentação - Franquias (Comparativo Diário)
-------------------------------------------------------------
-- Compara o relatório atual com o do dia anterior (D-1)
-- Calcula variação total e por base
-- Mostra Top 5 piores e Top 5 melhores reduções
-- Envia card ao Feishu com resumo e link do relatório
-"""
 
 import polars as pl
 import os
