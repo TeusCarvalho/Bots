@@ -22,21 +22,26 @@ COORDENADOR_WEBHOOKS = {
     "Orlean Nascimento": "https://open.feishu.cn/open-apis/bot/v2/hook/62cd648c-ecd5-406a-903d-b596944c1919",
     "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/62518b67-f897-4341-98e6-2db87f4fdee2",
     "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/e502bc10-3cb3-4b46-872e-eb73ef1c5ee0",
-    "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/db18d309-8f26-41b5-b911-1a9f27449c83"
+    "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/db18d309-8f26-41b5-b911-1a9f27449c83",
 }
 
 REPORTS_FOLDER_PATH = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Jt - Relatórios"
 ARQUIVO_MORTO_FOLDER = os.path.join(REPORTS_FOLDER_PATH, "Arquivo Morto")
 
-LINK_RELATORIO = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/Ek3KdqMIdX5EodE-3JwCQnsBAMiJ574BsxAR--oYBNN0-g?e=dfqBzT"
-
+LINK_RELATORIO = (
+    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/"
+    "matheus_carvalho_jtexpressdf_onmicrosoft_com/Ek3KdqMIdX5EodE-3JwCQnsBAMiJ574BsxAR--oYBNN0-g?e=dfqBzT"
+)
 
 # ==============================================================================
 # FUNÇÕES DE APOIO
 # ==============================================================================
 
 def format_currency_brl(value: float) -> str:
-    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    try:
+        return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return "R$ 0,00"
 
 
 def carregar_ultimo_arquivo_morto() -> Optional[pd.DataFrame]:
@@ -47,22 +52,28 @@ def carregar_ultimo_arquivo_morto() -> Optional[pd.DataFrame]:
 
     arquivos = [
         f for f in os.listdir(ARQUIVO_MORTO_FOLDER)
-        if f.lower().endswith((".xlsx", ".xls")) and "5+ dias" in f
+        if f.lower().endswith((".xlsx", ".xls")) and "5+ dias" in f.lower()
     ]
+
     if not arquivos:
         print("⚠️ Nenhum arquivo compatível em Arquivo Morto contendo '5+ dias'.")
         return None
 
     arquivos.sort(key=lambda x: os.path.getmtime(os.path.join(ARQUIVO_MORTO_FOLDER, x)), reverse=True)
     ultimo_arquivo = os.path.join(ARQUIVO_MORTO_FOLDER, arquivos[0])
-
     print(f"📂 Usando {ultimo_arquivo} como relatório anterior.")
+
     try:
-        return pd.read_excel(ultimo_arquivo)
+        df_old = pd.read_excel(ultimo_arquivo)
+        df_old.columns = df_old.columns.str.strip()
+        df_old.rename(
+            columns={"运单号": "Remessa", "Coordenador": "Coordenadores"},
+            inplace=True,
+        )
+        return df_old
     except Exception as e:
         print(f"⚠️ Erro ao ler {ultimo_arquivo}: {e}")
         return None
-
 
 # ==============================================================================
 # PREPARAÇÃO DO RELATÓRIO
@@ -77,6 +88,7 @@ def prepare_report_data(df_current: pd.DataFrame, df_old: Optional[pd.DataFrame]
     if df_old is not None and not df_old.empty:
         total_old = df_old["Remessa"].nunique() if "Remessa" in df_old.columns else len(df_old)
         difference = total_current - total_old
+
         if difference < 0:
             var_text = f"📉 Diminuiu {abs(difference)} pedidos"
         elif difference > 0:
@@ -100,14 +112,13 @@ def prepare_report_data(df_current: pd.DataFrame, df_old: Optional[pd.DataFrame]
     metrics_text = ""
 
     if "Unidade responsável" in df_current.columns and "Remessa" in df_current.columns:
-        # Contagem atual por base
         base_counts = (
             df_current.groupby("Unidade responsável")["Remessa"]
             .nunique()
             .sort_values(ascending=False)
         )
 
-        # 🔴 3 piores (maiores quantidades atuais)
+        # 🔴 3 piores bases
         worst_bases = base_counts.head(3)
         metrics_text += "**🔴 3 Piores Bases (maior nº de pedidos):**\n"
         for unit, count in worst_bases.items():
@@ -115,11 +126,9 @@ def prepare_report_data(df_current: pd.DataFrame, df_old: Optional[pd.DataFrame]
 
         metrics_text += "\n"
 
-        # 🟢 3 melhores (maiores reduções em relação ao relatório anterior)
+        # 🟢 3 melhores reduções
         if df_old is not None and "Unidade responsável" in df_old.columns:
             old_counts = df_old.groupby("Unidade responsável")["Remessa"].nunique()
-
-            # Diferença: pedidos antigos - atuais (positivo = redução)
             diffs = (old_counts - base_counts).dropna().sort_values(ascending=False)
 
             best_reductions = diffs.head(3)
@@ -130,7 +139,7 @@ def prepare_report_data(df_current: pd.DataFrame, df_old: Optional[pd.DataFrame]
                 metrics_text += f"- 🟢 **{unit}**: reduziu {int(reduction)} (de {anterior} → {atual})\n"
 
     return {
-        "title": f"{report_title}",
+        "title": report_title,
         "metrics_text": metrics_text,
         "observation": "Resumo automático.",
         "total_pacotes": total_current,
@@ -139,36 +148,53 @@ def prepare_report_data(df_current: pd.DataFrame, df_old: Optional[pd.DataFrame]
         "variacao_multa": var_f_text,
     }
 
-
 # ==============================================================================
 # FORMATAÇÃO DO CARD PARA FEISHU
 # ==============================================================================
 
 def create_feishu_card_payload(report_data: Dict[str, Any]) -> Dict[str, Any]:
     elements = [
-        {"tag": "div", "fields": [
-            {"is_short": True, "text": {"tag": "lark_md",
-                "content": (
-                    f"**Data de Geração:**\n{report_data.get('date', 'N/A')}\n\n"
-                    f"**Qtd de Pacotes:**\n{report_data.get('total_pacotes', 'N/A')}\n"
-                    f"**Variação Pacotes:**\n{report_data.get('variacao_pacotes', 'N/A')}"
-                )}},
-            {"is_short": True, "text": {"tag": "lark_md",
-                "content": (
-                    f"**Multa Atual:**\n{report_data.get('multa_atual', 'N/A')}\n"
-                    f"**Variação Multa:**\n{report_data.get('variacao_multa', 'N/A')}"
-                )}}
-        ]},
+        {
+            "tag": "div",
+            "fields": [
+                {
+                    "is_short": True,
+                    "text": {
+                        "tag": "lark_md",
+                        "content": (
+                            f"**Data de Geração:**\n{report_data.get('date', 'N/A')}\n\n"
+                            f"**Qtd de Pacotes:**\n{report_data.get('total_pacotes', 'N/A')}\n"
+                            f"**Variação Pacotes:**\n{report_data.get('variacao_pacotes', 'N/A')}"
+                        ),
+                    },
+                },
+                {
+                    "is_short": True,
+                    "text": {
+                        "tag": "lark_md",
+                        "content": (
+                            f"**Multa Atual:**\n{report_data.get('multa_atual', 'N/A')}\n"
+                            f"**Variação Multa:**\n{report_data.get('variacao_multa', 'N/A')}"
+                        ),
+                    },
+                },
+            ],
+        },
         {"tag": "hr"},
         {"tag": "div", "text": {"tag": "lark_md", "content": report_data.get("metrics_text", "")}},
         {"tag": "hr"},
-        {"tag": "action", "actions": [
-            {"tag": "button",
-             "text": {"tag": "plain_text", "content": "📎 Abrir Relatório Completo"},
-             "url": LINK_RELATORIO,
-             "type": "primary"}
-        ]},
-        {"tag": "note", "elements": [{"tag": "plain_text", "content": report_data.get("observation", "")}]}
+        {
+            "tag": "action",
+            "actions": [
+                {
+                    "tag": "button",
+                    "text": {"tag": "plain_text", "content": "📎 Abrir Relatório Completo"},
+                    "url": LINK_RELATORIO,
+                    "type": "primary",
+                }
+            ],
+        },
+        {"tag": "note", "elements": [{"tag": "plain_text", "content": report_data.get("observation", "")}]},
     ]
 
     return {
@@ -176,12 +202,11 @@ def create_feishu_card_payload(report_data: Dict[str, Any]) -> Dict[str, Any]:
         "card": {
             "header": {
                 "title": {"tag": "plain_text", "content": f"🚨 Sem Movimentação - {report_data.get('title', '')}"},
-                "template": "red"   # 🔴 Header vermelho
+                "template": "red",
             },
-            "elements": elements
-        }
+            "elements": elements,
+        },
     }
-
 
 # ==============================================================================
 # FUNÇÕES DE ENVIO E PROCESSAMENTO
@@ -197,14 +222,15 @@ def send_report_to_feishu(webhook_url: str, report_data: Dict[str, Any]):
     except Exception as e:
         print(f"❌ Erro ao enviar: {e}")
 
-
 def process_report_file(file_path: str) -> Optional[pd.DataFrame]:
     try:
-        return pd.read_excel(file_path)
+        df = pd.read_excel(file_path)
+        df.columns = df.columns.str.strip()
+        df.rename(columns={"运单号": "Remessa", "Coordenador": "Coordenadores"}, inplace=True)
+        return df
     except Exception as e:
         print(f"Erro ao ler {file_path}: {e}")
         return None
-
 
 def dispatch_reports_by_coordinator(df: pd.DataFrame, report_title: str):
     if "Coordenadores" not in df.columns:
@@ -222,12 +248,18 @@ def dispatch_reports_by_coordinator(df: pd.DataFrame, report_title: str):
         if df_old is not None and "Coordenadores" in df_old.columns:
             df_coord_old = df_old[df_old["Coordenadores"] == coordenador]
 
-        report_data = prepare_report_data(df_coord, df_coord_old, f"{coordenador}")
+        report_data = prepare_report_data(df_coord, df_coord_old, coordenador)
         report_data["date"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+        # 🧾 log no terminal
+        print("\n===============================")
+        print(f"📊 Coordenador: {coordenador}")
+        print(f"Atual: {len(df_coord)} linhas | Antigo: {len(df_coord_old) if df_coord_old is not None else 0}")
+        print(f"Variação Pacotes: {report_data['variacao_pacotes']}")
+        print("===============================")
 
         send_report_to_feishu(webhook_url, report_data)
         time.sleep(1)
-
 
 # ==============================================================================
 # EXECUÇÃO PRINCIPAL
@@ -237,8 +269,9 @@ def run_main_task():
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Procurando relatórios em {REPORTS_FOLDER_PATH}")
 
     arquivos = [
-        f for f in os.listdir(REPORTS_FOLDER_PATH)
-        if f.endswith(".xlsx") and "5+ dias" in f and not f.startswith("~")
+        f
+        for f in os.listdir(REPORTS_FOLDER_PATH)
+        if f.endswith(".xlsx") and "5+ dias" in f.lower() and not f.startswith("~")
     ]
     if not arquivos:
         print("⚠️ Nenhum relatório encontrado.")
@@ -251,7 +284,6 @@ def run_main_task():
     df_current = process_report_file(full_path)
     if df_current is not None:
         dispatch_reports_by_coordinator(df_current, os.path.splitext(file_name)[0])
-
 
 if __name__ == "__main__":
     run_main_task()

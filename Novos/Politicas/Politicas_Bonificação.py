@@ -119,23 +119,22 @@ def read_excel_silent(path):
         except Exception:
             return pl.DataFrame()
 
-# ==========================================================
-# 🟥 Sem Movimentação (multi-arquivos, GP/PA + aging)
-# ==========================================================
 def pacotes_sem_mov():
     arquivos = [f for f in os.listdir(DIR_SEMMOV) if f.endswith((".xlsx", ".xls"))]
     if not arquivos:
-        return pl.DataFrame()
+        return pl.DataFrame(), 0  # <- retorna 0 planilhas
 
     dfs = []
     for arq in tqdm(arquivos, desc="🟥 Lendo Sem Movimentação", colour="red"):
         df = read_excel_silent(os.path.join(DIR_SEMMOV, arq))
         if not df.is_empty():
             dfs.append(df)
+
     if not dfs:
-        return pl.DataFrame()
+        return pl.DataFrame(), 0
 
     df = pl.concat(dfs, how="diagonal_relaxed")
+
     # renomeia colunas PT/中文 → padrão
     rename_map = {}
     for c in df.columns:
@@ -151,7 +150,7 @@ def pacotes_sem_mov():
 
     obrig = ["Regional responsável", "Nome da base", "Aging", "Remessa"]
     if not all(c in df.columns for c in obrig):
-        return pl.DataFrame()
+        return pl.DataFrame(), 0
 
     df = df.filter(
         (pl.col("Regional responsável").is_in(["GP", "PA"])) &
@@ -164,9 +163,12 @@ def pacotes_sem_mov():
         ]))
     )
     df = _normalize_base(df)
-    # ✅ conta pela coluna "Número de pedido JMS 运单号" (renomeada para "Remessa")
+
     df = df.group_by("Nome da base").agg(pl.count("Remessa").alias("Qtd Sem Mov"))
-    return df
+    qtd_planilhas = len(arquivos)
+
+    print(f"🟥 {qtd_planilhas} planilhas lidas, total consolidado: {df['Qtd Sem Mov'].sum()} registros")
+    return df, qtd_planilhas
 
 # ==========================================================
 # 🟦 Coleta + Expedição
@@ -310,19 +312,30 @@ def ressarcimento_por_pacote(df_coleta):
     return df.select(["Nome da base", "Custo total (R$)", "Ressarcimento p/pct (R$)"])
 
 # ==========================================================
-# 🧮 Consolidação
+# 🧮 Consolidação (com Coordenador/Base_Atualizada.xlsx)
 # ==========================================================
 def consolidar():
     dias = calendar.monthrange(datetime.now().year, datetime.now().month)[1]
 
+    # 🔹 Lê a base de coordenadores
+    path_coord = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
+    df_coord = read_excel_silent(path_coord)
+    if "Nome da base" in df_coord.columns:
+        df_coord = df_coord.select(["Nome da base"]).unique()
+        df_coord = _normalize_base(df_coord)
+    else:
+        print("⚠️ 'Nome da base' não encontrada em Base_Atualizada.xlsx")
+        df_coord = pl.DataFrame({"Nome da base": []})
+
+    # 🔹 Lê as demais bases
     df_coleta = coleta_expedicao()
     df_t0 = taxa_t0()
     df_st_at = shippingtime_atual()
     df_st_ant = shippingtime_antiga()
     df_ress = ressarcimento_por_pacote(df_coleta)
-    df_sem = pacotes_sem_mov()
+    df_sem, _ = pacotes_sem_mov()
 
-    # Shipping diff (horas) com join seguro
+    # 🔹 Calcula Shipping diff
     if not df_st_at.is_empty():
         df_st = _safe_full_join(df_st_at, df_st_ant).with_columns(
             (pl.col("S.T. Atual (h)") - pl.col("S.T. Anterior (h)").fill_null(0)).alias("Variação (h)")
@@ -330,19 +343,22 @@ def consolidar():
     else:
         df_st = pl.DataFrame()
 
-    # Join mestre com proteção total
+    # 🔹 Junta tudo com segurança
     df_final = _safe_full_join(df_t0, df_st)
     df_final = _safe_full_join(df_final, df_ress)
     df_final = _safe_full_join(df_final, df_sem)
     df_final = _safe_full_join(df_final, df_coleta)
 
+    # 🔹 Garante todas as bases da planilha Base_Atualizada
+    df_final = _safe_full_join(df_coord, df_final)
+
+    # 🔹 Calcula Taxa Sem Movimentação
     df = df_final.fill_null(0).with_columns([
         (pl.when(pl.col("Total Coleta+Entrega") > 0)
          .then(pl.col("Qtd Sem Mov") / dias / pl.col("Total Coleta+Entrega"))
          .otherwise(0)).alias("Taxa Sem Mov.")
     ])
 
-    # ordem amigável para export
     ordered = [
         "Nome da base",
         "SLA (%)",
@@ -354,10 +370,11 @@ def consolidar():
         "Qtd Sem Mov",
         "Taxa Sem Mov."
     ]
-    # garante colunas ausentes
+
     for c in ordered:
         if c not in df.columns:
-            df = df.with_columns(pl.lit(0).alias(c)) if c != "Nome da base" else df.with_columns(pl.lit("").alias(c))
+            df = (df.with_columns(pl.lit(0).alias(c)) if c != "Nome da base" else df.with_columns(pl.lit("").alias(c)))
+
     return df.select(ordered)
 
 # ==========================================================
