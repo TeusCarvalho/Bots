@@ -1,12 +1,18 @@
 # -*- coding: utf-8 -*-
-# 🚀 Sem Movimentação — versão Polars Lazy ⚡ (corrigida contra overflow)
-# Compatível com Polars 1.11+ e Python 3.13
+"""
+📦 Sem Movimentação - Franquias (Comparativo Diário)
+------------------------------------------------------------
+- Compara o relatório atual com o do dia anterior (D-1)
+- Calcula variação total e por base
+- Mostra Top 5 piores e Top 5 melhores reduções
+- Envia card ao Feishu com resumo e link do relatório
+"""
 
 import polars as pl
 import os
 import logging
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
 # =====================================================================
@@ -46,7 +52,7 @@ BASES_VALIDAS = [
     "F ORL-PA", "F PCA-PA", "F PDR-GO", "F PGM-PA", "F PLN-DF", "F PON-GO",
     "F POS-GO", "F PVH 02-RO", "F PVH-RO", "F PVL-MT", "F RDC -PA", "F RVD - GO",
     "F SEN-GO", "F SFX-PA", "F TGA-MT", "F TGT-DF", "F TLA-PA", "F TRD-GO",
-    "F TUR-PA", "F VHL-RO", "F VLP-GO", "F XIG-PA","F TRM-AM", "F STM-PA",
+    "F TUR-PA", "F VHL-RO", "F VLP-GO", "F XIG-PA", "F TRM-AM", "F STM-PA",
     "F JPN 02-RO", "F CAC-RO"
 ]
 
@@ -98,11 +104,19 @@ def aplicar_regras_status(df: pl.DataFrame) -> pl.DataFrame:
 # =====================================================================
 
 def carregar_relatorio_anterior(pasta: str) -> Optional[pl.DataFrame]:
-    arquivos = [f for f in os.listdir(pasta) if f.endswith(".xlsx")]
-    if not arquivos:
-        logging.warning("Nenhum relatório encontrado no Arquivo Morto.")
-        return None
-    arquivo_mais_recente = max([os.path.join(pasta, f) for f in arquivos], key=os.path.getctime)
+    """Carrega o relatório do dia anterior (D-1) com base na data no nome."""
+    ontem = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    candidatos = [f for f in os.listdir(pasta) if ontem in f and f.endswith(".xlsx")]
+
+    if not candidatos:
+        logging.warning(f"Nenhum relatório encontrado para {ontem} — usando o mais recente disponível.")
+        arquivos = [f for f in os.listdir(pasta) if f.endswith(".xlsx")]
+        if not arquivos:
+            return None
+        arquivo_mais_recente = max([os.path.join(pasta, f) for f in arquivos], key=os.path.getctime)
+    else:
+        arquivo_mais_recente = os.path.join(pasta, candidatos[0])
+
     logging.info(f"📂 Comparando com relatório anterior: {arquivo_mais_recente}")
     return pl.read_excel(arquivo_mais_recente)
 
@@ -128,15 +142,15 @@ def comparar_relatorios(df_atual: pl.DataFrame, df_anterior: Optional[pl.DataFra
     else:
         df_comp = atual.with_columns(pl.lit(0).alias("QtdAnterior"))
 
+    # Calcular diferença
     df_comp = df_comp.with_columns([
-        pl.col("QtdAtual").cast(pl.Int64),
-        pl.col("QtdAnterior").cast(pl.Int64),
         (pl.col("QtdAtual") - pl.col("QtdAnterior")).cast(pl.Int64).alias("Diferenca")
     ])
 
     qtd_total = int(df_comp["QtdAtual"].sum())
     variacao_total = int(df_comp["Diferenca"].sum())
 
+    # 🔴 5 piores (maior quantidade atual)
     piores = (
         df_comp
         .sort("QtdAtual", descending=True)
@@ -144,10 +158,25 @@ def comparar_relatorios(df_atual: pl.DataFrame, df_anterior: Optional[pl.DataFra
         .select([COL_BASE_RECENTE, "QtdAtual"])
     )
 
-    piores_list = [(r[COL_BASE_RECENTE], int(r["QtdAtual"])) for r in piores.iter_rows(named=True)]
-    return qtd_total, variacao_total, piores_list
+    # 🟢 5 melhores reduções (maior queda)
+    melhores = (
+        df_comp
+        .filter(pl.col("Diferenca") < 0)
+        .sort("Diferenca")  # mais negativo = maior redução
+        .head(5)
+        .select([COL_BASE_RECENTE, "Diferenca"])
+    )
 
-def montar_card_franquias(data, qtd_total, variacao, piores, link):
+    piores_list = [(r[COL_BASE_RECENTE], int(r["QtdAtual"])) for r in piores.iter_rows(named=True)]
+    melhores_list = [(r[COL_BASE_RECENTE], int(r["Diferenca"])) for r in melhores.iter_rows(named=True)]
+
+    return qtd_total, variacao_total, piores_list, melhores_list
+
+# =====================================================================
+# 💬 CARD FEISHU
+# =====================================================================
+
+def montar_card_franquias(data, qtd_total, variacao, piores, melhores, link):
     return {
         "msg_type": "interactive",
         "card": {
@@ -161,6 +190,9 @@ def montar_card_franquias(data, qtd_total, variacao, piores, link):
                 {"tag": "hr"},
                 {"tag": "div", "text": {"tag": "lark_md", "content": "**🔴 5 Piores Franquias (Mais Pacotes)**"}},
                 {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join([f"- {b}: {q}" for b, q in piores])}},
+                {"tag": "hr"},
+                {"tag": "div", "text": {"tag": "lark_md", "content": "**🟢 5 Maiores Reduções (Melhoria)**"}},
+                {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join([f"- {b}: {q}" for b, q in melhores])}},
                 {"tag": "hr"},
                 {"tag": "action", "actions": [
                     {"tag": "button", "text": {"tag": "plain_text", "content": "📂 Abrir Relatório"},
@@ -194,7 +226,6 @@ def main():
 
     # Lazy load (otimizado)
     df_lazy = pl.read_excel(arquivo, infer_schema_length=1000).lazy()
-
     df_lazy = df_lazy.filter(pl.col(COL_BASE_RECENTE).is_in(BASES_VALIDAS))
 
     # 🕒 Calcular dias parado
@@ -203,7 +234,6 @@ def main():
         (pl.lit(datetime.now()) - pl.col(COL_HORA_OPERACAO)).dt.total_days().fill_null(0).cast(pl.Int64).alias(COL_DIAS_PARADO)
     ])
 
-    # Coleta (executa o plano lazy)
     df_main = df_lazy.collect()
 
     # Aplicar regras
@@ -220,7 +250,7 @@ def main():
 
     # Comparar e gerar card
     df_ant = carregar_relatorio_anterior(PATH_OUTPUT_ARQUIVO_MORTO)
-    qtd_total, variacao_total, piores = comparar_relatorios(df_card, df_ant)
+    qtd_total, variacao_total, piores, melhores = comparar_relatorios(df_card, df_ant)
 
     variacao = (
         f"⬇️ Diminuiu {abs(variacao_total)} pacotes" if variacao_total < 0 else
@@ -229,7 +259,7 @@ def main():
     )
 
     data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
-    card_payload = montar_card_franquias(data_atual, qtd_total, variacao, piores, "https://link-relatorio")
+    card_payload = montar_card_franquias(data_atual, qtd_total, variacao, piores, melhores, "https://link-relatorio")
     enviar_card(card_payload, WEBHOOK_URL)
 
     logging.info("✅ Processo concluído com sucesso.")

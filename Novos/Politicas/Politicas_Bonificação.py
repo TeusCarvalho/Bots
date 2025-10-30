@@ -239,45 +239,106 @@ def taxa_t0():
     )
 
 # ==========================================================
-# 📉 Shipping Time (Horas)
+# 📉 Shipping Time (Horas) - cálculo consolidado por base (em horas)
 # ==========================================================
 def _prep_shipping(df: pl.DataFrame, col_nome: str) -> pl.DataFrame:
+    """
+    Prepara o cálculo de Shipping Time:
+    - Soma as 3 etapas (Trânsito, Processamento e Saída-Entrega)
+    - Agrupa por base e calcula a média consolidada
+    - Detecta e converte automaticamente unidades (minutos/dias → horas)
+    - Não divide pela quantidade de planilhas
+    """
     if df.is_empty():
         return df
+
     base = "PDD de Entrega" if "PDD de Entrega" in df.columns else "Nome da base"
     etapas = [
         "Tempo trânsito SC Destino->Base Entrega",
         "Tempo médio processamento Base Entrega",
         "Tempo médio Saída para Entrega->Entrega"
     ]
+
+    # Garante que todas as colunas das etapas existam
     for e in etapas:
         if e not in df.columns:
             df = df.with_columns(pl.lit(0).alias(e))
+
+    # Converte colunas para float
+    df = df.with_columns([to_float(e) for e in etapas])
+
+    # ----------------------------------------------------------------------
+    # 🔍 Detecção automática de unidade (minutos / dias)
+    # ----------------------------------------------------------------------
+    def detectar_unidade(col: str) -> float:
+        media_valor = df[col].mean()
+        if media_valor is None:
+            return 1
+        if media_valor > 48 and media_valor < 1500:
+            print(f"⚠️  Coluna '{col}' parece estar em minutos → convertendo para horas (÷60)")
+            return 1 / 60
+        elif media_valor >= 1500:
+            print(f"⚠️  Coluna '{col}' parece estar em dias → convertendo para horas (×24)")
+            return 24
+        return 1
+
+    fatores = {e: detectar_unidade(e) for e in etapas}
+
+    for e in etapas:
+        if fatores[e] != 1:
+            df = df.with_columns((pl.col(e) * fatores[e]).alias(e))
+
+    # ----------------------------------------------------------------------
+    # 🧮 Soma das etapas + média por base (em horas)
+    # ----------------------------------------------------------------------
     df = df.with_columns([
-        to_float(etapas[0]), to_float(etapas[1]), to_float(etapas[2]),
         (pl.col(etapas[0]) + pl.col(etapas[1]) + pl.col(etapas[2])).alias(col_nome)
     ])
+
     out = df.group_by(base).agg(pl.mean(col_nome)).rename({base: "Nome da base"})
+    print(f"✅ Shipping Time calculado (média consolidada em horas) — {col_nome}")
+
     return _normalize_base(out)
 
+
 def shippingtime_atual():
-    arquivos = [f for f in os.listdir(DIR_SHIP) if f.endswith((".xlsx", ".xls"))]
+    """Lê TODAS as planilhas atuais e calcula o Shipping Time Atual (h)."""
+    arquivos = [os.path.join(DIR_SHIP, f) for f in os.listdir(DIR_SHIP) if f.endswith((".xlsx", ".xls"))]
     if not arquivos:
+        print("⚠️ Nenhum arquivo encontrado em DIR_SHIP.")
         return pl.DataFrame()
-    df = read_excel_silent(os.path.join(DIR_SHIP, sorted(arquivos)[-1]))
+
+    dfs = [read_excel_silent(f) for f in tqdm(arquivos, desc="📊 Lendo Base Atual", colour="green")]
+    dfs = [d for d in dfs if not d.is_empty()]
+    if not dfs:
+        print("⚠️ Nenhum dado válido encontrado nas planilhas atuais.")
+        return pl.DataFrame()
+
+    # Junta todas as planilhas atuais
+    df = pl.concat(dfs, how="diagonal_relaxed")
+
+    # Calcula a média consolidada por base (em horas)
     return _prep_shipping(df, "S.T. Atual (h)")
 
+
 def shippingtime_antiga():
+    """Lê TODAS as planilhas antigas e calcula o Shipping Time Anterior (h)."""
     arquivos = [os.path.join(DIR_ANTIGA, f) for f in os.listdir(DIR_ANTIGA) if f.endswith((".xlsx", ".xls"))]
     if not arquivos:
+        print("⚠️ Nenhum arquivo encontrado em DIR_ANTIGA.")
         return pl.DataFrame()
+
     dfs = [read_excel_silent(f) for f in tqdm(arquivos, desc="📉 Lendo Base Antiga", colour="cyan")]
     dfs = [d for d in dfs if not d.is_empty()]
     if not dfs:
+        print("⚠️ Nenhum dado válido encontrado nas planilhas antigas.")
         return pl.DataFrame()
-    df = pl.concat(dfs, how="diagonal_relaxed")
-    return _prep_shipping(df, "S.T. Anterior (h)")
 
+    # Junta todas as planilhas antigas
+    df = pl.concat(dfs, how="diagonal_relaxed")
+
+    # Calcula a média consolidada por base (em horas)
+    return _prep_shipping(df, "S.T. Anterior (h)")
 
 # ==========================================================
 # 💰 Ressarcimento

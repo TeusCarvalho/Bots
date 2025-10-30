@@ -128,3 +128,23 @@
 2025-10-29 14:05:55,762 - INFO - ✅ Card enviado com sucesso ao Feishu!
 2025-10-29 14:05:55,763 - INFO - 
 🏁 Processo concluído com sucesso!
+2025-10-30 10:14:37,437 - INFO - 🚀 Iniciando processamento turbo...
+2025-10-30 10:14:40,992 - WARNING - Could not determine dtype for column 13, falling back to string
+2025-10-30 10:14:40,992 - WARNING - Could not determine dtype for column 14, falling back to string
+2025-10-30 10:14:40,992 - WARNING - Could not determine dtype for column 15, falling back to string
+2025-10-30 10:14:40,992 - WARNING - Could not determine dtype for column 16, falling back to string
+2025-10-30 10:14:40,992 - WARNING - Could not determine dtype for column 19, falling back to string
+2025-10-30 10:14:59,228 - INFO - Total de 3119397 registros lidos e consolidados.
+2025-10-30 10:14:59,229 - INFO - Coluna de entrega detectada: 'ENTREGUE NO PRAZO？'
+2025-10-30 10:14:59,229 - INFO - Filtrando pela data prevista de entrega (hoje)...
+2025-10-30 10:14:59,246 - INFO - 86435 registros restantes após o filtro de data.
+2025-10-30 10:14:59,250 - INFO - 36012 registros restantes após o filtro de bases válidas.
+2025-10-30 10:14:59,250 - INFO - Gerando resumo de SLA por base...
+2025-10-30 10:14:59,277 - INFO - Verificando relatórios antigos em 'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada' para arquivar...
+2025-10-30 10:14:59,279 - INFO - Relatório antigo movido: 'Resumo_Consolidado_20251029.xlsx' -> 'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada\Nova pasta'
+2025-10-30 10:15:17,693 - INFO - 📄 Relatório completo salvo em: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada\Resumo_Consolidado_20251030.xlsx
+2025-10-30 10:15:17,693 - INFO -   -> Aba 'Resumo SLA' com 49 linhas.
+2025-10-30 10:15:17,693 - INFO -   -> Aba 'Dados Completos' com 36012 linhas.
+2025-10-30 10:15:19,718 - INFO - ✅ Card enviado com sucesso ao Feishu!
+2025-10-30 10:15:19,719 - INFO - 
+🏁 Processo concluído com sucesso!
