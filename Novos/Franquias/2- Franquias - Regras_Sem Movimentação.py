@@ -1,8 +1,19 @@
+# -*- coding: utf-8 -*-
+"""
+📦 Sem Movimentação - Franquias (Comparativo Diário)
+------------------------------------------------------------
+- Compara o relatório atual com o do dia anterior (D-1)
+- Calcula variação total e por base
+- Mostra Top 5 piores e Top 5 melhores reduções
+- Move relatórios antigos para "Arquivo Morto"
+- Envia card ao Feishu com resumo e link do relatório
+"""
 
 import polars as pl
 import os
 import logging
 import requests
+import shutil
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
@@ -95,7 +106,6 @@ def aplicar_regras_status(df: pl.DataFrame) -> pl.DataFrame:
 # =====================================================================
 
 def carregar_relatorio_anterior(pasta: str) -> Optional[pl.DataFrame]:
-    """Carrega o relatório do dia anterior (D-1) com base na data no nome."""
     ontem = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
     candidatos = [f for f in os.listdir(pasta) if ontem in f and f.endswith(".xlsx")]
 
@@ -133,7 +143,6 @@ def comparar_relatorios(df_atual: pl.DataFrame, df_anterior: Optional[pl.DataFra
     else:
         df_comp = atual.with_columns(pl.lit(0).alias("QtdAnterior"))
 
-    # Calcular diferença
     df_comp = df_comp.with_columns([
         (pl.col("QtdAtual") - pl.col("QtdAnterior")).cast(pl.Int64).alias("Diferenca")
     ])
@@ -141,7 +150,6 @@ def comparar_relatorios(df_atual: pl.DataFrame, df_anterior: Optional[pl.DataFra
     qtd_total = int(df_comp["QtdAtual"].sum())
     variacao_total = int(df_comp["Diferenca"].sum())
 
-    # 🔴 5 piores (maior quantidade atual)
     piores = (
         df_comp
         .sort("QtdAtual", descending=True)
@@ -149,11 +157,10 @@ def comparar_relatorios(df_atual: pl.DataFrame, df_anterior: Optional[pl.DataFra
         .select([COL_BASE_RECENTE, "QtdAtual"])
     )
 
-    # 🟢 5 melhores reduções (maior queda)
     melhores = (
         df_comp
         .filter(pl.col("Diferenca") < 0)
-        .sort("Diferenca")  # mais negativo = maior redução
+        .sort("Diferenca")
         .head(5)
         .select([COL_BASE_RECENTE, "Diferenca"])
     )
@@ -162,6 +169,26 @@ def comparar_relatorios(df_atual: pl.DataFrame, df_anterior: Optional[pl.DataFra
     melhores_list = [(r[COL_BASE_RECENTE], int(r["Diferenca"])) for r in melhores.iter_rows(named=True)]
 
     return qtd_total, variacao_total, piores_list, melhores_list
+
+# =====================================================================
+# 📦 MOVER ARQUIVOS PARA ARQUIVO MORTO
+# =====================================================================
+
+def mover_para_arquivo_morto():
+    data_hoje = datetime.now().strftime("%Y-%m-%d")
+    arquivos = [f for f in os.listdir(PATH_OUTPUT_REPORTS) if f.endswith(".xlsx")]
+
+    os.makedirs(PATH_OUTPUT_ARQUIVO_MORTO, exist_ok=True)
+
+    for f in arquivos:
+        if data_hoje not in f:  # move apenas os dias anteriores
+            origem = os.path.join(PATH_OUTPUT_REPORTS, f)
+            destino = os.path.join(PATH_OUTPUT_ARQUIVO_MORTO, f)
+            try:
+                shutil.move(origem, destino)
+                logging.info(f"📁 Movido para Arquivo Morto: {f}")
+            except Exception as e:
+                logging.error(f"❌ Erro ao mover {f}: {e}")
 
 # =====================================================================
 # 💬 CARD FEISHU
@@ -215,11 +242,9 @@ def main():
     arquivo = max([os.path.join(PATH_INPUT_MAIN, f) for f in arquivos], key=os.path.getctime)
     logging.info(f"Lendo arquivo principal: {arquivo}")
 
-    # Lazy load (otimizado)
     df_lazy = pl.read_excel(arquivo, infer_schema_length=1000).lazy()
     df_lazy = df_lazy.filter(pl.col(COL_BASE_RECENTE).is_in(BASES_VALIDAS))
 
-    # 🕒 Calcular dias parado
     df_lazy = df_lazy.with_columns([
         pl.col(COL_HORA_OPERACAO).cast(pl.Datetime).alias(COL_HORA_OPERACAO),
         (pl.lit(datetime.now()) - pl.col(COL_HORA_OPERACAO)).dt.total_days().fill_null(0).cast(pl.Int64).alias(COL_DIAS_PARADO)
@@ -227,19 +252,18 @@ def main():
 
     df_main = df_lazy.collect()
 
-    # Aplicar regras
     df_final = aplicar_regras_status(df_main)
     df_final = aplicar_regras_transito(df_final)
 
-    # Salvar relatório completo
     data_hoje = datetime.now().strftime("%Y-%m-%d")
     output_path = os.path.join(PATH_OUTPUT_REPORTS, f"Relatório_SemMovimentação_Completo_{data_hoje}.xlsx")
     df_final.write_excel(output_path)
+    logging.info(f"✅ Relatório salvo: {output_path}")
 
-    # Filtro 5+ dias
+    # 🗂️ Move arquivos antigos
+    mover_para_arquivo_morto()
+
     df_card = df_final.filter(pl.col(COL_DIAS_PARADO) >= 5)
-
-    # Comparar e gerar card
     df_ant = carregar_relatorio_anterior(PATH_OUTPUT_ARQUIVO_MORTO)
     qtd_total, variacao_total, piores, melhores = comparar_relatorios(df_card, df_ant)
 
@@ -250,9 +274,12 @@ def main():
     )
 
     data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
-    card_payload = montar_card_franquias(data_atual, qtd_total, variacao, piores, melhores, "https://link-relatorio")
-    enviar_card(card_payload, WEBHOOK_URL)
+    card_payload = montar_card_franquias(
+        data_atual, qtd_total, variacao, piores, melhores,
+        "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/EoLsAM3uwAJKiLmuU53XrzMBUqXMQQOvGtGJeVpp8JLLFA?e=N31EhA"
+    )
 
+    enviar_card(card_payload, WEBHOOK_URL)
     logging.info("✅ Processo concluído com sucesso.")
 
 if __name__ == "__main__":
