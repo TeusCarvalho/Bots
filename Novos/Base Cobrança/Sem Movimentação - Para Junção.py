@@ -1,17 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-===========================================================
-📦 Consolidação de Bases - Sem Movimentação (com Polars Lazy)
-Versão: 3.0 (2025-10-17)
-Autor: bb-assistente 😎
------------------------------------------------------------
-✅ Junta todas as planilhas da pasta
-✅ Usa Polars Lazy Mode (mais rápido e leve)
-✅ Divide automaticamente em abas de até 1.048.000 linhas
-✅ Cria abas "Resumo_Geral" e "Resumo_Arquivos"
-✅ Ignora arquivos de saída (Bases_*.xlsx)
-===========================================================
-"""
 
 import os
 import polars as pl

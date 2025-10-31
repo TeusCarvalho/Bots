@@ -1,15 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-📊 Política de Bonificação - v2.7.5 FINAL
-Autor: bb-assistente 😎
-
-Correções/Features:
-- Joins "full" seguros com normalização da chave ("Nome da base").
-- Remove sufixos indesejados ("_left", "_right") da chave antes/depois dos joins.
-- Shipping Time: variação em horas (Atual - Anterior).
-- Sem Movimentação: GP/PA + aging (6/7/10/14/30), lendo TODOS arquivos.
-- Excel sem fórmulas (colunas de atingimento/eligibilidade vazias).
-"""
 
 import os
 import polars as pl
@@ -155,6 +143,7 @@ def pacotes_sem_mov():
     df = df.filter(
         (pl.col("Regional responsável").is_in(["GP", "PA"])) &
         (pl.col("Aging").is_in([
+            "Exceed 5 days with no track"
             "Exceed 6 days with no track",
             "Exceed 7 days with no track",
             "Exceed 10 days with no track",

@@ -148,3 +148,18 @@
 2025-10-30 10:15:19,718 - INFO - ✅ Card enviado com sucesso ao Feishu!
 2025-10-30 10:15:19,719 - INFO - 
 🏁 Processo concluído com sucesso!
+2025-10-31 10:54:10,227 - INFO - 🚀 Iniciando processamento turbo...
+2025-10-31 10:54:27,413 - INFO - Total de 3737936 registros lidos e consolidados.
+2025-10-31 10:54:27,414 - INFO - Coluna de entrega detectada: 'ENTREGUE NO PRAZO？'
+2025-10-31 10:54:27,414 - INFO - Filtrando pela data prevista de entrega (hoje)...
+2025-10-31 10:54:27,435 - INFO - 110937 registros restantes após o filtro de data.
+2025-10-31 10:54:27,439 - INFO - 43467 registros restantes após o filtro de bases válidas.
+2025-10-31 10:54:27,439 - INFO - Gerando resumo de SLA por base...
+2025-10-31 10:54:27,451 - INFO - Verificando relatórios antigos em 'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada' para arquivar...
+2025-10-31 10:54:27,452 - INFO - Relatório antigo movido: 'Resumo_Consolidado_20251030.xlsx' -> 'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada\Nova pasta'
+2025-10-31 10:54:47,215 - INFO - 📄 Relatório completo salvo em: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada\Resumo_Consolidado_20251031.xlsx
+2025-10-31 10:54:47,215 - INFO -   -> Aba 'Resumo SLA' com 51 linhas.
+2025-10-31 10:54:47,215 - INFO -   -> Aba 'Dados Completos' com 43467 linhas.
+2025-10-31 10:54:48,692 - INFO - ✅ Card enviado com sucesso ao Feishu!
+2025-10-31 10:54:48,694 - INFO - 
+🏁 Processo concluído com sucesso!

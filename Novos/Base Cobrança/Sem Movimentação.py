@@ -15,7 +15,7 @@ ARQUIVO_SAIDA = os.path.join(PASTA_ENTRADA, "Bases_Filtradas.xlsx")
 BASES_ALVO = [
     "CZS -AC", "SMD -AC", "TAR -AC", "F BSL-AC",
     "ANA FLUVIAL - PA", "BRV -PA", "MCP FLUVIAL -AP",
-    "F PVH-RO", "F MCP-AP", "F MCP 02-AP", "STM FLUVIAL -PA" ,"ITT -PA",
+    "F PVH-RO", "F MCP-AP", "F MCP 02-AP", "STM FLUVIAL -PA", "ITT -PA",
     "MAO FLUVIAL -AM"
 ]
 
@@ -103,6 +103,46 @@ def main():
     # Filtrar apenas bases oficiais
     df_filtrado = df_total.filter(pl.col(coluna_unidade).is_in(BASES_ALVO))
 
+    # ======================================================
+    # 🚫 Remover status problemáticos
+    # ======================================================
+    col_nome_problema = "Nome de pacote problemático问题件名称"
+    col_tipo_operacao = "Tipo da última operação最新操作类型"
+
+    linhas_antes_total = df_filtrado.height
+
+    # 1️⃣ Remover "Mercadorias.que.chegam.incompletos货未到齐"
+    if col_nome_problema in df_filtrado.columns:
+        linhas_antes = df_filtrado.height
+        df_filtrado = df_filtrado.filter(
+            pl.col(col_nome_problema) != "Mercadorias.que.chegam.incompletos货未到齐"
+        )
+        removidas = linhas_antes - df_filtrado.height
+        print(f"🧹 {removidas} linha(s) com status 'Mercadorias.que.chegam.incompletos货未到齐' foram removidas.")
+    else:
+        print(
+            "⚠️ Coluna 'Nome de pacote problemático问题件名称' não encontrada. Nenhuma filtragem aplicada para esse status.")
+
+    # 2️⃣ Remover "发件扫描/Bipe de expedição"
+    if col_tipo_operacao in df_filtrado.columns:
+        linhas_antes = df_filtrado.height
+        df_filtrado = df_filtrado.filter(
+            pl.col(col_tipo_operacao) != "发件扫描/Bipe de expedição"
+        )
+        removidas = linhas_antes - df_filtrado.height
+        print(f"🧹 {removidas} linha(s) com status '发件扫描/Bipe de expedição' foram removidas.")
+    else:
+        print(
+            "⚠️ Coluna 'Tipo da última operação最新操作类型' não encontrada. Nenhuma filtragem aplicada para esse status.")
+
+    linhas_depois_total = df_filtrado.height
+    total_removidas = linhas_antes_total - linhas_depois_total
+
+    print(f"\n🧾 Total de {total_removidas} linha(s) removidas no total.\n")
+
+    # ======================================================
+    # 🧮 Verificação final
+    # ======================================================
     if df_filtrado.is_empty():
         print("\n⚠️ Nenhuma linha correspondente às bases desejadas foi encontrada.")
         return

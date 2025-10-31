@@ -60,6 +60,7 @@ BASES_VALIDAS = [
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+
 # =====================================================================
 # ⚙️ FUNÇÕES DE NEGÓCIO — POLARS
 # =====================================================================
@@ -91,6 +92,7 @@ def aplicar_regras_transito(df: pl.DataFrame) -> pl.DataFrame:
         .alias(COL_TRANSITO)
     )
 
+
 def aplicar_regras_status(df: pl.DataFrame) -> pl.DataFrame:
     is_problematico = df[COL_ULTIMA_OPERACAO] == "问题件扫描/Bipe de pacote problemático"
     cond_extravio = is_problematico & (df[COL_NOME_PROBLEMATICO] == "Extravio.interno.内部遗失")
@@ -100,6 +102,7 @@ def aplicar_regras_status(df: pl.DataFrame) -> pl.DataFrame:
         .otherwise(pl.col(COL_ULTIMA_OPERACAO).str.to_uppercase())
         .alias(COL_STATUS)
     )
+
 
 # =====================================================================
 # 🧮 APOIO E COMPARAÇÃO
@@ -120,6 +123,7 @@ def carregar_relatorio_anterior(pasta: str) -> Optional[pl.DataFrame]:
 
     logging.info(f"📂 Comparando com relatório anterior: {arquivo_mais_recente}")
     return pl.read_excel(arquivo_mais_recente)
+
 
 def comparar_relatorios(df_atual: pl.DataFrame, df_anterior: Optional[pl.DataFrame]):
     atual = (
@@ -170,6 +174,7 @@ def comparar_relatorios(df_atual: pl.DataFrame, df_anterior: Optional[pl.DataFra
 
     return qtd_total, variacao_total, piores_list, melhores_list
 
+
 # =====================================================================
 # 📦 MOVER ARQUIVOS PARA ARQUIVO MORTO
 # =====================================================================
@@ -189,6 +194,7 @@ def mover_para_arquivo_morto():
                 logging.info(f"📁 Movido para Arquivo Morto: {f}")
             except Exception as e:
                 logging.error(f"❌ Erro ao mover {f}: {e}")
+
 
 # =====================================================================
 # 💬 CARD FEISHU
@@ -220,12 +226,14 @@ def montar_card_franquias(data, qtd_total, variacao, piores, melhores, link):
         }
     }
 
+
 def enviar_card(payload: Dict[str, Any], webhook: str):
     r = requests.post(webhook, json=payload)
     if r.status_code == 200:
         logging.info("✅ Card enviado com sucesso ao Feishu!")
     else:
         logging.error(f"❌ Erro ao enviar card: {r.status_code} - {r.text}")
+
 
 # =====================================================================
 # 🚀 MAIN
@@ -247,7 +255,8 @@ def main():
 
     df_lazy = df_lazy.with_columns([
         pl.col(COL_HORA_OPERACAO).cast(pl.Datetime).alias(COL_HORA_OPERACAO),
-        (pl.lit(datetime.now()) - pl.col(COL_HORA_OPERACAO)).dt.total_days().fill_null(0).cast(pl.Int64).alias(COL_DIAS_PARADO)
+        (pl.lit(datetime.now()) - pl.col(COL_HORA_OPERACAO)).dt.total_days().fill_null(0).cast(pl.Int64).alias(
+            COL_DIAS_PARADO)
     ])
 
     df_main = df_lazy.collect()
@@ -255,16 +264,20 @@ def main():
     df_final = aplicar_regras_status(df_main)
     df_final = aplicar_regras_transito(df_final)
 
+    # 🔹 Carrega o relatório anterior antes de mover os arquivos
+    df_ant = carregar_relatorio_anterior(PATH_OUTPUT_REPORTS)
+
+    # 🗂️ Move arquivos antigos para o Arquivo Morto
+    mover_para_arquivo_morto()
+
+    # 🔸 Salva o relatório novo
     data_hoje = datetime.now().strftime("%Y-%m-%d")
     output_path = os.path.join(PATH_OUTPUT_REPORTS, f"Relatório_SemMovimentação_Completo_{data_hoje}.xlsx")
     df_final.write_excel(output_path)
     logging.info(f"✅ Relatório salvo: {output_path}")
 
-    # 🗂️ Move arquivos antigos
-    mover_para_arquivo_morto()
-
+    # 🧮 Comparativo
     df_card = df_final.filter(pl.col(COL_DIAS_PARADO) >= 5)
-    df_ant = carregar_relatorio_anterior(PATH_OUTPUT_ARQUIVO_MORTO)
     qtd_total, variacao_total, piores, melhores = comparar_relatorios(df_card, df_ant)
 
     variacao = (
@@ -281,6 +294,7 @@ def main():
 
     enviar_card(card_payload, WEBHOOK_URL)
     logging.info("✅ Processo concluído com sucesso.")
+
 
 if __name__ == "__main__":
     main()
