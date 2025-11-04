@@ -1,228 +1,181 @@
 # -*- coding: utf-8 -*-
-
-import pandas as pd
 import os
+import pandas as pd
+import requests
 from datetime import datetime
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 # ======================================================
-# ⚙️ CONFIGURAÇÕES
+# ⚙️ CONFIGURAÇÕES GERAIS
 # ======================================================
-
-BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Custo"
-OUTPUT_PATH = os.path.join(BASE_DIR, "Minha_responsabilidade_atualizada.xlsx")
-OUTPUT_SHARED = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Relatorios\Custos\Relatorio_Custos.xlsx"
+BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Custo - Coordenador"
 COORDENADOR_PATH = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
+OUTPUT_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Custos - Coordenadores"
+
+LINK_PASTA = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/EvIP3oIiLJRAqcB1SZ_1nmYBXLIYSJkIns5Pf_Xz2OqY_w?e=OEXsJN"
+
+DATA_ATUAL = datetime.now().strftime("%Y%m%d_%H%M%S")
+ARQUIVO_SAIDA = os.path.join(OUTPUT_DIR, f"Custos_Consolidado_{DATA_ATUAL}.xlsx")
 
 # ======================================================
-# 🧠 FUNÇÕES AUXILIARES
+# 🔗 WEBHOOKS POR COORDENADOR
 # ======================================================
+COORDENADOR_WEBHOOKS = {
+    "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/1f3f48d7-b60c-45c1-87ee-6cc8ab9f6467",
+    "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/b448a316-f146-49d0-9f0a-90b1f086b8a7",
+    "Anderson Matheus": "https://open.feishu.cn/open-apis/bot/v2/hook/fa768680-b4ab-4d87-bf2c-285c91034dad",
+    "Marcelo Medina": "https://open.feishu.cn/open-apis/bot/v2/hook/e14d0307-c6d6-472b-bea1-d83a5573dc1b",
+    "Odária Fereira": "https://open.feishu.cn/open-apis/bot/v2/hook/4cfd01be-defa-4adb-936e-6bfbee5326a6",
+    "Rodrigo Castro": "https://open.feishu.cn/open-apis/bot/v2/hook/e3e31e14-79ab-4a95-8a2d-be99e1fc9b10",
+    "Orlean Nascimento": "https://open.feishu.cn/open-apis/bot/v2/hook/9ce83b77-04ad-4558-ab83-39929b30f092",
+    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/d624dcc1-73c7-4d36-8f63-5c43d0e5259b",
+    "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/eb777d25-f454-4db7-9364-edf95ee37063",
+    "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/99557a7f-ca4e-4ede-b9e5-ccd7ad85b96a"
+}
 
+# ======================================================
+# 🧩 FUNÇÕES AUXILIARES
+# ======================================================
 def format_currency(value):
-    """Formata número em BRL (R$ 1.234,56)."""
     try:
-        return f"{float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    except (ValueError, TypeError):
-        return "0,00"
-
-def carregar_excel(path):
-    """Lê o arquivo Excel automaticamente (.xls ou .xlsx)."""
-    try:
-        return pd.read_excel(path, dtype=str, engine="openpyxl")
+        return f"R$ {float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception:
-        try:
-            return pd.read_excel(path, dtype=str, engine="xlrd")
-        except Exception as e:
-            raise ValueError(f"Erro ao ler o arquivo Excel: {e}")
-
-def to_float_safe(series):
-    """Converte para float, ignorando erros."""
-    return pd.to_numeric(series.astype(str).str.replace(",", ".").str.extract(r"(\d+\.?\d*)")[0], errors="coerce").fillna(0)
-
-def gerar_nome_seguro(path):
-    """Cria novo nome se o arquivo estiver bloqueado."""
-    base, ext = os.path.splitext(path)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{base}_{timestamp}{ext}"
+        return "R$ 0,00"
 
 def encontrar_arquivo_entrada(pasta):
-    """Encontra o primeiro arquivo Excel válido da pasta, ignorando os gerados pelo script."""
-    arquivos = [
-        f for f in os.listdir(pasta)
-        if f.lower().endswith((".xls", ".xlsx"))
-        and not f.startswith("~$")
-        and not f.lower().startswith(("minha_responsabilidade", "relatorio_"))
-    ]
+    arquivos = [f for f in os.listdir(pasta) if f.lower().endswith((".xls", ".xlsx")) and not f.startswith("~$")]
     if not arquivos:
-        raise FileNotFoundError("⚠️ Nenhum arquivo Excel válido encontrado na pasta de entrada.")
-    # opcional: ordenar por data de modificação e pegar o mais recente
+        raise FileNotFoundError("❌ Nenhum arquivo Excel encontrado na pasta de entrada.")
     arquivos.sort(key=lambda f: os.path.getmtime(os.path.join(pasta, f)), reverse=True)
     return os.path.join(pasta, arquivos[0])
+
+def carregar_excel(path):
+    return pd.read_excel(path, dtype=str, engine="openpyxl")
+
+def to_float_safe(series):
+    return pd.to_numeric(series.astype(str).str.replace(",", ".").str.extract(r"(\d+\.?\d*)")[0], errors="coerce").fillna(0)
+
+def enviar_card_feishu(coordenador, df_resumo):
+    try:
+        total_custo = df_resumo["Custo_Total_R$"].sum()
+        total_bases = df_resumo["Base responsável"].nunique()
+        total_pedidos = df_resumo["Total_Pedidos"].sum()
+
+        top_bases = (
+            df_resumo.groupby("Base responsável")["Custo_Total_R$"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(5)
+            .reset_index()
+        )
+
+        linhas_top = [
+            f"{i}. 💸 **{row['Base responsável']}** — {format_currency(row['Custo_Total_R$'])}"
+            for i, row in enumerate(top_bases.to_dict("records"), 1)
+        ]
+
+        conteudo = (
+            f"👤 **Coordenador:** {coordenador}\n"
+            f"📅 **Atualizado em:** {datetime.now():%d/%m/%Y %H:%M}\n"
+            f"📦 **Total de pedidos:** {int(total_pedidos):,}\n"
+            f"💰 **Custo total:** {format_currency(total_custo)}\n"
+            f"🏢 **Bases Avaliadas:** {int(total_bases)}\n\n"
+            f"🔻 **5 Maiores Custos:**\n" + "\n".join(linhas_top)
+        )
+
+        payload = {
+            "msg_type": "interactive",
+            "card": {
+                "config": {"wide_screen_mode": True},
+                "header": {"template": "turquoise",
+                           "title": {"tag": "plain_text", "content": f"💰 Custos - {coordenador}"}},
+                "elements": [
+                    {"tag": "div", "text": {"tag": "lark_md", "content": conteudo}},
+                    {"tag": "hr"},
+                    {"tag": "action", "actions": [
+                        {"tag": "button",
+                         "text": {"tag": "plain_text", "content": "📂 Abrir Pasta no OneDrive"},
+                         "url": LINK_PASTA, "type": "default"}
+                    ]}
+                ]
+            }
+        }
+
+        webhook = COORDENADOR_WEBHOOKS.get(coordenador)
+        if not webhook:
+            print(f"⚠️ Nenhum webhook configurado para {coordenador}, pulando envio.")
+            return
+
+        resp = requests.post(webhook, json=payload, timeout=10)
+        resp.raise_for_status()
+        print(f"✅ Card enviado para {coordenador}")
+
+    except Exception as e:
+        print(f"🚨 Falha ao enviar card para {coordenador}: {e}")
 
 # ======================================================
 # 🚀 PROCESSAMENTO PRINCIPAL
 # ======================================================
+if __name__ == "__main__":
+    print("🚀 Iniciando consolidação de custos por coordenador...\n")
 
-try:
-    print(f"📂 Procurando arquivo Excel em: {BASE_DIR}")
-    FILE_PATH = encontrar_arquivo_entrada(BASE_DIR)
-    print(f"✅ Arquivo selecionado: {os.path.basename(FILE_PATH)}\n")
+    try:
+        FILE_PATH = encontrar_arquivo_entrada(BASE_DIR)
+        print(f"📂 Arquivo selecionado: {os.path.basename(FILE_PATH)}")
 
-    df = carregar_excel(FILE_PATH)
-    print(f"📄 Planilha carregada com sucesso ({len(df):,} linhas)".replace(",", "."))
+        df = carregar_excel(FILE_PATH)
+        print(f"📄 Planilha carregada ({len(df):,} linhas)".replace(",", "."))
 
-    total_inicial = len(df)
-
-    # ------------------------------------------------------
-    # 🔍 Filtra apenas Regionais GP
-    # ------------------------------------------------------
-    if "Regional responsável" in df.columns:
-        df = df[df["Regional responsável"].astype(str).str.strip() == "GP"]
-        print(f"✅ Linhas após filtro 'Regional responsável = GP': {len(df):,}".replace(",", "."))
-    else:
-        print("⚠️ Coluna 'Regional responsável' não encontrada. Nenhum filtro aplicado.")
-
-    # ------------------------------------------------------
-    # 💰 Calcula custo estimado
-    # ------------------------------------------------------
-    if "Tipo de anomalia primária" in df.columns:
-        df["Custo Estimado"] = 0
-        df.loc[df["Tipo de anomalia primária"].str.contains("Dano", na=False, case=False), "Custo Estimado"] = 50
-        df.loc[df["Tipo de anomalia primária"].str.contains("Perdido", na=False, case=False), "Custo Estimado"] = 150
-        df.loc[df["Tipo de anomalia primária"].str.contains("Atraso", na=False, case=False), "Custo Estimado"] = 10
-        print("💵 Custo estimado adicionado com base nas anomalias.")
-    else:
-        df["Custo Estimado"] = 0
-        print("⚠️ Coluna 'Tipo de anomalia primária' não encontrada. Custo estimado zerado.")
-
-    # ------------------------------------------------------
-    # 👥 Junta com coordenadores (se existir)
-    # ------------------------------------------------------
-    if os.path.exists(COORDENADOR_PATH):
+        # 🔧 Normaliza e junta coordenadores
         df_coord = pd.read_excel(COORDENADOR_PATH)
-        if {"Nome da base", "Coordenadores"}.issubset(df_coord.columns):
-            df = pd.merge(
-                df,
-                df_coord[["Nome da base", "Coordenadores"]],
-                left_on="Base responsável",
-                right_on="Nome da base",
-                how="left"
-            ).drop(columns=["Nome da base"], errors="ignore")
-            print("👥 Coordenadores vinculados com sucesso.")
-        else:
-            print("⚠️ Planilha de coordenadores não contém as colunas esperadas.")
-    else:
-        print("⚠️ Planilha de coordenadores não encontrada.")
+        coord_col = "Coordenadores" if "Coordenadores" in df_coord.columns else "Coordenador"
+        df_coord.rename(columns={coord_col: "Coordenadores"}, inplace=True)
 
-    # ------------------------------------------------------
-    # 🧹 Remove remessas terminando em "-000" até "-999"
-    # ------------------------------------------------------
-    linhas_antes = len(df)
-    valor_removido = 0.0
+        df["Base responsável"] = df["Base responsável"].astype(str).str.strip().str.upper()
+        df_coord["Nome da base"] = df_coord["Nome da base"].astype(str).str.strip().str.upper()
 
-    if "Remessa" in df.columns:
-        df["Remessa"] = df["Remessa"].astype(str).str.strip()
-        df["Remessa"] = df["Remessa"].str.replace("–", "-", regex=False)
-        padrao_remessa = r".*-\d{3}\s*$"
+        df = pd.merge(
+            df, df_coord[["Nome da base", "Coordenadores"]],
+            left_on="Base responsável", right_on="Nome da base", how="left"
+        ).drop(columns=["Nome da base"], errors="ignore")
 
+        print("👥 Coordenadores vinculados com sucesso.")
+
+        # 💰 Converte 'Valor a pagar (yuan)' em float
         if "Valor a pagar (yuan)" in df.columns:
-            df["Valor a pagar (yuan)_num"] = to_float_safe(df["Valor a pagar (yuan)"])
-            valor_removido = df.loc[df["Remessa"].str.match(padrao_remessa, na=False), "Valor a pagar (yuan)_num"].sum()
+            df["Custo_R$"] = to_float_safe(df["Valor a pagar (yuan)"])
+        else:
+            df["Custo_R$"] = 0
 
-        df = df[~df["Remessa"].str.match(padrao_remessa, na=False)]
-
-    linhas_removidas = linhas_antes - len(df)
-    print(f"🧹 {linhas_removidas:,} linha(s) removida(s) com remessas terminando em '-000~999'".replace(",", "."))
-    print(f"💸 Valor total removido: ¥ {format_currency(valor_removido)}")
-
-    # ------------------------------------------------------
-    # 🕒 Data de processamento
-    # ------------------------------------------------------
-    data_atual = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    df["Data de processamento de retorno"] = df.get("Data de processamento de retorno", pd.Series([None]*len(df)))
-    df["Data de processamento de retorno"] = df["Data de processamento de retorno"].fillna(data_atual)
-    print(f"📌 Data de processamento registrada: {data_atual}")
-
-    # ------------------------------------------------------
-    # 📑 Reordena colunas
-    # ------------------------------------------------------
-    if "Base responsável" in df.columns and "Coordenadores" in df.columns:
-        cols = df.columns.tolist()
-        nova_ordem = ["Base responsável", "Coordenadores"] + [c for c in cols if c not in ["Base responsável", "Coordenadores"]]
-        df = df[nova_ordem]
-        print("✅ Colunas reordenadas (Base responsável e Coordenadores primeiro).")
-
-    # ------------------------------------------------------
-    # 📊 Resumos
-    # ------------------------------------------------------
-    custo_total = df["Custo Estimado"].sum() if "Custo Estimado" in df.columns else 0
-    resumo = pd.DataFrame({
-        "Indicador": [
-            "Total de linhas originais",
-            "Total após limpeza",
-            "Linhas removidas (-000~999)",
-            "Valor total removido (¥)",
-            "Custo total estimado (R$)",
-            "Data de processamento"
-        ],
-        "Valor": [
-            f"{total_inicial:,}".replace(",", "."),
-            f"{len(df):,}".replace(",", "."),
-            f"{linhas_removidas:,}".replace(",", "."),
-            f"¥ {format_currency(valor_removido)}",
-            format_currency(custo_total),
-            data_atual
-        ]
-    })
-
-    resumo_coord = pd.DataFrame()
-    if {"Coordenadores", "Valor a pagar (yuan)", "Custo Estimado"}.issubset(df.columns):
-        df["Valor a pagar (yuan)_num"] = to_float_safe(df["Valor a pagar (yuan)"])
+        # 🧮 Resumo de custos
         resumo_coord = (
             df.groupby(["Coordenadores", "Base responsável"], dropna=False)
             .agg({
                 "Remessa": "count",
-                "Valor a pagar (yuan)_num": "sum",
-                "Custo Estimado": "sum"
+                "Custo_R$": "sum"
             })
             .reset_index()
         )
+
         resumo_coord.rename(columns={
             "Remessa": "Total_Pedidos",
-            "Valor a pagar (yuan)_num": "Valor_Total_Yuan",
-            "Custo Estimado": "Custo_Total_R$"
+            "Custo_R$": "Custo_Total_R$"
         }, inplace=True)
-        resumo_coord.sort_values(by="Valor_Total_Yuan", ascending=False, inplace=True)
-        resumo_coord["Valor_Total_Yuan"] = resumo_coord["Valor_Total_Yuan"].apply(format_currency)
-        resumo_coord["Custo_Total_R$"] = resumo_coord["Custo_Total_R$"].apply(format_currency)
-        print("📈 Resumo por Coordenador gerado e ordenado pelo maior valor total (¥).")
 
-    # ------------------------------------------------------
-    # 💾 Salvar com proteção contra arquivo aberto
-    # ------------------------------------------------------
-    os.makedirs(os.path.dirname(OUTPUT_SHARED), exist_ok=True)
-    final_output = OUTPUT_PATH
-
-    try:
-        with pd.ExcelWriter(final_output, engine="openpyxl") as writer:
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        with pd.ExcelWriter(ARQUIVO_SAIDA, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, sheet_name="Base_Processada")
-            resumo.to_excel(writer, index=False, sheet_name="Resumo_Geral")
-            if not resumo_coord.empty:
-                resumo_coord.to_excel(writer, index=False, sheet_name="Resumo_por_Coordenador")
-    except PermissionError:
-        final_output = gerar_nome_seguro(OUTPUT_PATH)
-        print(f"⚠️ Arquivo aberto. Salvando como nova versão: {os.path.basename(final_output)}")
-        with pd.ExcelWriter(final_output, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False, sheet_name="Base_Processada")
-            resumo.to_excel(writer, index=False, sheet_name="Resumo_Geral")
-            if not resumo_coord.empty:
-                resumo_coord.to_excel(writer, index=False, sheet_name="Resumo_por_Coordenador")
+            resumo_coord.to_excel(writer, index=False, sheet_name="Resumo_por_Coordenador")
 
-    df.to_excel(OUTPUT_SHARED, index=False)
+        print(f"\n💾 Arquivo salvo com sucesso em:\n{ARQUIVO_SAIDA}\n")
 
-    print(f"\n✅ Arquivos salvos com sucesso!")
-    print(f"   📁 Local: {final_output}")
-    print(f"   ☁️ Compartilhado: {OUTPUT_SHARED}")
-    print(f"\n📊 Resumo: {len(df):,} linhas finais | {linhas_removidas:,} removidas | Valor removido ¥ {format_currency(valor_removido)} | Custo total R$ {format_currency(custo_total)}".replace(",", "."))
+        for coordenador in resumo_coord["Coordenadores"].dropna().unique():
+            sub_df = resumo_coord[resumo_coord["Coordenadores"] == coordenador]
+            if not sub_df.empty:
+                enviar_card_feishu(coordenador, sub_df)
 
-except Exception as e:
-    print(f"\n❌ Erro ao processar o arquivo:\n{e}")
+        print("\n🏁 Processo concluído com sucesso!")
+
+    except Exception as e:
+        print(f"\n❌ Erro ao processar:\n{e}")
