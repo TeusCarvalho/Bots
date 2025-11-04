@@ -1,0 +1,151 @@
+2025-11-04 08:12:54,422 - INFO - 🚀 Iniciando processamento turbo...
+2025-11-04 08:13:19,066 - INFO - Total de 4109582 registros lidos e consolidados.
+2025-11-04 08:13:19,067 - INFO - Coluna de entrega detectada: 'ENTREGUE NO PRAZO？'
+2025-11-04 08:13:19,067 - INFO - Filtrando pela data prevista de entrega (hoje)...
+2025-11-04 08:13:19,086 - INFO - 53800 registros restantes após o filtro de data.
+2025-11-04 08:13:19,093 - INFO - 19265 registros restantes após o filtro de bases válidas.
+2025-11-04 08:13:19,093 - INFO - Gerando resumo de SLA por base...
+2025-11-04 08:13:19,117 - INFO - Verificando relatórios antigos em 'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada' para arquivar...
+2025-11-04 08:13:19,119 - INFO - Relatório antigo movido: 'Resumo_Consolidado_20251103.xlsx' -> 'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada\Nova pasta'
+2025-11-04 08:13:30,140 - INFO - 📄 Relatório completo salvo em: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada\Resumo_Consolidado_20251104.xlsx
+2025-11-04 08:13:30,140 - INFO -   -> Aba 'Resumo SLA' com 38 linhas.
+2025-11-04 08:13:30,140 - INFO -   -> Aba 'Dados Completos' com 19265 linhas.
+2025-11-04 08:13:32,472 - INFO - ✅ Card enviado com sucesso ao Feishu!
+2025-11-04 08:13:32,473 - INFO - 
+🏁 Processo concluído com sucesso!
+2025-11-04 10:09:55,619 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-04 10:10:19,558 - INFO - Total de 4109582 registros lidos.
+2025-11-04 10:10:19,560 - CRITICAL - Erro fatal no processamento: invalid series dtype: expected `String`, got `datetime[ms]` for series with name `DATA PREVISTA DE ENTREGA`
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\4- SLA - Entrega Realizada.py", line 204, in <module>
+    df = df.with_columns(
+         ~~~~~~~~~~~~~~~^
+        pl.col("DATA PREVISTA DE ENTREGA").str.strptime(pl.Date, "%Y-%m-%d", strict=False)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ).filter(pl.col("DATA PREVISTA DE ENTREGA") == datetime.now().date())
+    ^
+  File "C:\Users\J&T-099\AppData\Local\Programs\Python\Python313\Lib\site-packages\polars\dataframe\frame.py", line 10172, in with_columns
+    .collect(optimizations=QueryOptFlags._eager())
+     ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\J&T-099\AppData\Local\Programs\Python\Python313\Lib\site-packages\polars\_utils\deprecation.py", line 97, in wrapper
+    return function(*args, **kwargs)
+  File "C:\Users\J&T-099\AppData\Local\Programs\Python\Python313\Lib\site-packages\polars\lazyframe\opt_flags.py", line 328, in wrapper
+    return function(*args, **kwargs)
+  File "C:\Users\J&T-099\AppData\Local\Programs\Python\Python313\Lib\site-packages\polars\lazyframe\frame.py", line 2415, in collect
+    return wrap_df(ldf.collect(engine, callback))
+                   ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+polars.exceptions.SchemaError: invalid series dtype: expected `String`, got `datetime[ms]` for series with name `DATA PREVISTA DE ENTREGA`
+2025-11-04 10:11:28,792 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-04 10:11:46,494 - INFO - Total de 4109582 registros lidos.
+2025-11-04 10:11:46,496 - CRITICAL - Erro fatal no processamento: invalid series dtype: expected `String`, got `datetime[ms]` for series with name `DATA PREVISTA DE ENTREGA`
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\4- SLA - Entrega Realizada.py", line 205, in <module>
+    df = df.with_columns(
+         ~~~~~~~~~~~~~~~^
+        pl.col("DATA PREVISTA DE ENTREGA").str.strptime(pl.Date, "%Y-%m-%d", strict=False)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ).filter(pl.col("DATA PREVISTA DE ENTREGA") == datetime.now().date())
+    ^
+  File "C:\Users\J&T-099\AppData\Local\Programs\Python\Python313\Lib\site-packages\polars\dataframe\frame.py", line 10172, in with_columns
+    .collect(optimizations=QueryOptFlags._eager())
+     ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\J&T-099\AppData\Local\Programs\Python\Python313\Lib\site-packages\polars\_utils\deprecation.py", line 97, in wrapper
+    return function(*args, **kwargs)
+  File "C:\Users\J&T-099\AppData\Local\Programs\Python\Python313\Lib\site-packages\polars\lazyframe\opt_flags.py", line 328, in wrapper
+    return function(*args, **kwargs)
+  File "C:\Users\J&T-099\AppData\Local\Programs\Python\Python313\Lib\site-packages\polars\lazyframe\frame.py", line 2415, in collect
+    return wrap_df(ldf.collect(engine, callback))
+                   ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+polars.exceptions.SchemaError: invalid series dtype: expected `String`, got `datetime[ms]` for series with name `DATA PREVISTA DE ENTREGA`
+2025-11-04 10:16:24,688 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-04 10:16:46,893 - INFO - Total de 4109582 registros lidos.
+2025-11-04 10:16:46,894 - INFO - Tipo detectado para 'DATA PREVISTA DE ENTREGA': Datetime(time_unit='ms', time_zone=None)
+2025-11-04 10:16:46,915 - INFO - 53800 registros filtrados para data de hoje.
+2025-11-04 10:16:46,915 - INFO - 🔗 Associando coordenadores às bases...
+2025-11-04 10:16:46,925 - CRITICAL - Erro fatal no processamento: "Coordenador" not found
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\4- SLA - Entrega Realizada.py", line 223, in <module>
+    coord_df = pl.read_excel(PASTA_COORDENADOR).rename({
+        "Nome da base": "BASE DE ENTREGA",
+        "Coordenador": "COORDENADOR"
+    })
+  File "C:\Users\J&T-099\AppData\Local\Programs\Python\Python313\Lib\site-packages\polars\dataframe\frame.py", line 5026, in rename
+    .collect(optimizations=QueryOptFlags._eager())
+     ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\J&T-099\AppData\Local\Programs\Python\Python313\Lib\site-packages\polars\_utils\deprecation.py", line 97, in wrapper
+    return function(*args, **kwargs)
+  File "C:\Users\J&T-099\AppData\Local\Programs\Python\Python313\Lib\site-packages\polars\lazyframe\opt_flags.py", line 328, in wrapper
+    return function(*args, **kwargs)
+  File "C:\Users\J&T-099\AppData\Local\Programs\Python\Python313\Lib\site-packages\polars\lazyframe\frame.py", line 2415, in collect
+    return wrap_df(ldf.collect(engine, callback))
+                   ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+polars.exceptions.ColumnNotFoundError: "Coordenador" not found
+2025-11-04 10:20:48,266 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-04 10:21:06,476 - INFO - Total de 4109582 registros lidos.
+2025-11-04 10:21:06,476 - INFO - Tipo detectado para 'DATA PREVISTA DE ENTREGA': Datetime(time_unit='ms', time_zone=None)
+2025-11-04 10:21:06,502 - INFO - 53800 registros filtrados para data de hoje.
+2025-11-04 10:21:06,502 - INFO - 🔗 Associando coordenadores às bases...
+2025-11-04 10:21:06,526 - INFO - Verificando relatórios antigos em 'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\SLA - Entrega Realizada' para arquivar...
+2025-11-04 10:21:33,160 - INFO - 📄 Relatório salvo em: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\SLA - Entrega Realizada\Resumo_Consolidado_20251104.xlsx
+2025-11-04 10:21:35,391 - INFO - ✅ Card enviado para João Melo
+2025-11-04 10:21:37,590 - INFO - ✅ Card enviado para Johas Vieira
+2025-11-04 10:21:38,955 - INFO - ✅ Card enviado para Anderson Matheus
+2025-11-04 10:21:40,510 - INFO - ✅ Card enviado para Marcelo Medina
+2025-11-04 10:21:41,902 - INFO - ✅ Card enviado para Odária Fereira
+2025-11-04 10:21:44,226 - INFO - ✅ Card enviado para Rodrigo Castro
+2025-11-04 10:21:45,592 - INFO - ✅ Card enviado para Orlean Nascimento
+2025-11-04 10:21:47,168 - INFO - ✅ Card enviado para Jose Marlon
+2025-11-04 10:21:48,683 - INFO - ✅ Card enviado para Emerson Silva
+2025-11-04 10:21:50,064 - INFO - ✅ Card enviado para Marcos Caique
+2025-11-04 10:21:50,065 - INFO - 🏁 Processamento concluído com sucesso!
+2025-11-04 10:31:11,733 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-04 10:31:32,291 - INFO - Total de 4109582 registros lidos.
+2025-11-04 10:31:32,292 - INFO - Tipo detectado para 'DATA PREVISTA DE ENTREGA': Datetime(time_unit='ms', time_zone=None)
+2025-11-04 10:31:32,309 - INFO - 53800 registros filtrados para data de hoje.
+2025-11-04 10:31:32,309 - INFO - 🔗 Associando coordenadores às bases...
+2025-11-04 10:31:32,329 - INFO - Verificando relatórios antigos em 'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\SLA - Entrega Realizada' para arquivar...
+2025-11-04 10:31:32,332 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251104.xlsx
+2025-11-04 10:32:03,838 - INFO - 📄 Relatório salvo em: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\SLA - Entrega Realizada\Resumo_Consolidado_20251104.xlsx
+2025-11-04 10:32:05,694 - INFO - ✅ Card enviado para João Melo
+2025-11-04 10:32:08,635 - INFO - ✅ Card enviado para Johas Vieira
+2025-11-04 10:32:10,057 - INFO - ✅ Card enviado para Anderson Matheus
+2025-11-04 10:32:11,535 - INFO - ✅ Card enviado para Marcelo Medina
+2025-11-04 10:32:13,034 - INFO - ✅ Card enviado para Odária Fereira
+2025-11-04 10:32:14,469 - INFO - ✅ Card enviado para Rodrigo Castro
+2025-11-04 10:32:15,952 - INFO - ✅ Card enviado para Orlean Nascimento
+2025-11-04 10:32:17,472 - INFO - ✅ Card enviado para Jose Marlon
+2025-11-04 10:32:18,846 - INFO - ✅ Card enviado para Emerson Silva
+2025-11-04 10:32:20,229 - INFO - ✅ Card enviado para Marcos Caique
+2025-11-04 10:32:20,231 - INFO - 🏁 Processamento concluído com sucesso!
+2025-11-04 11:04:48,325 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-04 11:04:57,107 - INFO - Total de 2061486 registros lidos.
+2025-11-04 11:04:57,144 - INFO - SLA geral hoje: 47.48% | ontem: 83.07%
+2025-11-04 11:04:57,216 - ERROR - Erro ao mover o arquivo 'Resumo_Consolidado_20251104.xlsx': [WinError 32] O arquivo já está sendo usado por outro processo: 'C:\\Users\\J&T-099\\OneDrive - Speed Rabbit Express Ltda\\SLA - Entrega Realizada\\Resumo_Consolidado_20251104.xlsx'
+2025-11-04 11:04:57,363 - ERROR - ⚠️ Falha ao salvar o relatório: [Errno 13] Permission denied: 'C:\\Users\\J&T-099\\OneDrive - Speed Rabbit Express Ltda\\SLA - Entrega Realizada\\Resumo_Consolidado_20251104.xlsx'
+2025-11-04 11:04:59,700 - INFO - ✅ Card enviado para João Melo
+2025-11-04 11:05:04,983 - INFO - ✅ Card enviado para Johas Vieira
+2025-11-04 11:05:06,547 - INFO - ✅ Card enviado para Anderson Matheus
+2025-11-04 11:05:08,090 - INFO - ✅ Card enviado para Marcelo Medina
+2025-11-04 11:05:10,450 - INFO - ✅ Card enviado para Odária Fereira
+2025-11-04 11:05:12,155 - INFO - ✅ Card enviado para Rodrigo Castro
+2025-11-04 11:05:13,784 - INFO - ✅ Card enviado para Orlean Nascimento
+2025-11-04 11:05:15,430 - INFO - ✅ Card enviado para Jose Marlon
+2025-11-04 11:05:16,846 - INFO - ✅ Card enviado para Emerson Silva
+2025-11-04 11:05:18,377 - INFO - ✅ Card enviado para Marcos Caique
+2025-11-04 11:05:18,378 - INFO - 🏁 Processamento concluído com sucesso!
+2025-11-04 11:13:14,358 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-04 11:13:24,081 - INFO - Total de 2061486 registros lidos.
+2025-11-04 11:13:24,117 - INFO - SLA geral hoje: 47.48% | ontem: 83.07%
+2025-11-04 11:13:24,184 - ERROR - Erro ao mover o arquivo 'Resumo_Consolidado_20251104.xlsx': [WinError 32] O arquivo já está sendo usado por outro processo: 'C:\\Users\\J&T-099\\OneDrive - Speed Rabbit Express Ltda\\SLA - Entrega Realizada\\Resumo_Consolidado_20251104.xlsx'
+2025-11-04 11:13:24,334 - ERROR - ⚠️ Falha ao salvar o relatório: [Errno 13] Permission denied: 'C:\\Users\\J&T-099\\OneDrive - Speed Rabbit Express Ltda\\SLA - Entrega Realizada\\Resumo_Consolidado_20251104.xlsx'
+2025-11-04 11:13:26,289 - INFO - ✅ Card enviado para João Melo
+2025-11-04 11:13:27,659 - INFO - ✅ Card enviado para Johas Vieira
+2025-11-04 11:13:29,092 - INFO - ✅ Card enviado para Anderson Matheus
+2025-11-04 11:13:30,596 - INFO - ✅ Card enviado para Marcelo Medina
+2025-11-04 11:13:32,002 - INFO - ✅ Card enviado para Odária Fereira
+2025-11-04 11:13:33,604 - INFO - ✅ Card enviado para Rodrigo Castro
+2025-11-04 11:13:35,053 - INFO - ✅ Card enviado para Orlean Nascimento
+2025-11-04 11:13:36,602 - INFO - ✅ Card enviado para Jose Marlon
+2025-11-04 11:13:38,051 - INFO - ✅ Card enviado para Emerson Silva
+2025-11-04 11:13:39,546 - INFO - ✅ Card enviado para Marcos Caique
+2025-11-04 11:13:39,548 - INFO - 🏁 Processamento concluído com sucesso!

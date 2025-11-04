@@ -72,7 +72,7 @@ LINK_RELATORIO = (
     "EtbZs3AZ0_BHtx7KGJOAVGcBvxaAJM-8vINYH7PJG43W-w?e=Su1J2P"
 )
 
-BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\Custo"
+BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Custo - Coordenador"
 OUTPUT_FILE = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Custo\Minha_responsabilidade_atualizada.xlsx"
 
 BASES_PERMITIDAS = [
