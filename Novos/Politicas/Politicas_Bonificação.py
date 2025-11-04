@@ -1,5 +1,6 @@
 
 import os
+import re
 import polars as pl
 import pandas as pd
 from datetime import datetime
@@ -22,6 +23,205 @@ DIR_ANTIGA = os.path.join(BASE_ROOT, "Base Antiga")
 DIR_SEMMOV = os.path.join(BASE_ROOT, "05 - Pacotes Sem Movimentação")
 DIR_OUT    = os.path.join(BASE_ROOT, "Resultados")
 os.makedirs(DIR_OUT, exist_ok=True)
+
+# ==========================================================
+# ⚙️ Utilitários
+# ==========================================================
+
+
+def _normalize_base(df: pl.DataFrame) -> pl.DataFrame:
+
+    df = _fix_key_cols(df)
+
+    if "Nome da base" not in df.columns or df.is_empty():
+        return df
+
+    def limpar_nome(nome: str) -> str:
+        if not nome:
+            return ""
+        nome = str(nome).upper()
+        nome = re.sub(r"[^\x00-\x7F]+", "", nome)  # remove caracteres não ASCII
+        nome = re.sub(r"[-_]+", " ", nome)         # troca hífens e underscores por espaço
+        nome = re.sub(r"\s+", " ", nome).strip()   # remove espaços duplicados
+        partes = nome.split(" ")
+
+        # Detecta inversão comum (ex: 'BSB DF' → 'DF BSB')
+        if len(partes) == 2 and len(partes[0]) == 3 and len(partes[1]) == 2:
+            nome = f"{partes[1]} {partes[0]}"
+
+        return nome
+
+    df = df.with_columns(
+        pl.col("Nome da base")
+        .cast(pl.Utf8, strict=False)
+        .map_elements(limpar_nome, return_dtype=pl.Utf8)
+        .alias("Nome da base")
+    )
+
+    return df
+
+
+def _fix_key_cols(df: pl.DataFrame) -> pl.DataFrame:
+    if df.is_empty():
+        return df
+    cols = df.columns
+    key_aliases = [c for c in cols if c.startswith("Nome da base")]
+    if not key_aliases:
+        return df
+    chosen = "Nome da base" if "Nome da base" in key_aliases else (
+        "Nome da base_left" if "Nome da base_left" in key_aliases else (
+            "Nome da base_right" if "Nome da base_right" in key_aliases else key_aliases[0]
+        )
+    )
+    if chosen != "Nome da base":
+        df = df.rename({chosen: "Nome da base"})
+    for c in key_aliases:
+        if c != "Nome da base" and c in df.columns:
+            df = df.drop(c)
+    return df
+
+def _safe_full_join(left: pl.DataFrame, right: pl.DataFrame) -> pl.DataFrame:
+    if left.is_empty() and right.is_empty():
+        return pl.DataFrame()
+    left = _fix_key_cols(left)
+    right = _fix_key_cols(right)
+    if "Nome da base" not in left.columns and "Nome da base" in right.columns:
+        left, right = right, left
+    if "Nome da base" not in left.columns:
+        return pl.concat([left, right], how="diagonal_relaxed").unique(maintain_order=True)
+    if "Nome da base" not in right.columns:
+        out = left
+    else:
+        out = left.join(right, on="Nome da base", how="full", suffix="_dup")
+    out = _fix_key_cols(out)
+    dup_cols = [c for c in out.columns if c.endswith("_dup")]
+    if dup_cols:
+        drop = [c for c in dup_cols if c[:-4] in out.columns]
+        if drop:
+            out = out.drop(drop)
+    out = out.unique(subset=["Nome da base"], keep="first")
+    return out
+
+def to_float(col):
+    return pl.col(col).cast(pl.Float64, strict=False).fill_null(0).fill_nan(0)
+
+def read_excel_silent(path):
+    with warnings.catch_warnings(), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        warnings.simplefilter("ignore")
+        try:
+            return pl.read_excel(path)
+        except Exception:
+            return pl.DataFrame()
+
+# ==========================================================
+# 🧮 Consolidação (usando Base_Dados_Geral.xlsx — mantém dados reais, sem zerar)
+# ==========================================================
+def consolidar():
+    dias = calendar.monthrange(datetime.now().year, datetime.now().month)[1]
+
+    # ======================================================
+    # 🧾 Lê a planilha Base_Dados_Geral.xlsx (com Coordenador/Supervisor/Líder/Assistente)
+    # ======================================================
+    path_coord = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Dados_Geral.xlsx"
+    df_coord = read_excel_silent(path_coord)
+
+    if "Base" not in df_coord.columns:
+        raise SystemExit("⚠️ A planilha 'Base_Dados_Geral.xlsx' não possui a coluna 'Base'.")
+
+    rename_cols = {
+        "Base": "Nome da base",
+        "Coordenador": "Coordenador",
+        "Supervisor": "Supervisor",
+        "Líder": "Líder",
+        "Assistente": "Assistente"
+    }
+
+    # Mantém apenas as colunas úteis e normaliza nomes
+    df_coord = df_coord.rename(rename_cols)
+    df_coord = _normalize_base(df_coord.select([c for c in rename_cols.values() if c in df_coord.columns]))
+    print(f"✅ {df_coord.height} bases carregadas de Base_Dados_Geral.xlsx")
+
+    # ======================================================
+    # 📥 Lê as demais planilhas de dados
+    # ======================================================
+    df_coleta = coleta_expedicao()
+    df_t0 = taxa_t0()
+    df_st_at = shippingtime_atual()
+    df_st_ant = shippingtime_antiga()
+    df_ress = ressarcimento_por_pacote(df_coleta)
+    df_sem, _ = pacotes_sem_mov()
+
+    # ======================================================
+    # 📉 Calcula variação de Shipping Time
+    # ======================================================
+    if not df_st_at.is_empty():
+        df_st = _safe_full_join(df_st_at, df_st_ant).with_columns(
+            (pl.col("S.T. Atual (h)") - pl.col("S.T. Anterior (h)").fill_null(0)).alias("Variação (h)")
+        )
+    else:
+        df_st = pl.DataFrame()
+
+    # ======================================================
+    # 🧩 Junta tudo com segurança
+    # ======================================================
+    df_final = _safe_full_join(df_t0, df_st)
+    df_final = _safe_full_join(df_final, df_ress)
+    df_final = _safe_full_join(df_final, df_sem)
+    df_final = _safe_full_join(df_final, df_coleta)
+    df_final = _safe_full_join(df_coord, df_final)
+
+    # ======================================================
+    # 🧮 Calcula Taxa Sem Movimentação (sem zerar outras colunas)
+    # ======================================================
+    df_final = df_final.with_columns([
+        pl.when(
+            (pl.col("Total Coleta+Entrega").is_not_null()) &
+            (pl.col("Total Coleta+Entrega") > 0) &
+            (pl.col("Qtd Sem Mov").is_not_null())
+        )
+        .then(pl.col("Qtd Sem Mov") / dias / pl.col("Total Coleta+Entrega"))
+        .otherwise(None)
+        .alias("Taxa Sem Mov.")
+    ])
+
+    # ======================================================
+    # 🧱 Garante todas as colunas e mantém valores reais
+    # ======================================================
+    ordered = [
+        "Nome da base",
+        "Coordenador",
+        "Supervisor",
+        "Líder",
+        "Assistente",
+        "SLA (%)",
+        "S.T. Atual (h)",
+        "S.T. Anterior (h)",
+        "Variação (h)",
+        "Ressarcimento p/pct (R$)",
+        "Custo total (R$)",
+        "Qtd Sem Mov",
+        "Taxa Sem Mov."
+    ]
+
+    for c in ordered:
+        if c not in df_final.columns:
+            if c == "Nome da base":
+                df_final = df_final.with_columns(pl.lit("").alias(c))
+            else:
+                df_final = df_final.with_columns(pl.lit(None).alias(c))
+
+    # Mantém texto vazio apenas nas colunas de texto (não zera números)
+    df_final = df_final.with_columns([
+        pl.when(pl.col(c).is_null()).then("").otherwise(pl.col(c)).alias(c)
+        if df_final.schema[c] == pl.Utf8
+        else pl.col(c)
+        for c in df_final.columns
+    ])
+
+    df_final = df_final.select(ordered).unique(subset=["Nome da base"], keep="first")
+
+    print(f"✅ Consolidação concluída com {df_final.height} bases (mantendo dados reais, sem zerar colunas).")
+    return df_final
 
 # ==========================================================
 # ⚙️ Utilitários
@@ -482,7 +682,19 @@ def main():
 
     print(f"✅ Relatório final gerado!\n📂 {out}")
 
+
+# ==========================================================
+# 💾 Exportar (exemplo)
+# ==========================================================
+def main():
+    df = consolidar()
+    if df.is_empty():
+        print("⚠️ Nenhum dado consolidado.")
+        return
+    out = os.path.join(DIR_OUT, f"Base_Verificada_{datetime.now():%Y%m%d_%H%M%S}.xlsx")
+    df.to_pandas().to_excel(out, index=False)
+    print(f"✅ Arquivo salvo em:\n{out}")
+
 # ==========================================================
 if __name__ == "__main__":
     main()
-

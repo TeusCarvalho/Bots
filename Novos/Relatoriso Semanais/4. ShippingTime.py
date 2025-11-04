@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-📦 Comparativo Shipping Time Semanal — versão robusta final + filtro UF + ofensores detalhados
+📦 Comparativo Shipping Time Semanal — FINAL + médias por dia (detecção automática)
 ---------------------------------------------------------------
 - Corrige tipos numéricos automaticamente
 - Usa PDD de Entrega como base
 - Calcula Etapas 6, 7, 8 e Tempo Total
 - Gera comparativo limpo e compatível
 - Mantém apenas UFs especificadas em 'Estado de Entrega'
-- Mostra TOP ofensores (Etapas 7 e 8) com valores e variação
+- Mostra TOP ofensores (Etapas 7 e 8)
+- Adiciona linha TOTAL GERAL
+- Cria aba "Média por Dia (Atual)" automaticamente se encontrar data
 """
 
 import polars as pl
+import pandas as pd
 import os
 import glob
 from tqdm import tqdm
@@ -111,7 +114,49 @@ def calcular_tempo_medio(df):
         ])
         .rename({base_col: "Base Entrega"})
     )
-    return agrupado
+
+    # 🧮 Linha TOTAL GERAL
+    total_geral = (
+        agrupado.select([
+            pl.lit("TOTAL GERAL").alias("Base Entrega"),
+            pl.col("Etapa 6 (h)").mean(),
+            pl.col("Etapa 7 (h)").mean(),
+            pl.col("Etapa 8 (h)").mean(),
+            pl.col("Tempo Total (h)").mean()
+        ])
+    )
+    agrupado = pl.concat([agrupado, total_geral], how="vertical")
+
+    return agrupado, df  # retorna também o original limpo
+
+def detectar_coluna_data(df):
+    """Tenta detectar automaticamente uma coluna de data."""
+    possiveis = [c for c in df.columns if "data" in c.lower()]
+    if possiveis:
+        return possiveis[0]
+    return None
+
+def calcular_media_por_dia(df):
+    col_data = detectar_coluna_data(df)
+    if not col_data:
+        print("⚠️ Nenhuma coluna de data encontrada — não foi possível gerar médias diárias.")
+        return None
+
+    df = df.with_columns([
+        pl.col(col_data).str.slice(0, 10).alias("Data")
+    ])
+
+    media_dia = (
+        df.group_by("Data")
+        .agg([
+            pl.mean("Tempo trânsito SC Destino->Base Entrega").alias("Etapa 6 (h)"),
+            pl.mean("Tempo médio processamento Base Entrega").alias("Etapa 7 (h)"),
+            pl.mean("Tempo médio Saída para Entrega->Entrega").alias("Etapa 8 (h)"),
+            pl.mean("Tempo Total (h)").alias("Tempo Total (h)")
+        ])
+        .sort("Data")
+    )
+    return media_dia
 
 def gerar_comparativo(semana_ant, semana_atual):
     comp = semana_ant.join(semana_atual, on="Base Entrega", how="outer", suffix="_Atual")
@@ -144,7 +189,6 @@ def resumo_final(semana_ant, semana_atual):
     print("")
 
 def mostrar_top_ofensores(comp, etapa="Etapa 7 (h)", top_n=10):
-    """Mostra bases que pioraram mais na etapa informada com valores detalhados."""
     base_col = "Base Entrega"
     atual_col = f"{etapa}_Atual"
     ant_col = etapa
@@ -188,24 +232,30 @@ def main():
         print("❌ Não foi possível ler uma das semanas.")
         return
 
-    # 🔍 Filtro de UF
     df_atual = filtrar_por_uf(df_atual)
     df_ant = filtrar_por_uf(df_ant)
 
     print("\n⏳ Calculando médias por base (PDD de Entrega)...")
-    semana_atual = calcular_tempo_medio(df_atual)
-    semana_anterior = calcular_tempo_medio(df_ant)
+    semana_atual, df_atual_limpo = calcular_tempo_medio(df_atual)
+    semana_anterior, _ = calcular_tempo_medio(df_ant)
 
     print("📈 Gerando comparativo...")
     comparativo = gerar_comparativo(semana_anterior, semana_atual)
     resumo_final(semana_anterior, semana_atual)
 
-    # 🔥 Mostrar ofensores detalhados
     mostrar_top_ofensores(comparativo, "Etapa 7 (h)", top_n=10)
     mostrar_top_ofensores(comparativo, "Etapa 8 (h)", top_n=10)
 
+    # 📅 Média por dia (semana atual)
+    media_por_dia = calcular_media_por_dia(df_atual_limpo)
+
+    # 💾 Exportação com pandas.ExcelWriter
     output_excel = os.path.join(OUTPUT_DIR, "Comparativo_ShippingTime.xlsx")
-    comparativo.write_excel(output_excel)
+    with pd.ExcelWriter(output_excel, engine="xlsxwriter") as writer:
+        comparativo.to_pandas().to_excel(writer, sheet_name="Comparativo Semanal", index=False)
+        if media_por_dia is not None:
+            media_por_dia.to_pandas().to_excel(writer, sheet_name="Média por Dia (Atual)", index=False)
+
     print(f"\n✅ Comparativo salvo em:\n{output_excel}\n")
 
 
