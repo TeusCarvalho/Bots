@@ -9,7 +9,7 @@ import multiprocessing
 import logging
 import shutil
 from datetime import datetime, timedelta
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
@@ -41,10 +41,8 @@ ARQUIVO_SAIDA = os.path.join(PASTA_SAIDA, f"Resumo_Consolidado_{DATA_HOJE}.xlsx"
 LINK_PASTA = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/EvIP3oIiLJRAqcB1SZ_1nmYBXLIYSJkIns5Pf_Xz2OqY_w?e=OEXsJN"
 
 # ==========================================================
-# 🧭 WEBHOOKS POR COORDENADOR (teste)
+# 🧭 WEBHOOKS POR COORDENADOR
 # ==========================================================
-#WEBHOOK_TESTE = "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b"
-
 COORDENADOR_WEBHOOKS = {
     "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/3663dd30-722c-45d6-9e3c-1d4e2838f112",
     "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/0b907801-c73e-4de8-9f84-682d7b54f6fd",
@@ -61,6 +59,8 @@ COORDENADOR_WEBHOOKS = {
 # ==========================================================
 # ⚡️ FUNÇÕES AUXILIARES
 # ==========================================================
+EXTS = (".xlsx", ".xls", ".csv")
+
 def cor_percentual(pct: float) -> str:
     if pct < 0.95:
         return "🔴"
@@ -68,7 +68,6 @@ def cor_percentual(pct: float) -> str:
         return "🟡"
     else:
         return "🟢"
-
 
 def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo_arquivo: str):
     os.makedirs(pasta_destino, exist_ok=True)
@@ -80,33 +79,27 @@ def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo_a
         except Exception as e:
             logging.error(f"Erro ao mover o arquivo '{arquivo}': {e}")
 
-
-def ler_planilha_rapido(caminho):
+def ler_planilha_rapido(caminho: str) -> pl.DataFrame:
     try:
         if caminho.endswith(".csv"):
-            return pl.read_csv(caminho)
+            return pl.read_csv(caminho, ignore_errors=True)
         return pl.read_excel(caminho)
     except Exception as e:
         logging.error(f"Falha ao ler {os.path.basename(caminho)}: {e}")
         return pl.DataFrame()
 
-
 def consolidar_planilhas(pasta_entrada: str) -> pl.DataFrame:
     arquivos = [os.path.join(pasta_entrada, f)
                 for f in os.listdir(pasta_entrada)
-                if f.endswith((".xlsx", ".xls", ".csv")) and not f.startswith("~$")]
+                if f.endswith(EXTS) and not f.startswith("~$")]
     if not arquivos:
         raise FileNotFoundError("❌ Nenhum arquivo Excel/CSV encontrado na pasta de entrada.")
-
-    with ProcessPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
+    with ThreadPoolExecutor(max_workers=min(16, len(arquivos))) as executor:
         dfs = list(executor.map(ler_planilha_rapido, arquivos))
-
     dfs_validos = [df for df in dfs if not df.is_empty()]
     if not dfs_validos:
         raise ValueError("Nenhum arquivo pôde ser lido com sucesso.")
-
     return pl.concat(dfs_validos, how="vertical_relaxed")
-
 
 def detectar_coluna_entregue(df: pl.DataFrame) -> str:
     for col in df.columns:
@@ -114,14 +107,12 @@ def detectar_coluna_entregue(df: pl.DataFrame) -> str:
             return col
     raise KeyError("❌ Coluna de status de entrega não encontrada.")
 
-
 def calcular_sla(df: pl.DataFrame, col_entregue: str) -> float:
     if df.is_empty():
         return 0.0
     total = df.height
-    entregues = (df[col_entregue] == "Y").sum()
+    entregues = (df[col_entregue] == "Y").sum() + (df[col_entregue] == "y").sum()
     return entregues / total if total > 0 else 0.0
-
 
 def salvar_relatorio_completo(df_dados: pl.DataFrame, df_resumo: pd.DataFrame, caminho_arquivo: str):
     try:
@@ -132,7 +123,6 @@ def salvar_relatorio_completo(df_dados: pl.DataFrame, df_resumo: pd.DataFrame, c
         logging.info(f"📄 Relatório salvo em: {caminho_arquivo}")
     except Exception as e:
         logging.error(f"⚠️ Falha ao salvar o relatório: {e}")
-
 
 def enviar_card_feishu(resumo_df: pd.DataFrame, webhook: str, coordenador: str, sla_atual: float, sla_anterior: float):
     try:
@@ -190,19 +180,18 @@ def enviar_card_feishu(resumo_df: pd.DataFrame, webhook: str, coordenador: str, 
         logging.error(f"🚨 Falha ao enviar card para {coordenador}: {e}")
 
 # ==========================================================
-# 🚀 EXECUÇÃO PRINCIPAL
+# 🚀 EXECUÇÃO PRINCIPAL (v2.2)
 # ==========================================================
 if __name__ == "__main__":
     logging.info("🚀 Iniciando processamento SLA por coordenador...")
 
     try:
         df = consolidar_planilhas(PASTA_ENTRADA)
-        logging.info(f"Total de {df.height} registros lidos.")
+        logging.info(f"📥 Total de {df.height} registros lidos.")
 
         df = df.rename({c: c.strip().upper() for c in df.columns})
         col_entregue = detectar_coluna_entregue(df)
 
-        # === Conversão de data ===
         if "DATA PREVISTA DE ENTREGA" not in df.columns:
             raise KeyError("❌ Coluna 'DATA PREVISTA DE ENTREGA' não encontrada.")
 
@@ -218,12 +207,6 @@ if __name__ == "__main__":
         df_hoje = df.filter(pl.col("DATA PREVISTA DE ENTREGA") == hoje)
         df_ontem = df.filter(pl.col("DATA PREVISTA DE ENTREGA") == ontem)
 
-        sla_geral_hoje = calcular_sla(df_hoje, col_entregue)
-        sla_geral_ontem = calcular_sla(df_ontem, col_entregue)
-
-        logging.info(f"SLA geral hoje: {sla_geral_hoje:.2%} | ontem: {sla_geral_ontem:.2%}")
-
-        # === JOIN com Coordenadores ===
         coord_df = pl.read_excel(PASTA_COORDENADOR).rename({
             "Nome da base": "BASE DE ENTREGA",
             "Coordenadores": "COORDENADOR"
@@ -247,10 +230,66 @@ if __name__ == "__main__":
         arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, "Resumo_Consolidado_")
         salvar_relatorio_completo(df, resumo_pd, ARQUIVO_SAIDA)
 
+        # ✅ SLA individual por coordenador
         for coordenador, webhook in COORDENADOR_WEBHOOKS.items():
             sub_df = resumo_pd[resumo_pd["COORDENADOR"] == coordenador]
             if not sub_df.empty:
-                enviar_card_feishu(sub_df, webhook, coordenador, sla_geral_hoje, sla_geral_ontem)
+                bases_coord = sub_df["Base De Entrega"].unique()
+                df_hoje_coord = df_hoje.filter(pl.col("BASE DE ENTREGA").is_in(bases_coord))
+                df_ontem_coord = df_ontem.filter(pl.col("BASE DE ENTREGA").is_in(bases_coord))
+
+                sla_hoje_coord = calcular_sla(df_hoje_coord, col_entregue)
+                sla_ontem_coord = calcular_sla(df_ontem_coord, col_entregue)
+
+                logging.info(f"📊 {coordenador}: SLA Hoje = {sla_hoje_coord:.2%} | Ontem = {sla_ontem_coord:.2%}")
+                enviar_card_feishu(sub_df, webhook, coordenador, sla_hoje_coord, sla_ontem_coord)
+            else:
+                logging.info(f"ℹ️ Nenhuma base encontrada para {coordenador}")
+
+        # ==========================================================
+        # 💾 SALVAR CONSOLIDADO GERAL E ARQUIVAR ANTIGOS
+        # ==========================================================
+        try:
+            os.makedirs(PASTA_SAIDA, exist_ok=True)
+            os.makedirs(PASTA_ARQUIVO, exist_ok=True)
+
+            arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, "Consolidado_Geral_")
+
+            DATAHORA_ATUAL = datetime.now().strftime("%Y%m%d_%H%M%S")
+            CAMINHO_CONSOLIDADO = os.path.join(
+                PASTA_SAIDA, f"Consolidado_Geral_{DATAHORA_ATUAL}.xlsx"
+            )
+
+            df_completo = (
+                df.join(coord_df, on="BASE DE ENTREGA", how="left")
+                  .select([
+                      "BASE DE ENTREGA",
+                      "COORDENADOR",
+                      "DATA PREVISTA DE ENTREGA",
+                      col_entregue
+                  ])
+            )
+
+            resumo_geral = (
+                df_completo.group_by(["BASE DE ENTREGA", "COORDENADOR"])
+                .agg([
+                    pl.count().alias("Total"),
+                    (pl.col(col_entregue) == "Y").sum().alias("Entregues"),
+                    ((pl.col(col_entregue) != "Y") | pl.col(col_entregue).is_null()).sum().alias("Nao_Entregues"),
+                ])
+                .with_columns((pl.col("Entregues") / pl.col("Total")).alias("% Entregues"))
+                .sort("% Entregues", descending=True)
+            )
+
+            resumo_geral_pd = resumo_geral.to_pandas()
+            with pd.ExcelWriter(CAMINHO_CONSOLIDADO, engine="openpyxl") as writer:
+                resumo_geral_pd.to_excel(writer, index=False, sheet_name="Resumo Consolidado")
+                df_completo.to_pandas().to_excel(writer, index=False, sheet_name="Detalhamento")
+
+            logging.info(f"💾 Consolidado geral salvo em: {CAMINHO_CONSOLIDADO}")
+
+        except Exception as e:
+            logging.error(f"⚠️ Erro ao salvar o consolidado geral: {e}")
 
         logging.info("🏁 Processamento concluído com sucesso!")
 

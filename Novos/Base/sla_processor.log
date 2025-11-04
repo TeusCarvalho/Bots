@@ -149,3 +149,44 @@ polars.exceptions.ColumnNotFoundError: "Coordenador" not found
 2025-11-04 11:13:38,051 - INFO - ✅ Card enviado para Emerson Silva
 2025-11-04 11:13:39,546 - INFO - ✅ Card enviado para Marcos Caique
 2025-11-04 11:13:39,548 - INFO - 🏁 Processamento concluído com sucesso!
+2025-11-04 13:57:41,735 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-04 13:57:52,365 - INFO - Total de 2061486 registros lidos.
+2025-11-04 13:57:52,403 - INFO - SLA geral hoje: 47.48% | ontem: 83.07%
+2025-11-04 13:57:52,485 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251104.xlsx
+2025-11-04 13:57:54,412 - ERROR - ⚠️ Falha ao salvar o relatório: This sheet is too large! Your sheet size is: 2061486, 35 Max sheet size is: 1048576, 16384
+2025-11-04 13:57:56,514 - INFO - ✅ Card enviado para João Melo
+2025-11-04 13:57:58,281 - INFO - ✅ Card enviado para Johas Vieira
+2025-11-04 13:57:59,910 - INFO - ✅ Card enviado para Anderson Matheus
+2025-11-04 13:58:01,504 - INFO - ✅ Card enviado para Marcelo Medina
+2025-11-04 13:58:03,078 - INFO - ✅ Card enviado para Odária Fereira
+2025-11-04 13:58:04,772 - INFO - ✅ Card enviado para Rodrigo Castro
+2025-11-04 13:58:06,224 - INFO - ✅ Card enviado para Orlean Nascimento
+2025-11-04 13:58:07,670 - INFO - ✅ Card enviado para Jose Marlon
+2025-11-04 13:58:09,091 - INFO - ✅ Card enviado para Emerson Silva
+2025-11-04 13:58:10,712 - INFO - ✅ Card enviado para Marcos Caique
+2025-11-04 13:58:10,713 - INFO - 🏁 Processamento concluído com sucesso!
+2025-11-04 14:04:52,744 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-04 14:05:01,803 - INFO - Total de 2061486 registros lidos.
+2025-11-04 14:05:01,837 - INFO - SLA geral hoje: 47.48% | ontem: 83.07%
+2025-11-04 14:05:01,897 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251104.xlsx
+2025-11-04 14:05:03,758 - ERROR - ⚠️ Falha ao salvar o relatório: This sheet is too large! Your sheet size is: 2061486, 35 Max sheet size is: 1048576, 16384
+2025-11-04 14:05:03,831 - CRITICAL - Erro fatal no processamento: name 'COORDENADOR_WEBHOOKS' is not defined
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 250, in <module>
+    for coordenador, webhook in COORDENADOR_WEBHOOKS.items():
+                                ^^^^^^^^^^^^^^^^^^^^
+NameError: name 'COORDENADOR_WEBHOOKS' is not defined
+2025-11-04 14:05:34,968 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-04 14:05:43,748 - INFO - Total de 2061486 registros lidos.
+2025-11-04 14:05:43,784 - INFO - SLA geral hoje: 47.48% | ontem: 83.07%
+2025-11-04 14:05:43,843 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251104.xlsx
+2025-11-04 14:05:45,643 - ERROR - ⚠️ Falha ao salvar o relatório: This sheet is too large! Your sheet size is: 2061486, 35 Max sheet size is: 1048576, 16384
+2025-11-04 14:05:47,514 - INFO - ✅ Card enviado para João Melo
+2025-11-04 14:05:47,515 - INFO - 🏁 Processamento concluído com sucesso!
+2025-11-04 14:06:37,984 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-04 14:06:45,117 - INFO - 📥 Total de 2061486 registros lidos.
+2025-11-04 14:06:45,268 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251104.xlsx
+2025-11-04 14:06:47,253 - ERROR - ⚠️ Falha ao salvar o relatório: This sheet is too large! Your sheet size is: 2061486, 35 Max sheet size is: 1048576, 16384
+2025-11-04 14:06:47,403 - INFO - 📊 João Melo: SLA Hoje = 84.23% | Ontem = 80.95%
+2025-11-04 14:06:49,399 - INFO - ✅ Card enviado para João Melo
+2025-11-04 14:06:49,400 - INFO - 🏁 Processamento concluído com sucesso!

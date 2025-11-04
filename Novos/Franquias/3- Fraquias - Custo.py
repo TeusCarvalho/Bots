@@ -44,7 +44,7 @@ def create_feishu_card_payload(title: str, body: str) -> dict:
                         }
                     ]
                 },
-                {"tag": "note", "elements": [{"tag": "plain_text", "content": "Resumo automático."}]}
+                {"tag": "note", "elements": [{"tag": "plain_text", "content": "Resumo automático gerado por script."}]}
             ]
         }
     }
@@ -52,10 +52,27 @@ def create_feishu_card_payload(title: str, body: str) -> dict:
 
 def get_latest_file(folder: str):
     """Retorna o arquivo mais recente de uma pasta"""
-    files = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(('.xls', '.xlsx'))]
+    files = [
+        os.path.join(folder, f)
+        for f in os.listdir(folder)
+        if f.lower().endswith(('.csv', '.xls', '.xlsx'))
+    ]
     if not files:
         return None
     return max(files, key=os.path.getmtime)
+
+
+def read_file_auto(path: str) -> pl.LazyFrame:
+    """Lê automaticamente CSV, XLS ou XLSX"""
+    ext = os.path.splitext(path)[1].lower()
+    print(f"📖 Lendo arquivo detectado como: {ext.upper()}")
+
+    if ext == ".csv":
+        return pl.read_csv(path, ignore_errors=True).lazy()
+    elif ext in [".xls", ".xlsx"]:
+        return pl.read_excel(path, infer_schema_length=1000).lazy()
+    else:
+        raise ValueError(f"❌ Formato de arquivo não suportado: {ext}")
 
 
 # ============================================================
@@ -101,8 +118,8 @@ else:
     try:
         print(f"📂 Lendo arquivo: {os.path.basename(latest_file)}")
 
-        # 🧠 Lê o Excel em modo Lazy (com inferência flexível)
-        lazy_df = pl.read_excel(latest_file, infer_schema_length=1000).lazy()
+        # 🧠 Lê o Excel/CSV automaticamente em modo Lazy
+        lazy_df = read_file_auto(latest_file)
 
         # 🔹 Normalização e filtragem
         if "Base responsável" in lazy_df.columns:
@@ -117,7 +134,7 @@ else:
                 .filter(~pl.col("Remessa").str.contains("-"))
                 .with_columns(
                     pl.when(pl.col("Base responsável") == "VHL -RO")
-                    .then(pl.lit("F VHL-RO"))  # 👈 uso de pl.lit() resolve o erro
+                    .then(pl.lit("F VHL-RO"))
                     .otherwise(pl.col("Base responsável"))
                     .alias("Base responsável")
                 )
@@ -147,7 +164,7 @@ else:
         # 💬 MENSAGEM PARA FEISHU
         # ============================================================
         data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
-        mensagem = f"📊 **Relatório de Resarcimento - TOP 5 Piores Bases**\n📅 {data_geracao}\n\n"
+        mensagem = f"📊 **Relatório de Ressarcimento - TOP 5 Piores Bases**\n📅 {data_geracao}\n\n"
         for row in top5.iter_rows(named=True):
             mensagem += f"🔴 {row['Base responsável']} - {row['Qtd_Pedidos']} pedidos - R$ {format_currency(row['Valor_Total'])}\n"
         mensagem += f"\n💰 **Total Geral:** R$ {format_currency(valor_total_geral)}"
@@ -155,7 +172,7 @@ else:
         # ============================================================
         # 📤 ENVIAR CARD FEISHU
         # ============================================================
-        payload = create_feishu_card_payload("📊 Relatório de Resarcimento - Franquias", mensagem)
+        payload = create_feishu_card_payload("📊 Relatório de Ressarcimento - Franquias", mensagem)
         webhook_url = COORDENADOR_WEBHOOKS.get("Franquias")
         if webhook_url:
             resp = requests.post(webhook_url, headers={"Content-Type": "application/json"}, data=json.dumps(payload))
