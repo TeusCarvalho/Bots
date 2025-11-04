@@ -5,11 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="git commit">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/Franquias/sla_processor.log" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Franquias/sla_processor.log" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/Local_Para_Teste.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Local_Para_Teste.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/Politicas/Politicas_Bonificação.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Politicas/Politicas_Bonificação.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/Relatoriso Semanais/4. ShippingTime.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Relatoriso Semanais/4. ShippingTime.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Novos/Base/SLA - Entrega Realizada.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Base/SLA - Entrega Realizada.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -133,11 +129,11 @@
       <recent name="C:\Users\J&amp;T-099\PycharmProjects\Bots\Novos\Franquias" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\J&amp;T-099\PycharmProjects\Bots\Novos\Base\Antigos" />
+      <recent name="C:\Users\J&amp;T-099\PycharmProjects\Bots\Novos\Base" />
       <recent name="C:\Users\J&amp;T-099\PycharmProjects\Bots\Novos\Base Cobrança" />
       <recent name="C:\Users\J&amp;T-099\PycharmProjects\Bots\Novos" />
       <recent name="C:\Users\J&amp;T-099\PycharmProjects\Bots" />
-      <recent name="C:\Users\J&amp;T-099\PycharmProjects\Bots\Novos\Junções" />
-      <recent name="C:\Users\J&amp;T-099\PycharmProjects\Bots\Novos\Politicas" />
     </key>
   </component>
   <component name="RunManager">
@@ -304,6 +300,7 @@
       <workItem from="1762170637033" duration="12707000" />
       <workItem from="1762183583033" duration="12326000" />
       <workItem from="1762202051283" duration="285000" />
+      <workItem from="1762254091836" duration="343000" />
     </task>
     <task id="LOCAL-00001" summary="git commit">
       <option name="closed" value="true" />
@@ -649,7 +646,15 @@
       <option name="project" value="LOCAL" />
       <updated>1761940501049</updated>
     </task>
-    <option name="localTasksCounter" value="44" />
+    <task id="LOCAL-00044" summary="git commit">
+      <option name="closed" value="true" />
+      <created>1762254286258</created>
+      <option name="number" value="00044" />
+      <option name="presentableId" value="LOCAL-00044" />
+      <option name="project" value="LOCAL" />
+      <updated>1762254286258</updated>
+    </task>
+    <option name="localTasksCounter" value="45" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
