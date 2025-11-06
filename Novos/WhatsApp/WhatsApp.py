@@ -14,7 +14,7 @@ from datetime import datetime
 # ==========================================================
 # ⚙️ CONFIGURAÇÕES
 # ==========================================================
-ACCESS_TOKEN = "EAALqfksfv9UBP7KTbeYTWgpCTs0eh6iTHZB7CFIunJSZASJN3OGav9EUg8uss2rm3texT0VfHsEcRd4U9HFffZAHGm85EGG8NZBuDDLox9XfrwglyfTsNMEhZCSy3ZCgbZAYZCexPdcvDKIyt77VcAdoepLlcp0BllAZBdZBKT2BpcngnX6AGF1ugdDdMujw2ZBabCArAP44ZCxktjzBJfFZB0ZAhFcoNZCuhIkwfli81bV65CThqi8xM7bgisowVHB5zXnylD5EsyZBhmXo3I8rpVdJjfTZC"
+ACCESS_TOKEN = "EAALqfksfv9UBPyg9FKvvUiNkpikG5AvEXIwHMtOd5lYZBl3LgQQfSmU9g9T3pIRheZBJLmqm0cMTtqe6BX2j9bggOM6kDtl2rF1uCElLZBZAZBH63ZCRwvxqVCnvGTgch2486hrk3KdvXVedSvfJiA6HheC3FAIxBEYxKTNE4ZAnZCEqvBcXZBrW6xmrg7j7X7WuZBFW5cjZBo4Ko5OUl27FgCNZAl2ZBoJ5QZBsZCXP65JGWZAA1wVosr2F9IrCUOUtAhb41LAAiZBiHIZAJv3MpRULFcLt7ZCdwZDZD"
 PHONE_NUMBER_ID = "899378896582685"  # ID do número da Meta
 DESTINATARIO = "5561994335940"       # Número do motorista
 

@@ -3,7 +3,6 @@
 import os
 import json
 import hashlib
-import shutil
 import time
 import requests
 import pandas as pd
@@ -18,20 +17,19 @@ init(autoreset=True)
 # ==============================================================================
 
 COORDENADOR_WEBHOOKS = {
-    "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
-    "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
-    "Anderson Matheus": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
-    "Marcelo Medina": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
-    "Odária Fereira": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
-    "Rodrigo Castro": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
-    "Orlean Nascimento": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
-    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
-    "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
-    "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
+    "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/1d9bbacf-79ed-4eb3-8046-26d7480893c3",
+    "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/5c2bb460-1971-4770-9b37-98b6e4ba3cd9",
+    "Anderson Matheus": "https://open.feishu.cn/open-apis/bot/v2/hook/ac4a5800-44b5-45d5-b0d2-f4d88a677967",
+    "Marcelo Medina": "https://open.feishu.cn/open-apis/bot/v2/hook/20a61c63-6db7-4e83-9e44-ae6b545495cc",
+    "Odária Fereira": "https://open.feishu.cn/open-apis/bot/v2/hook/914ce9f9-35ab-4869-860f-d2bef7d933fb",
+    "Rodrigo Castro": "https://open.feishu.cn/open-apis/bot/v2/hook/16414836-5020-49bd-b3d3-ded4f34878ab",
+    "Orlean Nascimento": "https://open.feishu.cn/open-apis/bot/v2/hook/62cd648c-ecd5-406a-903d-b596944c1919",
+    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/62518b67-f897-4341-98e6-2db87f4fdee2",
+    "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/e502bc10-3cb3-4b46-872e-eb73ef1c5ee0",
+    "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/db18d309-8f26-41b5-b911-1a9f27449c83",
 }
 
 REPORTS_FOLDER_PATH = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Jt - Relatórios"
-ARQUIVO_MORTO_FOLDER = os.path.join(REPORTS_FOLDER_PATH, "Arquivo Morto")
 HASH_FILE = os.path.join(os.path.dirname(__file__), "ultimo_relatorio.json")
 
 LINK_RELATORIO = (
@@ -51,7 +49,6 @@ def format_currency_brl(value: float) -> str:
 
 
 def calcular_hash_md5(file_path: str) -> str:
-    """Calcula o hash MD5 de um arquivo para detectar mudanças."""
     hash_md5 = hashlib.md5()
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
@@ -228,10 +225,8 @@ def run_main_task():
     file_hash = calcular_hash_md5(full_path)
     snapshot_antigo = carregar_snapshot_antigo()
 
-    # Se o hash do arquivo for igual ao último processado, não refaz o envio
-    if snapshot_antigo and snapshot_antigo.get("file_hash") == file_hash:
-        print(f"{Fore.YELLOW}⚠️ Nenhuma mudança detectada no relatório. Nada será reenviado.")
-        return
+    # 🔁 Força reenvio mesmo que o hash não tenha mudado
+    print(f"{Fore.YELLOW}⚠️ Reenvio forçado do relatório atual.")
 
     df = process_report_file(full_path)
     snapshot_atual = gerar_snapshot(df)
@@ -247,16 +242,7 @@ def run_main_task():
 
     salvar_snapshot(snapshot_atual)
 
-    # Move o relatório para Arquivo Morto
-    if not os.path.exists(ARQUIVO_MORTO_FOLDER):
-        os.makedirs(ARQUIVO_MORTO_FOLDER)
-    destino = os.path.join(ARQUIVO_MORTO_FOLDER, file_name)
-    try:
-        shutil.move(full_path, destino)
-        print(f"{Fore.GREEN}📦 Relatório movido para Arquivo Morto: {destino}")
-    except Exception as e:
-        print(f"{Fore.RED}⚠️ Falha ao mover relatório: {e}")
-
+    print(f"{Fore.CYAN}📂 Relatório mantido em {REPORTS_FOLDER_PATH}")
     print(f"{Fore.CYAN}✅ Processo concluído!")
 
 

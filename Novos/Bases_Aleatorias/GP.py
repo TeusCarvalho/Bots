@@ -8,7 +8,7 @@ import pandas as pd
 import polars as pl
 
 # ===========================================================
-# Configuração de Logs Coloridos
+# 🧾 Configuração de Logs Coloridos
 # ===========================================================
 class ColorFormatter(logging.Formatter):
     COLORS = {
@@ -29,7 +29,7 @@ logging.getLogger().handlers = [handler]
 logging.getLogger().setLevel(logging.INFO)
 
 # ===========================================================
-# Colunas principais
+# 📋 Colunas principais
 # ===========================================================
 COLUNAS = {
     "motorista": "Responsável pela entrega",
@@ -42,18 +42,33 @@ COLUNAS = {
 }
 
 # ===========================================================
-# Funções auxiliares
+# 📂 Funções auxiliares
 # ===========================================================
 def encontrar_arquivos_por_prefixo(pasta, prefixo):
     arquivos = []
     try:
-        for nome in os.listdir(pasta):
-            if nome.startswith(prefixo) and nome.endswith(".xlsx"):
-                arquivos.append(os.path.join(pasta, nome))
-        if arquivos:
-            logging.info(f"✅ {len(arquivos)} arquivo(s) encontrado(s) com prefixo '{prefixo}'")
+        logging.info(f"📂 Listando arquivos em: {pasta}")
+        todos = [f for f in os.listdir(pasta) if f.lower().endswith(".xlsx")]
+        if not todos:
+            logging.warning("⚠️ Nenhum arquivo .xlsx encontrado na pasta.")
+            return arquivos
+
+        logging.info("📋 Arquivos encontrados:")
+        for nome in todos:
+            logging.info(f"   • {nome}")
+
+        if prefixo.strip() == "":
+            arquivos = [os.path.join(pasta, nome) for nome in todos]
+            logging.info("✅ Nenhum prefixo informado — todos os arquivos .xlsx serão processados.")
         else:
-            logging.warning(f"⚠️ Nenhum arquivo encontrado com prefixo '{prefixo}'")
+            for nome in todos:
+                if prefixo.lower() in nome.lower():
+                    arquivos.append(os.path.join(pasta, nome))
+
+            if arquivos:
+                logging.info(f"✅ {len(arquivos)} arquivo(s) encontrado(s) contendo '{prefixo}' no nome")
+            else:
+                logging.warning(f"⚠️ Nenhum arquivo encontrado contendo '{prefixo}'")
     except Exception as e:
         logging.error(f"❌ Erro ao procurar arquivos: {e}")
     return arquivos
@@ -114,18 +129,15 @@ def processar_arquivos(lista_arquivos):
 
         df.columns = df.columns.astype(str).str.strip()
 
-        # Converte colunas de data/hora
         df["tempo_entrega_dt"] = pd.to_datetime(df.get(COLUNAS["tempo_entrega"]), errors="coerce")
         df["horario_entrega_dt"] = pd.to_datetime(df.get(COLUNAS["horario_entrega"]), errors="coerce")
 
-        # Cria coluna de "Entrega válida no domingo"
         df["Entrega válida no domingo"] = (
             (df["tempo_entrega_dt"].dt.dayofweek == 6)
             & (df["horario_entrega_dt"].notna())
             & (df[COLUNAS["assinatura"]].astype(str).str.strip() == "Recebimento com assinatura normal")
         )
 
-        # Adiciona coordenador e UF
         df = adicionar_coordenador(df)
         dfs.append(df)
 
@@ -133,19 +145,17 @@ def processar_arquivos(lista_arquivos):
         return None
     return pd.concat(dfs, ignore_index=True)
 
-
 # ===========================================================
-# Geração do relatório final
+# 📊 Geração do relatório final (atualizada)
 # ===========================================================
 def gerar_relatorio(df, caminho_saida):
-    """Cria resumo geral e por UF — usando 'Base de entrega' para bases únicas."""
+    """Cria resumo geral, por UF, lista de motoristas e bases."""
     try:
         total_pedidos = len(df)
         total_motoristas = df[COLUNAS["motorista"]].nunique()
         total_domingo = df["Entrega válida no domingo"].sum()
         total_bases = df[COLUNAS["base"]].nunique()
 
-        # --- Sempre mostra resumo no terminal ---
         logging.info(f"""
 📊 RESUMO GERAL:
 • Total de pedidos: {total_pedidos:,}
@@ -154,18 +164,12 @@ def gerar_relatorio(df, caminho_saida):
 • Bases distintas (geral): {total_bases:,}
 """)
 
-        # --- Se o arquivo for muito grande, não salva ---
-        if total_pedidos > 500_000:
-            logging.warning("⚠️ Base muito grande — relatório não salvo em Excel para evitar lentidão.")
-            return
-
-        # --- Resumo por UF ---
         resumo_uf = (
             df.groupby("UF")
             .agg({
                 COLUNAS["pedido"]: "count",
                 COLUNAS["motorista"]: pd.Series.nunique,
-                COLUNAS["base"]: pd.Series.nunique,  # usa Base de entrega
+                COLUNAS["base"]: pd.Series.nunique,
                 "Entrega válida no domingo": "sum"
             })
             .reset_index()
@@ -178,7 +182,6 @@ def gerar_relatorio(df, caminho_saida):
             .sort_values("UF")
         )
 
-        # --- Resumo geral ---
         resumo_geral = pd.DataFrame({
             "Métrica": [
                 "Total de pedidos recebidos",
@@ -189,26 +192,49 @@ def gerar_relatorio(df, caminho_saida):
             "Quantidade": [total_pedidos, total_motoristas, total_domingo, total_bases]
         })
 
-        # --- Exportar para Excel ---
+        # --- NOVO: Listas de motoristas e bases ---
+        lista_motoristas = (
+            df.groupby(COLUNAS["motorista"])
+            .agg({COLUNAS["pedido"]: "count"})
+            .reset_index()
+            .rename(columns={
+                COLUNAS["motorista"]: "Motorista",
+                COLUNAS["pedido"]: "Total de Pedidos"
+            })
+            .sort_values("Total de Pedidos", ascending=False)
+        )
+
+        lista_bases = (
+            df.groupby(COLUNAS["base"])
+            .agg({COLUNAS["pedido"]: "count"})
+            .reset_index()
+            .rename(columns={
+                COLUNAS["base"]: "Base de Entrega",
+                COLUNAS["pedido"]: "Total de Pedidos"
+            })
+            .sort_values("Total de Pedidos", ascending=False)
+        )
+
         with pd.ExcelWriter(caminho_saida, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, sheet_name="Detalhes")
             resumo_uf.to_excel(writer, index=False, sheet_name="Resumo por UF")
             resumo_geral.to_excel(writer, index=False, sheet_name="Resumo Geral")
+            lista_motoristas.to_excel(writer, index=False, sheet_name="Motoristas")
+            lista_bases.to_excel(writer, index=False, sheet_name="Bases")
 
         logging.info(f"💾 Arquivo salvo com sucesso em:\n📍 {caminho_saida}")
 
     except Exception as e:
         logging.error(f"❌ Erro ao gerar relatório: {e}")
 
-
 # ===========================================================
-# Execução Principal
+# 🚀 Execução Principal
 # ===========================================================
 if __name__ == "__main__":
     inicio = time.time()
 
-    PREFIXO = "Exportar carta de porte de entrega"
     PASTA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Motorista"
+    PREFIXO = input("🔎 Digite parte do nome dos arquivos a processar (ex: Outubro, Exportar... ou deixe vazio para todos): ").strip()
 
     arquivos = encontrar_arquivos_por_prefixo(PASTA, PREFIXO)
     if not arquivos:
