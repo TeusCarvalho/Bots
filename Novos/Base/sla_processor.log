@@ -216,3 +216,64 @@ NameError: name 'COORDENADOR_WEBHOOKS' is not defined
 2025-11-05 10:13:41,787 - INFO - ✅ Card enviado para Marcos Caique
 2025-11-05 10:13:42,084 - ERROR - ⚠️ Erro ao salvar o consolidado geral: This sheet is too large! Your sheet size is: 1825559, 4 Max sheet size is: 1048576, 16384
 2025-11-05 10:13:42,094 - INFO - 🏁 Processamento concluído com sucesso!
+2025-11-05 15:04:05,465 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-05 15:04:13,171 - INFO - 📥 Total de 1909931 registros lidos.
+2025-11-05 15:04:13,292 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251105.xlsx
+2025-11-05 15:04:15,126 - ERROR - ⚠️ Falha ao salvar o relatório: This sheet is too large! Your sheet size is: 1909931, 35 Max sheet size is: 1048576, 16384
+2025-11-05 15:04:15,259 - INFO - 📊 João Melo: SLA Hoje = 81.53% | Ontem = 91.45%
+2025-11-05 15:04:16,905 - INFO - ✅ Card enviado para João Melo
+2025-11-05 15:04:16,948 - INFO - 📊 Johas Vieira: SLA Hoje = 59.10% | Ontem = 83.06%
+2025-11-05 15:04:18,710 - INFO - ✅ Card enviado para Johas Vieira
+2025-11-05 15:04:18,741 - INFO - 📊 Anderson Matheus: SLA Hoje = 65.26% | Ontem = 86.43%
+2025-11-05 15:04:20,239 - INFO - ✅ Card enviado para Anderson Matheus
+2025-11-05 15:04:20,267 - INFO - 📊 Marcelo Medina: SLA Hoje = 80.18% | Ontem = 95.07%
+2025-11-05 15:04:21,844 - INFO - ✅ Card enviado para Marcelo Medina
+2025-11-05 15:04:21,870 - INFO - 📊 Odária Fereira: SLA Hoje = 83.45% | Ontem = 95.48%
+2025-11-05 15:04:23,890 - INFO - ✅ Card enviado para Odária Fereira
+2025-11-05 15:04:23,912 - INFO - 📊 Rodrigo Castro: SLA Hoje = 78.56% | Ontem = 91.08%
+2025-11-05 15:04:25,566 - INFO - ✅ Card enviado para Rodrigo Castro
+2025-11-05 15:04:25,592 - INFO - 📊 Orlean Nascimento: SLA Hoje = 52.97% | Ontem = 94.23%
+2025-11-05 15:04:27,034 - INFO - ✅ Card enviado para Orlean Nascimento
+2025-11-05 15:04:27,056 - INFO - 📊 Jose Marlon: SLA Hoje = 87.55% | Ontem = 89.67%
+2025-11-05 15:04:28,713 - INFO - ✅ Card enviado para Jose Marlon
+2025-11-05 15:04:28,735 - INFO - 📊 Emerson Silva: SLA Hoje = 87.66% | Ontem = 87.23%
+2025-11-05 15:04:30,200 - INFO - ✅ Card enviado para Emerson Silva
+2025-11-05 15:04:30,224 - INFO - 📊 Marcos Caique: SLA Hoje = 71.60% | Ontem = 88.98%
+2025-11-05 15:04:31,823 - INFO - ✅ Card enviado para Marcos Caique
+2025-11-05 15:04:31,826 - INFO - 📦 Relatório antigo movido: Consolidado_Geral_20251105_101341.xlsx
+2025-11-05 15:04:32,104 - ERROR - ⚠️ Erro ao salvar o consolidado geral: This sheet is too large! Your sheet size is: 1909931, 4 Max sheet size is: 1048576, 16384
+2025-11-05 15:04:32,114 - INFO - 🏁 Processamento concluído com sucesso!
+2025-11-06 08:15:59,382 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-06 08:16:03,519 - WARNING - Could not determine dtype for column 13, falling back to string
+2025-11-06 08:16:03,519 - WARNING - Could not determine dtype for column 14, falling back to string
+2025-11-06 08:16:03,519 - WARNING - Could not determine dtype for column 15, falling back to string
+2025-11-06 08:16:03,519 - WARNING - Could not determine dtype for column 16, falling back to string
+2025-11-06 08:16:03,520 - WARNING - Could not determine dtype for column 17, falling back to string
+2025-11-06 08:16:03,520 - WARNING - Could not determine dtype for column 18, falling back to string
+2025-11-06 08:16:03,520 - WARNING - Could not determine dtype for column 19, falling back to string
+2025-11-06 08:16:07,249 - INFO - 📥 Total de 1915151 registros lidos.
+2025-11-06 08:16:07,368 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251105.xlsx
+2025-11-06 08:16:10,550 - ERROR - ⚠️ Falha ao salvar o relatório: This sheet is too large! Your sheet size is: 1915151, 35 Max sheet size is: 1048576, 16384
+2025-11-06 08:16:10,709 - INFO - 📊 João Melo: SLA Hoje = 91.67% | Ontem = 97.85%
+2025-11-06 08:16:12,770 - INFO - ✅ Card enviado para João Melo
+2025-11-06 08:16:12,808 - INFO - 📊 Johas Vieira: SLA Hoje = 48.85% | Ontem = 86.39%
+2025-11-06 08:16:14,407 - INFO - ✅ Card enviado para Johas Vieira
+2025-11-06 08:16:14,439 - INFO - 📊 Anderson Matheus: SLA Hoje = 61.75% | Ontem = 94.36%
+2025-11-06 08:16:16,003 - INFO - ✅ Card enviado para Anderson Matheus
+2025-11-06 08:16:16,036 - INFO - 📊 Marcelo Medina: SLA Hoje = 89.08% | Ontem = 93.78%
+2025-11-06 08:16:17,690 - INFO - ✅ Card enviado para Marcelo Medina
+2025-11-06 08:16:17,720 - INFO - 📊 Odária Fereira: SLA Hoje = 78.01% | Ontem = 98.63%
+2025-11-06 08:16:19,443 - INFO - ✅ Card enviado para Odária Fereira
+2025-11-06 08:16:19,468 - INFO - 📊 Rodrigo Castro: SLA Hoje = 61.28% | Ontem = 92.61%
+2025-11-06 08:16:21,188 - INFO - ✅ Card enviado para Rodrigo Castro
+2025-11-06 08:16:21,215 - INFO - 📊 Orlean Nascimento: SLA Hoje = 59.06% | Ontem = 94.42%
+2025-11-06 08:16:23,033 - INFO - ✅ Card enviado para Orlean Nascimento
+2025-11-06 08:16:23,061 - INFO - 📊 Jose Marlon: SLA Hoje = 56.30% | Ontem = 90.81%
+2025-11-06 08:16:24,769 - INFO - ✅ Card enviado para Jose Marlon
+2025-11-06 08:16:24,794 - INFO - 📊 Emerson Silva: SLA Hoje = 80.38% | Ontem = 92.72%
+2025-11-06 08:16:26,302 - INFO - ✅ Card enviado para Emerson Silva
+2025-11-06 08:16:26,327 - INFO - 📊 Marcos Caique: SLA Hoje = 54.41% | Ontem = 93.90%
+2025-11-06 08:16:27,865 - INFO - ✅ Card enviado para Marcos Caique
+2025-11-06 08:16:27,869 - INFO - 📦 Relatório antigo movido: Consolidado_Geral_20251105_150431.xlsx
+2025-11-06 08:16:28,222 - ERROR - ⚠️ Erro ao salvar o consolidado geral: This sheet is too large! Your sheet size is: 1915151, 4 Max sheet size is: 1048576, 16384
+2025-11-06 08:16:28,233 - INFO - 🏁 Processamento concluído com sucesso!

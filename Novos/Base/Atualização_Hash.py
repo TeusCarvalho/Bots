@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
 
-import requests
-import json
-from datetime import datetime
-import time
 import os
-import pandas as pd
+import json
+import hashlib
 import shutil
+import time
+import requests
+import pandas as pd
+from datetime import datetime
 from typing import Dict, Any, Optional
+from colorama import init, Fore, Style
+
+init(autoreset=True)
 
 # ==============================================================================
 # CONFIGURAÇÕES GERAIS
@@ -26,11 +30,8 @@ COORDENADOR_WEBHOOKS = {
     "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
 }
 
-# Pastas
 REPORTS_FOLDER_PATH = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Jt - Relatórios"
 ARQUIVO_MORTO_FOLDER = os.path.join(REPORTS_FOLDER_PATH, "Arquivo Morto")
-
-# Caminho do hash local (na mesma pasta do script)
 HASH_FILE = os.path.join(os.path.dirname(__file__), "ultimo_relatorio.json")
 
 LINK_RELATORIO = (
@@ -39,7 +40,7 @@ LINK_RELATORIO = (
 )
 
 # ==============================================================================
-# FUNÇÕES DE APOIO
+# FUNÇÕES AUXILIARES
 # ==============================================================================
 
 def format_currency_brl(value: float) -> str:
@@ -49,36 +50,13 @@ def format_currency_brl(value: float) -> str:
         return "R$ 0,00"
 
 
-def process_report_file(file_path: str) -> Optional[pd.DataFrame]:
-    try:
-        df = pd.read_excel(file_path)
-        df.columns = df.columns.str.strip()
-        df.rename(columns={"运单号": "Remessa", "Coordenador": "Coordenadores"}, inplace=True)
-        return df
-    except Exception as e:
-        print(f"❌ Erro ao ler {file_path}: {e}")
-        return None
-
-
-def gerar_snapshot(df: pd.DataFrame) -> Dict[str, Any]:
-    """Cria o dicionário base com informações resumidas por coordenador e base."""
-    snapshot = {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "coordenadores": {}}
-
-    if "Coordenadores" not in df.columns:
-        return snapshot
-
-    for coord in df["Coordenadores"].unique():
-        dfc = df[df["Coordenadores"] == coord]
-        total_pacotes = dfc["Remessa"].nunique()
-        total_multa = dfc["Multa (R$)"].sum() if "Multa (R$)" in dfc.columns else 0
-        bases = dfc.groupby("Unidade responsável")["Remessa"].nunique().to_dict()
-
-        snapshot["coordenadores"][coord] = {
-            "total_pacotes": total_pacotes,
-            "total_multa": float(total_multa),
-            "bases": bases,
-        }
-    return snapshot
+def calcular_hash_md5(file_path: str) -> str:
+    """Calcula o hash MD5 de um arquivo para detectar mudanças."""
+    hash_md5 = hashlib.md5()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
 
 
 def carregar_snapshot_antigo() -> Optional[Dict[str, Any]]:
@@ -93,7 +71,29 @@ def salvar_snapshot(snapshot: Dict[str, Any]):
         json.dump(snapshot, f, ensure_ascii=False, indent=4)
 
 
-def comparar_coordenador(snapshot_atual: Dict[str, Any], snapshot_antigo: Optional[Dict[str, Any]], coord: str):
+def process_report_file(file_path: str) -> pd.DataFrame:
+    df = pd.read_excel(file_path)
+    df.columns = df.columns.str.strip()
+    df.rename(columns={"运单号": "Remessa", "Coordenador": "Coordenadores"}, inplace=True)
+    return df
+
+
+def gerar_snapshot(df: pd.DataFrame) -> Dict[str, Any]:
+    snapshot = {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "coordenadores": {}}
+    for coord in df["Coordenadores"].unique():
+        dfc = df[df["Coordenadores"] == coord]
+        total_pacotes = dfc["Remessa"].nunique()
+        total_multa = dfc["Multa (R$)"].sum() if "Multa (R$)" in dfc.columns else 0
+        bases = dfc.groupby("Unidade responsável")["Remessa"].nunique().to_dict()
+        snapshot["coordenadores"][coord] = {
+            "total_pacotes": total_pacotes,
+            "total_multa": float(total_multa),
+            "bases": bases,
+        }
+    return snapshot
+
+
+def comparar_coordenador(snapshot_atual, snapshot_antigo, coord):
     atual = snapshot_atual["coordenadores"].get(coord, {})
     antigo = snapshot_antigo["coordenadores"].get(coord, {}) if snapshot_antigo else {}
 
@@ -102,10 +102,13 @@ def comparar_coordenador(snapshot_atual: Dict[str, Any], snapshot_antigo: Option
 
     if diff_pacotes > 0:
         var_pacotes = f"📈 Aumentou {diff_pacotes} pedidos"
+        cor_pacotes = Fore.RED
     elif diff_pacotes < 0:
         var_pacotes = f"📉 Diminuiu {abs(diff_pacotes)} pedidos"
+        cor_pacotes = Fore.GREEN
     else:
         var_pacotes = "➖ Sem alteração"
+        cor_pacotes = Fore.YELLOW
 
     if diff_multa > 0:
         var_multa = f"📈 Aumentou {format_currency_brl(diff_multa)}"
@@ -114,14 +117,11 @@ def comparar_coordenador(snapshot_atual: Dict[str, Any], snapshot_antigo: Option
     else:
         var_multa = "➖ Sem alteração"
 
-    # --- Bases ---
-    bases_txt = ""
+    bases_txt = "**🔴 3 Piores Bases:**\n"
     bases_atuais = atual.get("bases", {})
     bases_antigas = antigo.get("bases", {}) if antigo else {}
-
-    # Ordena pelas piores bases
     sorted_bases = sorted(bases_atuais.items(), key=lambda x: x[1], reverse=True)[:3]
-    bases_txt += "**🔴 3 Piores Bases:**\n"
+
     for base, count in sorted_bases:
         diff = count - bases_antigas.get(base, 0)
         if diff < 0:
@@ -131,6 +131,7 @@ def comparar_coordenador(snapshot_atual: Dict[str, Any], snapshot_antigo: Option
         else:
             bases_txt += f"- ⚪ **{base}**: {count} pedidos (sem alteração)\n"
 
+    print(f"{cor_pacotes}📊 {coord:<20} | {var_pacotes:<25} | Multa: {var_multa}")
     return {
         "total_pacotes": atual.get("total_pacotes", 0),
         "total_multa": atual.get("total_multa", 0),
@@ -160,7 +161,7 @@ def create_feishu_payload(coordenador: str, data: Dict[str, Any]) -> Dict[str, A
                             "text": {
                                 "tag": "lark_md",
                                 "content": (
-                                    f"**Data de Geração:**\n{datetime.now().strftime('%d/%m/%Y %H:%M')}\n\n"
+                                    f"**Data de Geração:**\n{datetime.now():%d/%m/%Y %H:%M}\n\n"
                                     f"**Qtd de Pacotes:**\n{data['total_pacotes']}\n"
                                     f"**Variação Pacotes:**\n{data['var_pacotes']}"
                                 ),
@@ -201,59 +202,62 @@ def send_to_feishu(url: str, data: Dict[str, Any]):
     try:
         r = requests.post(url, json=data, timeout=10)
         r.raise_for_status()
-        print(f"✅ Enviado para {url[:60]}...")
+        print(f"{Fore.CYAN}✅ Enviado com sucesso → {url[:55]}...")
     except Exception as e:
-        print(f"❌ Erro ao enviar: {e}")
-
+        print(f"{Fore.RED}❌ Erro ao enviar: {e}")
 
 # ==============================================================================
 # EXECUÇÃO PRINCIPAL
 # ==============================================================================
 
 def run_main_task():
-    print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] Procurando relatórios em {REPORTS_FOLDER_PATH}")
+    print(f"{Fore.CYAN}[{datetime.now():%Y-%m-%d %H:%M:%S}] Procurando relatórios em {REPORTS_FOLDER_PATH}")
 
-    arquivos = [
-        f for f in os.listdir(REPORTS_FOLDER_PATH)
-        if f.endswith(".xlsx") and "5+ dias" in f.lower() and not f.startswith("~")
-    ]
+    arquivos = [f for f in os.listdir(REPORTS_FOLDER_PATH)
+                if f.endswith(".xlsx") and "5+ dias" in f.lower() and not f.startswith("~")]
     if not arquivos:
-        print("⚠️ Nenhum relatório encontrado.")
+        print(f"{Fore.YELLOW}⚠️ Nenhum relatório encontrado.")
         return
 
     arquivos.sort(key=lambda x: os.path.getmtime(os.path.join(REPORTS_FOLDER_PATH, x)), reverse=True)
     file_name = arquivos[0]
     full_path = os.path.join(REPORTS_FOLDER_PATH, file_name)
 
-    df = process_report_file(full_path)
-    if df is None:
+    print(f"{Fore.CYAN}📄 Último relatório detectado: {file_name}")
+
+    file_hash = calcular_hash_md5(full_path)
+    snapshot_antigo = carregar_snapshot_antigo()
+
+    # Se o hash do arquivo for igual ao último processado, não refaz o envio
+    if snapshot_antigo and snapshot_antigo.get("file_hash") == file_hash:
+        print(f"{Fore.YELLOW}⚠️ Nenhuma mudança detectada no relatório. Nada será reenviado.")
         return
 
+    df = process_report_file(full_path)
     snapshot_atual = gerar_snapshot(df)
-    snapshot_antigo = carregar_snapshot_antigo()
+    snapshot_atual["file_hash"] = file_hash
 
     for coord, url in COORDENADOR_WEBHOOKS.items():
         if coord not in snapshot_atual["coordenadores"]:
             continue
-
         dados = comparar_coordenador(snapshot_atual, snapshot_antigo, coord)
         payload = create_feishu_payload(coord, dados)
         send_to_feishu(url, payload)
         time.sleep(1)
 
-    # 🔁 Atualiza o hash
     salvar_snapshot(snapshot_atual)
 
-    # 📦 Move relatório atual para Arquivo Morto
+    # Move o relatório para Arquivo Morto
     if not os.path.exists(ARQUIVO_MORTO_FOLDER):
         os.makedirs(ARQUIVO_MORTO_FOLDER)
-
     destino = os.path.join(ARQUIVO_MORTO_FOLDER, file_name)
     try:
         shutil.move(full_path, destino)
-        print(f"📦 Relatório movido para Arquivo Morto: {destino}")
+        print(f"{Fore.GREEN}📦 Relatório movido para Arquivo Morto: {destino}")
     except Exception as e:
-        print(f"⚠️ Falha ao mover relatório: {e}")
+        print(f"{Fore.RED}⚠️ Falha ao mover relatório: {e}")
+
+    print(f"{Fore.CYAN}✅ Processo concluído!")
 
 
 if __name__ == "__main__":

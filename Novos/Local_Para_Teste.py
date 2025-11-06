@@ -1,733 +1,265 @@
+# -*- coding: utf-8 -*-
 import os
-import re
-import glob
 import polars as pl
-import pandas as pd
-from datetime import datetime
-import calendar
-from tqdm import tqdm
-import warnings
-import contextlib
-import io
+from datetime import datetime # <-- Importação adicionada
 
 # ==========================================================
-# 📂 Caminhos
-# ==========================================================
-BASE_ROOT = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Politicas de Bonificação"
-
-DIR_COLETA = os.path.join(BASE_ROOT, "00 -  Base de Dados (Coleta + Expedição)")
-DIR_T0 = os.path.join(BASE_ROOT, "01 - Taxa de entrega T0")
-DIR_RESS = os.path.join(BASE_ROOT, "02 - Ressarcimento por pacote")
-DIR_SHIP = os.path.join(BASE_ROOT, "03 - Redução Shipping Time")
-DIR_ANTIGA = os.path.join(BASE_ROOT, "Base Antiga")
-DIR_SEMMOV = os.path.join(BASE_ROOT, "05 - Pacotes Sem Movimentação")
-DIR_OUT = os.path.join(BASE_ROOT, "Resultados")
-os.makedirs(DIR_OUT, exist_ok=True)
-
-
-# ==========================================================
-# ⚙️ Utilitários
+# ⚙️ CONFIGURAÇÕES (Ajuste aqui os parâmetros)
 # ==========================================================
 
-def _normalize_base(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Normaliza o nome das bases, removendo caracteres especiais e padronizando o formato.
-    """
-    df = _fix_key_cols(df)
+PASTA_RETIDOS   = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Politicas de Bonificação\06 - Retidos"
+PASTA_DEVOLUCAO = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Politicas de Bonificação\00.3 - Base Devolução"
+PASTA_CUSTODIA  = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Politicas de Bonificação\00.4 - Base Custodia"
+PASTA_SAIDA     = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Politicas de Bonificação\Resultados"
 
-    if "Nome da base" not in df.columns or df.is_empty():
+# Nomes “preferidos” (usados se existirem)
+COL_PEDIDO_RET            = "Número do Pedido JMS 运单号"
+COL_DATA_ATUALIZACAO_RET  = "Data da Atualização 更新日期"
+COL_REGIONAL_RET          = "Regional 区域"
+
+COL_PEDIDO_DEV            = "Número de pedido JMS"
+COL_DATA_SOLICITACAO_DEV  = "Tempo de solicitação"
+
+COL_PEDIDO_CUST           = "Número de pedido JMS"
+COL_DATA_REGISTRO_CUST    = "data de registro"
+
+REGIONAIS_DESEJADAS = ["GP", "PA", "GO"]
+PRAZO_CUSTODIA_DIAS = 9
+NOME_ARQUIVO_FINAL  = "resultado_final_analise_retidos"
+
+EXCEL_ROW_LIMIT = 1_048_000  # margem segura (máx: 1_048_576)
+
+# ==========================================================
+# 🧩 Utilidades
+# ==========================================================
+def converter_datetime(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
+    """Converte coluna para Datetime testando vários formatos; remove nulos ao final."""
+    if coluna not in df.columns:
         return df
-
-    def limpar_nome(nome: str) -> str:
-        if not nome:
-            return ""
-        nome = str(nome).upper()
-        nome = re.sub(r"[^\x00-\x7F]+", "", nome)  # remove caracteres não ASCII
-        nome = re.sub(r"[-_]+", " ", nome)  # troca hífens e underscores por espaço
-        nome = re.sub(r"\s+", " ", nome).strip()  # remove espaços duplicados
-        partes = nome.split(" ")
-
-        # Detecta inversão comum (ex: 'BSB DF' → 'DF BSB')
-        if len(partes) == 2 and len(partes[0]) == 3 and len(partes[1]) == 2:
-            nome = f"{partes[1]} {partes[0]}"
-
-        return nome
-
-    df = df.with_columns(
-        pl.col("Nome da base")
-        .cast(pl.Utf8, strict=False)
-        .map_elements(limpar_nome, return_dtype=pl.Utf8)
-        .alias("Nome da base")
-    )
-
-    return df
-
-
-def _fix_key_cols(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Normaliza qualquer variante da chave para 'Nome da base' e remove duplicatas da chave.
-    """
-    if df.is_empty():
-        return df
-    cols = df.columns
-    # candidatos que aparecem pós-join
-    key_aliases = [c for c in cols if c.startswith("Nome da base")]
-    if not key_aliases:
-        return df
-    # escolhe prioridade: exata > _left > _right > primeira
-    chosen = "Nome da base" if "Nome da base" in key_aliases else (
-        "Nome da base_left" if "Nome da base_left" in key_aliases else (
-            "Nome da base_right" if "Nome da base_right" in key_aliases else key_aliases[0]
-        )
-    )
-    if chosen != "Nome da base":
-        df = df.rename({chosen: "Nome da base"})
-    # drop demais variantes da chave
-    for c in key_aliases:
-        if c != "Nome da base" and c in df.columns:
-            df = df.drop(c)
-    return df
-
-
-def _safe_full_join(left: pl.DataFrame, right: pl.DataFrame) -> pl.DataFrame:
-    """
-    Join 'full' robusto: normaliza chaves antes/depois e evita duplicações.
-    """
-    if left.is_empty() and right.is_empty():
-        return pl.DataFrame()
-    left = _fix_key_cols(left)
-    right = _fix_key_cols(right)
-    if "Nome da base" not in left.columns and "Nome da base" in right.columns:
-        # se o left não tem a chave mas o right tem, inverte para manter a chave
-        left, right = right, left
-    if "Nome da base" not in left.columns:
-        # sem chave nos dois -> retorna concat (fallback)
-        return pl.concat([left, right], how="diagonal_relaxed").unique(maintain_order=True)
-
-    if "Nome da base" not in right.columns:
-        # right sem chave: retorna left como está
-        out = left
-    else:
-        out = left.join(right, on="Nome da base", how="full", suffix="_dup")
-    # normaliza pós-join
-    out = _fix_key_cols(out)
-    # remove colunas duplicadas com sufixo "_dup" geradas por overlaps não-chave
-    dup_cols = [c for c in out.columns if c.endswith("_dup")]
-    if dup_cols:
-        # regra simples: se já existe a versão "sem _dup", mantemos a sem _dup
-        keep = []
-        drop = []
-        for c in dup_cols:
-            base = c[:-4]
-            if base in out.columns:
-                drop.append(c)
-            else:
-                keep.append(c)  # só mantém se não existe base
-        if drop:
-            out = out.drop(drop)
-    # dedup por chave
-    out = out.unique(subset=["Nome da base"], keep="first")
-    return out
-
-
-def to_float(col):
-    """
-    Converte uma coluna para float, tratando valores nulos e NaN.
-    """
-    return pl.col(col).cast(pl.Float64, strict=False).fill_null(0).fill_nan(0)
-
-
-def read_excel_silent(path):
-    """
-    Lê um arquivo Excel de forma silenciosa, sem exibir warnings ou erros.
-    """
-    with warnings.catch_warnings(), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
-            io.StringIO()):
-        warnings.simplefilter("ignore")
+    formatos = [
+        "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%d/%m/%Y %H:%M:%S",
+        "%Y-%m-%d %H:%M", "%d/%m/%Y %H:%M", "%Y-%m-%d", "%d/%m/%Y"
+    ]
+    for fmt in formatos:
         try:
-            # Tenta ler normalmente
-            df = pl.read_excel(path)
-            # Se só tiver colunas UNNAMED, tenta ler a partir da segunda linha
-            if all("__UNNAMED__" in c or c == "Responsáveis" for c in df.columns):
-                df = pl.read_excel(path, has_header=False)
-                # Primeira linha (índice 0) vira cabeçalho
-                headers = [str(x) for x in df.row(0)]
-                df = df.slice(1)
-                df.columns = headers
-            return df
-        except Exception:
-            return pl.DataFrame()
-
-
-# ==========================================================
-# 📥 Funções de Leitura de Dados
-# ==========================================================
-
-def pacotes_sem_mov():
-    """
-    Lê e processa os dados de pacotes sem movimentação.
-    """
-    arquivos = [f for f in os.listdir(DIR_SEMMOV) if f.endswith((".xlsx", ".xls"))]
-    if not arquivos:
-        return pl.DataFrame(), 0  # <- retorna 0 planilhas
-
-    dfs = []
-    for arq in tqdm(arquivos, desc="🟥 Lendo Sem Movimentação", colour="red"):
-        df = read_excel_silent(os.path.join(DIR_SEMMOV, arq))
-        if not df.is_empty():
-            dfs.append(df)
-
-    if not dfs:
-        return pl.DataFrame(), 0
-
-    df = pl.concat(dfs, how="diagonal_relaxed")
-
-    # renomeia colunas PT/中文 → padrão
-    rename_map = {}
-    for c in df.columns:
-        if "责任所属代理区" in c or c == "Regional responsável":
-            rename_map[c] = "Regional responsável"
-        elif "责任机构" in c or c in ("Unidade responsável", "Unidade responsável责任机构"):
-            rename_map[c] = "Nome da base"
-        elif "Aging" in c:
-            rename_map[c] = "Aging"
-        elif "JMS" in c or "运单号" in c or c == "Número de pedido JMS 运单号":
-            rename_map[c] = "Remessa"
-    df = df.rename(rename_map)
-
-    obrig = ["Regional responsável", "Nome da base", "Aging", "Remessa"]
-    if not all(c in df.columns for c in obrig):
-        return pl.DataFrame(), 0
-
-    df = df.filter(
-        (pl.col("Regional responsável").is_in(["GP", "PA"])) &
-        (pl.col("Aging").is_in([
-            "Exceed 5 days with no track",
-            "Exceed 6 days with no track",
-            "Exceed 7 days with no track",
-            "Exceed 10 days with no track",
-            "Exceed 14 days with no track",
-            "Exceed 30 days with no track"
-        ]))
-    )
-    df = _normalize_base(df)
-
-    df = df.group_by("Nome da base").agg(pl.count("Remessa").alias("Qtd Sem Mov"))
-    qtd_planilhas = len(arquivos)
-
-    print(f"🟥 {qtd_planilhas} planilhas lidas, total consolidado: {df['Qtd Sem Mov'].sum()} registros")
-    return df, qtd_planilhas
-
-
-def coleta_expedicao():
-    """
-    Lê e processa os dados de coleta e expedição.
-    """
-    arquivos = [f for f in os.listdir(DIR_COLETA) if f.endswith((".xlsx", ".xls"))]
-    dfs = []
-    for arq in tqdm(arquivos, desc="🟦 Lendo Coleta + Expedição", colour="blue"):
-        df = read_excel_silent(os.path.join(DIR_COLETA, arq))
-        if all(c in df.columns for c in [
-            "Nome da base",
-            "Quantidade coletada",
-            "Quantidade com saída para entrega",
-            "Quantidade entregue com assinatura"
-        ]):
-            df = _normalize_base(df).with_columns([
-                to_float("Quantidade coletada"),
-                to_float("Quantidade com saída para entrega"),
-                to_float("Quantidade entregue com assinatura"),
-                (pl.col("Quantidade coletada") + pl.col("Quantidade com saída para entrega")).alias("Total Geral")
-            ])
-            dfs.append(df.select(["Nome da base", "Total Geral", "Quantidade entregue com assinatura"]))
-    if not dfs:
-        raise SystemExit("⚠️ Nenhum arquivo encontrado em Coleta + Expedição.")
-    df = pl.concat(dfs, how="diagonal_relaxed")
-    return (
-        df.group_by("Nome da base")
-        .agg([
-            pl.sum("Total Geral").alias("Total Coleta+Entrega"),
-            pl.sum("Quantidade entregue com assinatura").alias("Qtd Entregue Assinatura")
-        ])
-    )
-
-
-def taxa_t0():
-    """
-    Lê e processa os dados de taxa T0 (SLA).
-    🔧 CORRIGIDO: Garante que a função sempre retorne um DataFrame com as colunas esperadas.
-    """
-    arquivos = [f for f in os.listdir(DIR_T0) if f.endswith((".xlsx", ".xls"))]
-    dfs = []
-    for arq in tqdm(arquivos, desc="🟨 Lendo T0", colour="yellow"):
-        df = read_excel_silent(os.path.join(DIR_T0, arq))
-        if all(c in df.columns for c in ["Nome da base", "T日签收率-应签收量", "T日签收率-已签收量"]):
-            df = _normalize_base(
-                df.rename({
-                    "T日签收率-应签收量": "Total Recebido",
-                    "T日签收率-已签收量": "Entregue"
-                }).with_columns([
-                    to_float("Total Recebido"),
-                    to_float("Entregue")
-                ])
-            )
-            dfs.append(df)
-
-    # 🔧 GARANTE ESTRUTURA MÍNIMA
-    if not dfs:
-        print("⚠️ Nenhum dado de T0 encontrado. Retornando DataFrame vazio com estrutura padrão.")
-        return pl.DataFrame(schema={"Nome da base": pl.Utf8, "SLA (%)": pl.Float64})
-
-    df_total = pl.concat(dfs, how="diagonal_relaxed")
-    result_df = (
-        df_total.group_by("Nome da base")
-        .agg([
-            pl.sum("Total Recebido").alias("Total Recebido"),
-            pl.sum("Entregue").alias("Entregue")
-        ])
-        .with_columns(
-            (pl.when(pl.col("Total Recebido") > 0)
-             .then(pl.col("Entregue") / pl.col("Total Recebido"))
-             .otherwise(0)).alias("SLA (%)")
-        )
-        .select(["Nome da base", "SLA (%)"])
-    )
-
-    if result_df.is_empty():
-        print("⚠️ Após o processamento, o DataFrame de T0 está vazio. Retornando estrutura padrão.")
-        return pl.DataFrame(schema={"Nome da base": pl.Utf8, "SLA (%)": pl.Float64})
-
-    return result_df
-
-
-def _prep_shipping(df: pl.DataFrame, col_nome: str) -> pl.DataFrame:
-    """
-    Prepara o cálculo de Shipping Time:
-    - Soma as 3 etapas (Trânsito, Processamento e Saída-Entrega)
-    - Agrupa por base e calcula a média consolidada
-    - Detecta e converte automaticamente unidades (minutos/dias → horas)
-    - Não divide pela quantidade de planilhas
-    """
-    if df.is_empty():
-        return df
-
-    base = "PDD de Entrega" if "PDD de Entrega" in df.columns else "Nome da base"
-    etapas = [
-        "Tempo trânsito SC Destino->Base Entrega",
-        "Tempo médio processamento Base Entrega",
-        "Tempo médio Saída para Entrega->Entrega"
-    ]
-
-    # Garante que todas as colunas das etapas existam
-    for e in etapas:
-        if e not in df.columns:
-            df = df.with_columns(pl.lit(0).alias(e))
-
-    # Converte colunas para float
-    df = df.with_columns([to_float(e) for e in etapas])
-
-    # ----------------------------------------------------------------------
-    # 🔍 Detecção automática de unidade (minutos / dias)
-    # ----------------------------------------------------------------------
-    def detectar_unidade(col: str) -> float:
-        media_valor = df[col].mean()
-        if media_valor is None:
-            return 1
-        if media_valor > 48 and media_valor < 1500:
-            print(f"⚠️  Coluna '{col}' parece estar em minutos → convertendo para horas (÷60)")
-            return 1 / 60
-        elif media_valor >= 1500:
-            print(f"⚠️  Coluna '{col}' parece estar em dias → convertendo para horas (×24)")
-            return 24
-        return 1
-
-    fatores = {e: detectar_unidade(e) for e in etapas}
-
-    for e in etapas:
-        if fatores[e] != 1:
-            df = df.with_columns((pl.col(e) * fatores[e]).alias(e))
-
-    # ----------------------------------------------------------------------
-    # 🧮 Soma das etapas + média por base (em horas)
-    # ----------------------------------------------------------------------
-    df = df.with_columns([
-        (pl.col(etapas[0]) + pl.col(etapas[1]) + pl.col(etapas[2])).alias(col_nome)
-    ])
-
-    out = df.group_by(base).agg(pl.mean(col_nome)).rename({base: "Nome da base"})
-    print(f"✅ Shipping Time calculado (média consolidada em horas) — {col_nome}")
-
-    return _normalize_base(out)
-
-
-def shippingtime_atual():
-    """
-    Lê todos os arquivos (inclusive subpastas) e calcula o Shipping Time Atual (h).
-    """
-    padrao = os.path.join(DIR_SHIP, "**", "*.xls*")  # inclui .xls e .xlsx
-    arquivos = glob.glob(padrao, recursive=True)
-    if not arquivos:
-        print("⚠️ Nenhum arquivo encontrado em DIR_SHIP (nem em subpastas).")
-        return pl.DataFrame()
-
-    dfs = [read_excel_silent(f) for f in tqdm(arquivos, desc="📊 Lendo Base Atual", colour="green")]
-    dfs = [d for d in dfs if not d.is_empty()]
-    if not dfs:
-        print("⚠️ Nenhum dado válido encontrado nas planilhas atuais.")
-        return pl.DataFrame()
-
-    df = pl.concat(dfs, how="diagonal_relaxed")
-    return _prep_shipping(df, "S.T. Atual (h)")
-
-
-def shippingtime_antiga():
-    """
-    Lê todos os arquivos (inclusive subpastas) e calcula o Shipping Time Anterior (h).
-    """
-    padrao = os.path.join(DIR_ANTIGA, "**", "*.xls*")
-    arquivos = glob.glob(padrao, recursive=True)
-    if not arquivos:
-        print("⚠️ Nenhum arquivo encontrado em DIR_ANTIGA (nem em subpastas).")
-        return pl.DataFrame()
-
-    dfs = [read_excel_silent(f) for f in tqdm(arquivos, desc="📉 Lendo Base Antiga", colour="cyan")]
-    dfs = [d for d in dfs if not d.is_empty()]
-    if not dfs:
-        print("⚠️ Nenhum dado válido encontrado nas planilhas antigas.")
-        return pl.DataFrame()
-
-    df = pl.concat(dfs, how="diagonal_relaxed")
-    return _prep_shipping(df, "S.T. Anterior (h)")
-
-
-def ressarcimento_por_pacote(df_coleta):
-    """
-    Lê e processa os dados de ressarcimento por pacote.
-    """
-    arquivos = [f for f in os.listdir(DIR_RESS) if f.endswith((".xlsx", ".xls"))]
-    if not arquivos:
-        return pl.DataFrame()
-    df = read_excel_silent(os.path.join(DIR_RESS, sorted(arquivos)[-1]))
-    if df.is_empty() or "Regional responsável" not in df.columns:
-        return pl.DataFrame()
-
-    df = df.filter(pl.col("Regional responsável").str.to_uppercase() == "GP")
-    df = df.with_columns(to_float("Valor a pagar (yuan)").alias("Custo total (R$)"))
-    df = df.group_by("Base responsável").agg(pl.sum("Custo total (R$)").alias("Custo total (R$)"))
-    df = df.rename({"Base responsável": "Nome da base"})
-    df = _normalize_base(df)
-
-    if not df_coleta.is_empty():
-        df = _safe_full_join(
-            df,
-            df_coleta.select(["Nome da base", "Qtd Entregue Assinatura"])
-        )
-
-    df = df.fill_null(0).with_columns([
-        (pl.when(pl.col("Qtd Entregue Assinatura") > 0)
-         .then(pl.col("Custo total (R$)") / pl.col("Qtd Entregue Assinatura"))
-         .otherwise(pl.col("Custo total (R$)"))).alias("Ressarcimento p/pct (R$)")
-    ])
-
-    # ✅ Corrigido: Custo total primeiro, depois Ressarcimento
-    return df.select(["Nome da base", "Custo total (R$)", "Ressarcimento p/pct (R$)"])
-
-
-# ==========================================================
-# 🧮 Consolidação de Dados
-# ==========================================================
-def consolidar():
-    """
-    Consolida todos os dados em um único DataFrame.
-    🔧 REFATORADO: Força a avaliação do DataFrame para evitar erros de otimização.
-    """
-    dias = calendar.monthrange(datetime.now().year, datetime.now().month)[1]
-
-    # 🔹 Lê a base de coordenadores (Base_Dados_Geral.xlsx)
-    path_coord = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Dados_Geral.xlsx"
-    df_coord = read_excel_silent(path_coord)
-
-    if df_coord.is_empty():
-        print("⚠️ Planilha Base_Dados_Geral.xlsx não encontrada ou vazia.")
-        df_coord = pl.DataFrame(
-            {"Nome da base": [], "Coordenador": [], "Supervisor": [], "Líder": [], "Assistente": []})
-    else:
-        # 🔍 Detecta automaticamente a coluna com nome da base
-        col_base = None
-        for possible in ["Base", "Nome da base", "Unidade", "Unidade responsável"]:
-            if possible in df_coord.columns:
-                col_base = possible
+            df = df.with_columns(pl.col(coluna).str.strptime(pl.Datetime, format=fmt, strict=False))
+            if df[coluna].dtype == pl.Datetime and df[coluna].is_not_null().any():
                 break
+        except Exception:
+            continue
+    return df.filter(pl.col(coluna).is_not_null())
 
-        if col_base is None:
-            raise SystemExit("❌ Nenhuma coluna identificada como 'Base' ou equivalente em Base_Dados_Geral.xlsx")
+def detectar_coluna(df: pl.DataFrame, candidatos: list[str]) -> str | None:
+    """Retorna o primeiro nome de coluna que contém qualquer candidato (case-insensitive)."""
+    cols_low = {c.lower(): c for c in df.columns}
+    for cand in candidatos:
+        cand = cand.lower()
+        for low, original in cols_low.items():
+            if cand in low:
+                return original
+    return None
 
-        rename_cols = {
-            col_base: "Nome da base",
-            "Coordenador": "Coordenador",
-            "Supervisor": "Supervisor",
-            "Líder": "Líder",
-            "Assistente": "Assistente"
-        }
+def safe_pick(df: pl.DataFrame, preferido: str, candidatos_extra: list[str]) -> str | None:
+    """Prefere um nome exato; se não houver, detecta por candidatos."""
+    if preferido in df.columns:
+        return preferido
+    return detectar_coluna(df, candidatos_extra)
 
-        df_coord = df_coord.rename(rename_cols)
-        # Seleciona apenas as colunas que existem após o rename
-        df_coord = df_coord.select([c for c in rename_cols.values() if c in df_coord.columns])
+def ler_planilhas(pasta: str, nome_base: str) -> pl.DataFrame:
+    """Lê e concatena a 1ª aba de todos os Excels da pasta; ignora arquivos ~$. """
+    if not os.path.exists(pasta):
+        print(f"❌ Pasta '{pasta}' não encontrada.")
+        return pl.DataFrame()
 
-        # 🔧 CORRIGIDO: Formata os nomes para "Título" usando map_elements
-        name_cols_to_format = [c for c in ["Coordenador", "Supervisor", "Líder", "Assistente"] if c in df_coord.columns]
-        if name_cols_to_format:
-            df_coord = df_coord.with_columns([
-                pl.col(c).map_elements(lambda s: s.strip().title() if s is not None else s, return_dtype=pl.Utf8) for c
-                in name_cols_to_format
-            ])
-
-        # Normaliza nomes das bases (ex: "BSB DF" → "DF BSB")
-        def limpar_nome(nome: str) -> str:
-            if not nome:
-                return ""
-            nome = str(nome).upper().strip()
-            nome = re.sub(r"[^\x00-\x7F]+", "", nome)
-            nome = re.sub(r"[-_]+", " ", nome)
-            nome = re.sub(r"\s+", " ", nome)
-            partes = nome.split(" ")
-            if len(partes) == 2 and len(partes[0]) == 3 and len(partes[1]) == 2:
-                nome = f"{partes[1]} {partes[0]}"
-            elif len(partes) == 2 and len(partes[0]) == 2 and len(partes[1]) == 3:
-                nome = f"{partes[0]} {partes[1]}"
-            return nome.strip()
-
-        df_coord = df_coord.with_columns(
-            pl.col("Nome da base").map_elements(limpar_nome, return_dtype=pl.Utf8).alias("Nome da base")
-        )
-
-        print(f"✅ {df_coord.height} bases carregadas e padronizadas de Base_Dados_Geral.xlsx")
-
-    # 🔹 Lê as demais bases
-    df_coleta = coleta_expedicao()
-    df_t0 = taxa_t0()
-    df_st_at = shippingtime_atual()
-    df_st_ant = shippingtime_antiga()
-    df_ress = ressarcimento_por_pacote(df_coleta)
-    df_sem, _ = pacotes_sem_mov()
-
-    # 🔹 Calcula Shipping diff
-    if not df_st_at.is_empty():
-        df_st = _safe_full_join(df_st_at, df_st_ant).with_columns(
-            (pl.col("S.T. Atual (h)") - pl.col("S.T. Anterior (h)").fill_null(0)).alias("Variação (h)")
-        )
-    else:
-        df_st = pl.DataFrame()
-
-    # 🔹 Junta tudo com segurança
-    df_final = _safe_full_join(df_t0, df_st)
-
-    # 🔧 CORREÇÃO CRÍTICA: Garante que a coluna "SLA (%)" exista IMEDIATAMENTE após o join
-    if "SLA (%)" not in df_final.columns:
-        df_final = df_final.with_columns(pl.lit(0.0).alias("SLA (%)"))
-        print("⚠️ Coluna 'SLA (%)' não encontrada após o join com T0. Criando coluna com valor 0.")
-
-    # 🔧 FORÇA A AVALIAÇÃO AQUI
-    df_final = df_final.collect()
-
-    df_final = _safe_full_join(df_final, df_ress)
-    df_final = _safe_full_join(df_final, df_sem)
-    df_final = _safe_full_join(df_final, df_coleta)
-
-    # 🔹 Garante todas as bases da planilha Base_Atualizada
-    df_final = _safe_full_join(df_coord, df_final)
-
-    # 🔧 FORÇA A AVALIAÇÃO NOVAMENTE ANTES DOS CÁLCULOS
-    df_final = df_final.collect()
-
-    # 🔹 Calcula Taxa Sem Movimentação
-    df = df_final.fill_null(0).with_columns([
-        (pl.when(pl.col("Total Coleta+Entrega") > 0)
-         .then(pl.col("Qtd Sem Mov") / dias / pl.col("Total Coleta+Entrega"))
-         .otherwise(0)).alias("Taxa Sem Mov.")
-    ])
-
-    # 🆕 NOVAS COLUNAS DE BONIFICAÇÃO
-    # ----> AJUSTE AS REGRAS ABAIXO CONFORME SUA POLÍTICA <----
-
-    # 1. Elegibilidade (Ex: SLA > 90%)
-    META_ELEGIBILIDADE_SLA = 0.90
-    df = df.with_columns(
-        pl.when(pl.col("SLA (%)") > META_ELEGIBILIDADE_SLA)
-        .then("Sim")
-        .otherwise("Não")
-        .alias("Elegibilidade")
-    )
-
-    # 2. Atingimento Sem Movimentação (Ex: Taxa Sem Mov < 1%)
-    META_TAXA_SEM_MOV = 0.01
-    df = df.with_columns(
-        pl.when(pl.col("Taxa Sem Mov.") < META_TAXA_SEM_MOV)
-        .then("Sim")
-        .otherwise("Não")
-        .alias("Atingimento Sem Mov")
-    )
-
-    # 3. Atingamento Geral (Ex: usar o SLA como base)
-    # SUBSTITUA ESTA COLUNA PELA FÓRMULA REAL DE ATINGIMENTO
-    df = df.with_columns(
-        (pl.col("SLA (%)") * 100).alias("Atingimento Geral (%)")
-    )
-
-    # 4. Total da Bonificação (Ex: Bônus Fixo de R$1000 * Atingimento Geral)
-    BONUS_FIXO = 1000.00
-    df = df.with_columns(
-        (pl.col("Atingimento Geral (%)") / 100 * BONUS_FIXO).alias("Total da bonificação (R$)")
-    )
-
-    # ----> FIM DAS COLUNAS DE BONIFICAÇÃO <----
-
-    ordered = [
-        "Nome da base",
-        "Coordenador",
-        "Supervisor",
-        "Líder",
-        "Assistente",
-        "SLA (%)",
-        "S.T. Atual (h)",
-        "S.T. Anterior (h)",
-        "Variação (h)",
-        "Ressarcimento p/pct (R$)",
-        "Custo total (R$)",
-        "Qtd Sem Mov",
-        "Taxa Sem Mov.",
-        "Elegibilidade",
-        "Atingimento Sem Mov",
-        "Atingimento Geral (%)",
-        "Total da bonificação (R$)"
+    arquivos = [
+        os.path.join(pasta, f)
+        for f in os.listdir(pasta)
+        if f.lower().endswith((".xls", ".xlsx")) and not f.startswith("~$")
     ]
+    if not arquivos:
+        print(f"⚠️ Nenhum arquivo Excel encontrado em {nome_base}.")
+        return pl.DataFrame()
 
-    # Garante que todas as colunas necessárias existam
-    for c in ordered:
-        if c not in df.columns:
-            if c == "Nome da base":
-                df = df.with_columns(pl.lit("").alias(c))
-            else:
-                df = df.with_columns(pl.lit(None).alias(c))
+    print(f"📂 {len(arquivos)} arquivo(s) encontrado(s) em {nome_base}:")
+    for f in arquivos:
+        print(f"   • {os.path.basename(f)}")
 
-    # Correção: Processa apenas colunas válidas (não vazias) que existem no DataFrame
-    valid_cols = [c for c in df.columns if c and c.strip() and c in df.schema]
+    dfs = []
+    for arq in arquivos:
+        try:
+            df_raw = pl.read_excel(arq)
+            df = next(iter(df_raw.values())) if isinstance(df_raw, dict) else df_raw
+            dfs.append(df)
+        except Exception as e:
+            print(f"   ❌ Erro ao ler {os.path.basename(arq)}: {e}")
 
-    # Trata colunas de texto separadamente das colunas numéricas
-    text_cols = [c for c in valid_cols if df.schema[c] == pl.Utf8]
-    numeric_cols = [c for c in valid_cols if df.schema[c] != pl.Utf8]
+    return pl.concat(dfs, how="diagonal_relaxed") if dfs else pl.DataFrame()
 
-    # Aplica tratamento de nulos apenas às colunas de texto (sem fill_nan)
-    if text_cols:
-        df = df.with_columns([
-            pl.col(c).fill_null("") for c in text_cols
-        ])
+def salvar_resultado(df: pl.DataFrame, caminho_saida: str, nome_base: str):
+    if not os.path.exists(caminho_saida):
+        os.makedirs(caminho_saida)
+        print(f"📁 Pasta de saída criada: {caminho_saida}")
 
-    # Aplica tratamento de nulos apenas às colunas numéricas
-    if numeric_cols:
-        df = df.with_columns([
-            pl.col(c).fill_null(0).fill_nan(0) for c in numeric_cols
-        ])
+    # Ordena colunas para facilitar leitura no Excel
+    col_order = [c for c in [
+        COL_PEDIDO_RET,
+        COL_DATA_ATUALIZACAO_RET,
+        COL_REGIONAL_RET,
+        COL_PEDIDO_CUST,
+        COL_DATA_REGISTRO_CUST,
+        "Prazo_Limite",
+        "Status_Custodia"
+    ] if c in df.columns]
+    if col_order:
+        df = df.select(col_order)
 
-    return df.select(ordered).unique(subset=["Nome da base"], keep="first")
+    # Adiciona timestamp ao nome do arquivo para não sobrescrever
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_filename = f"{nome_base}_{timestamp}"
 
+    # Decide formato conforme limite do Excel
+    if df.height >= EXCEL_ROW_LIMIT:
+        out = os.path.join(caminho_saida, f"{base_filename}.csv")
+        df.write_csv(out)
+        print(f"\n✅ Resultado salvo em CSV (sem limite de linhas): {out}")
+    else:
+        out = os.path.join(caminho_saida, f"{base_filename}.xlsx")
+        df.write_excel(out)
+        print(f"\n✅ Resultado salvo em Excel: {out}")
 
 # ==========================================================
-# 💾 Exportar Relatório Formatado
+# 🚀 Principal
 # ==========================================================
-def main():
-    """
-    Função principal que executa o processo de consolidação e geração do relatório.
-    """
-    df = consolidar()
-    if df.is_empty():
-        print("⚠️ Nenhum dado consolidado.")
+def analisar_retidos():
+    print("\n==============================")
+    print("🚀 INICIANDO ANÁLISE COMPLETA")
+    print("==============================")
+
+    # 1) RETIDOS
+    print("\n🟢 ETAPA 1 – LENDO BASE RETIDOS...")
+    df_ret = ler_planilhas(PASTA_RETIDOS, "Retidos")
+    if df_ret.is_empty():
+        print("❌ Nenhum dado em Retidos. Abortando análise.")
         return
 
-    # Caminho de saída
-    out = os.path.join(DIR_OUT, f"Resumo_Politica_Bonificacao_{datetime.now():%Y%m%d_%H%M%S}.xlsx")
-    df_pd = df.to_pandas()
+    # Descoberta de colunas (flexível)
+    col_pedido_ret = safe_pick(df_ret, COL_PEDIDO_RET, ["jms", "運單", "运单", "pedido"])
+    col_data_ret   = safe_pick(df_ret, COL_DATA_ATUALIZACAO_RET, ["atualiza", "更新", "data"])
+    col_regional   = safe_pick(df_ret, COL_REGIONAL_RET, ["regional", "区域"])
 
-    # 🔧 Substitui zeros por "-" nas colunas numéricas para melhor visualização
-    # Não substituímos na coluna "Variação (h)" e "Atingimento Geral (%)"
-    cols_to_replace_zero = [
-        "SLA (%)", "S.T. Atual (h)", "S.T. Anterior (h)",
-        "Ressarcimento p/pct (R$)", "Custo total (R$)",
-        "Qtd Sem Mov", "Taxa Sem Mov.", "Total da bonificação (R$)"
-    ]
-    for col in cols_to_replace_zero:
-        if col in df_pd.columns:
-            # Usa o método replace para substituir 0 por "-"
-            df_pd[col] = df_pd[col].replace(0, "-")
+    faltando = [n for n, v in {
+        "Pedido Retidos": col_pedido_ret,
+        "Data Atualização": col_data_ret,
+    }.items() if v is None]
+    if faltando:
+        print(f"❌ Colunas essenciais ausentes em Retidos: {', '.join(faltando)}")
+        return
 
-    # Escrita e formatação
-    with pd.ExcelWriter(out, engine="xlsxwriter") as writer:
-        startrow = 6
-        df_pd.to_excel(writer, sheet_name="Bonificação", startrow=startrow, startcol=0, header=True, index=False)
+    # Seleciona e normaliza nomes
+    rename_map = {
+        col_pedido_ret: COL_PEDIDO_RET,
+        col_data_ret: COL_DATA_ATUALIZACAO_RET
+    }
+    if col_regional:
+        rename_map[col_regional] = COL_REGIONAL_RET
 
-        wb, ws = writer.book, writer.sheets["Bonificação"]
+    df_ret = df_ret.select(list(rename_map.keys())).rename(rename_map)
+    df_ret = converter_datetime(df_ret, COL_DATA_ATUALIZACAO_RET)
 
-        # Formatos
-        red = wb.add_format(
-            {"bold": True, "font_color": "white", "align": "center", "valign": "vcenter", "bg_color": "#C00000",
-             "border": 1})
-        gray = wb.add_format(
-            {"bold": True, "font_color": "white", "align": "center", "valign": "vcenter", "bg_color": "#595959",
-             "border": 1})
-        center = wb.add_format({"align": "center", "valign": "vcenter"})
-        fmt_percent_2 = wb.add_format({"num_format": "0.00%", "align": "center"})
-        fmt_money = wb.add_format({"num_format": '"R$"#,##0.00', "align": "center"})
-        fmt_number = wb.add_format({"num_format": "#,##0.00", "align": "center"})
-        fmt_int = wb.add_format({"num_format": "0", "align": "center"})
+    if COL_REGIONAL_RET in df_ret.columns:
+        df_ret = df_ret.filter(pl.col(COL_REGIONAL_RET).is_in(REGIONAIS_DESEJADAS))
 
-        # Cabeçalhos
-        ws.merge_range("A1:Q1", "RESULTADOS DE INDICADORES — POLÍTICA DE BONIFICAÇÃO", red)
-        ws.merge_range("A2:Q2", f"Data de atualização: {datetime.now():%d/%m/%Y}", gray)
-        ws.merge_range("A5:E5", "Equipe de Responsáveis", gray)
-        ws.merge_range("F5:L5", "Indicadores de Desempenho", gray)
-        ws.merge_range("M5:Q5", "Política de Bonificação", gray)
+    total_inicial = df_ret.height
+    print(f"📊 Total inicial de Retidos ({', '.join(REGIONAIS_DESEJADAS)}): {total_inicial}")
 
-        headers = [
-            ("A6", "Nome da base"),
-            ("B6", "Coordenador"),
-            ("C6", "Supervisor"),
-            ("D6", "Líder"),
-            ("E6", "Assistente"),
-            ("F6", "SLA (%)"),
-            ("G6", "S.T. Atual (h)"),
-            ("H6", "S.T. Anterior (h)"),
-            ("I6", "Variação (h)"),
-            ("J6", "Ressarcimento p/pct (R$)"),
-            ("K6", "Custo total (R$)"),
-            ("L6", "Qtd Sem Mov"),
-            ("M6", "Taxa Sem Mov."),
-            ("N6", "Elegibilidade"),
-            ("O6", "Atingimento Sem Mov"),
-            ("P6", "Atingimento Geral (%)"),
-            ("Q6", "Total da bonificação (R$)")
-        ]
-        for c, t in headers:
-            ws.write(c, t, red)
+    # 2) DEVOLUÇÃO
+    print("\n🟡 ETAPA 2 – COMPARAÇÃO COM BASE DE DEVOLUÇÃO...")
+    df_dev = ler_planilhas(PASTA_DEVOLUCAO, "Devolução")
+    if not df_dev.is_empty():
+        col_pedido_dev = safe_pick(df_dev, COL_PEDIDO_DEV, ["jms", "pedido"])
+        col_solic_dev  = safe_pick(df_dev, COL_DATA_SOLICITACAO_DEV, ["solicit", "tempo", "data"])
+        if col_pedido_dev and col_solic_dev:
+            df_dev = df_dev.select([col_pedido_dev, col_solic_dev]).rename({
+                col_pedido_dev: COL_PEDIDO_DEV,
+                col_solic_dev:  COL_DATA_SOLICITACAO_DEV
+            })
+            df_dev = converter_datetime(df_dev, COL_DATA_SOLICITACAO_DEV)
+            df_dev = df_dev.group_by(COL_PEDIDO_DEV).agg(pl.col(COL_DATA_SOLICITACAO_DEV).min())
 
-        # Largura e formatação
-        ws.set_column("A:E", 22, center)
-        ws.set_column("F:F", 12, fmt_percent_2)
-        ws.set_column("G:I", 14, fmt_number)
-        ws.set_column("J:K", 16, fmt_money)
-        ws.set_column("L:L", 14, fmt_int)
-        ws.set_column("M:M", 14, fmt_percent_2)
-        ws.set_column("N:O", 18, center)  # Colunas de texto
-        ws.set_column("P:P", 18, fmt_percent_2)
-        ws.set_column("Q:Q", 20, fmt_money)
+            df_merge = df_ret.join(df_dev, left_on=COL_PEDIDO_RET, right_on=COL_PEDIDO_DEV, how="left")
+            df_merge = df_merge.with_columns(
+                ((pl.col(COL_DATA_ATUALIZACAO_RET) < pl.col(COL_DATA_SOLICITACAO_DEV)) &
+                 pl.col(COL_DATA_SOLICITACAO_DEV).is_not_null()).alias("Remover_Dev")
+            )
+            removidos_dev = df_merge.filter(pl.col("Remover_Dev")).height
+            df_ret = df_merge.filter(~pl.col("Remover_Dev")).drop(["Remover_Dev", COL_PEDIDO_DEV, COL_DATA_SOLICITACAO_DEV], strict=False)
+            print(f"📦 Devolução → Removidos: {removidos_dev} | Mantidos: {df_ret.height}")
+        else:
+            print("⚠️ Colunas de Devolução não detectadas — pulando etapa.")
+    else:
+        print("⚠️ Base de Devolução não encontrada — pulando etapa.")
 
-        # Congela cabeçalhos
-        ws.freeze_panes(7, 0)
+    # 3) CUSTÓDIA (+9 dias)
+    print("\n🔵 ETAPA 3 – COMPARAÇÃO COM BASE DE CUSTÓDIA (+9 dias)...")
+    df_cust = ler_planilhas(PASTA_CUSTODIA, "Custódia")
+    df_final = df_ret
+    if not df_cust.is_empty():
+        col_pedido_c = safe_pick(df_cust, COL_PEDIDO_CUST, ["jms", "pedido"])
+        col_reg_c    = safe_pick(df_cust, COL_DATA_REGISTRO_CUST, ["registro", "data"])
+        if col_pedido_c and col_reg_c:
+            df_cust = df_cust.select([col_pedido_c, col_reg_c]).rename({
+                col_pedido_c: COL_PEDIDO_CUST,
+                col_reg_c:    COL_DATA_REGISTRO_CUST
+            })
+            df_cust = converter_datetime(df_cust, COL_DATA_REGISTRO_CUST)
+            df_cust = (
+                df_cust.group_by(COL_PEDIDO_CUST)
+                .agg(pl.col(COL_DATA_REGISTRO_CUST).min())
+                .with_columns((pl.col(COL_DATA_REGISTRO_CUST) + pl.duration(days=PRAZO_CUSTODIA_DIAS)).alias("Prazo_Limite"))
+            )
 
-    print(f"✅ Relatório final gerado com sucesso!\n📂 {out}")
+            df_join = df_ret.join(df_cust, left_on=COL_PEDIDO_RET, right_on=COL_PEDIDO_CUST, how="left")
 
+            df_join = df_join.with_columns(
+                pl.when(
+                    (pl.col(COL_DATA_ATUALIZACAO_RET) <= pl.col("Prazo_Limite")) &
+                    pl.col("Prazo_Limite").is_not_null()
+                )
+                .then(pl.lit("Dentro do Prazo"))
+                .otherwise(pl.lit("Fora do Prazo"))
+                .alias("Status_Custodia")
+            )
+
+            removidos_cust = df_join.filter(pl.col("Status_Custodia") == "Dentro do Prazo").height
+            df_final = df_join.filter(pl.col("Status_Custodia") == "Fora do Prazo")
+
+            if COL_DATA_REGISTRO_CUST in df_final.columns:
+                df_final = df_final.sort(COL_DATA_REGISTRO_CUST)
+
+            print(f"📦 Custódia → Removidos: {removidos_cust} | Mantidos: {df_final.height}")
+        else:
+            print("⚠️ Colunas de Custódia não detectadas — mantendo base após Devolução.")
+
+    # 4) RESULTADO
+    print("\n==============================")
+    print("📊 RESULTADO FINAL GERAL")
+    print("==============================")
+    print(f"📉 Total inicial: {total_inicial}")
+    print(f"✅ Total final: {df_final.height}")
+    print(f"🗑️ Total removido: {total_inicial - df_final.height}")
+    print("==============================")
+
+    print("\n📋 Amostra dos primeiros registros:")
+    print(df_final.head(15))
+
+    # 5) SALVAR RESULTADO
+    if df_final.is_empty():
+        print("\n⚠️ Base final vazia — nada para salvar.")
+    else:
+        salvar_resultado(df_final, PASTA_SAIDA, NOME_ARQUIVO_FINAL)
 
 # ==========================================================
-# Execução do Script
+# ▶️ EXECUÇÃO
 # ==========================================================
 if __name__ == "__main__":
-    main()
+    analisar_retidos()
