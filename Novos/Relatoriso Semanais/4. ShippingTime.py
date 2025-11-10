@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-📦 Comparativo Shipping Time Semanal — FINAL + médias por dia (detecção automática)
+📦 Comparativo Shipping Time Semanal — FINAL v2.2
 ---------------------------------------------------------------
 - Corrige tipos numéricos automaticamente
 - Usa PDD de Entrega como base
 - Calcula Etapas 6, 7, 8 e Tempo Total
 - Gera comparativo limpo e compatível
-- Mantém apenas UFs especificadas em 'Estado de Entrega'
+- Mantém apenas UFs especificadas
 - Mostra TOP ofensores (Etapas 7 e 8)
 - Adiciona linha TOTAL GERAL
-- Cria aba "Média por Dia (Atual)" automaticamente se encontrar data
+- Cria abas separadas por Data automaticamente
+- Inclui aba(s) 'Base Consolidada' com junção total
+- Divide automaticamente se ultrapassar 1.048.000 linhas
 """
 
 import polars as pl
@@ -26,8 +28,8 @@ BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de 
 OUTPUT_DIR = os.path.join(BASE_DIR, "Output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# =================== UF PERMITIDAS ===================
 UFS_PERMITIDAS = ["PA", "MT", "GO", "AM", "MS", "RO", "TO", "DF", "RR", "AC", "AP"]
+LIMITE_EXCEL = 1_048_000  # limite de linhas por aba
 
 # =================== FUNÇÕES ===================
 
@@ -74,7 +76,6 @@ def filtrar_por_uf(df):
     return df
 
 def limpar_coluna_num(df, col):
-    """Limpa strings e converte para float."""
     return (
         df[col]
         .str.replace_all(r"[^\d,.\-]", "")
@@ -115,7 +116,6 @@ def calcular_tempo_medio(df):
         .rename({base_col: "Base Entrega"})
     )
 
-    # 🧮 Linha TOTAL GERAL
     total_geral = (
         agrupado.select([
             pl.lit("TOTAL GERAL").alias("Base Entrega"),
@@ -127,23 +127,27 @@ def calcular_tempo_medio(df):
     )
     agrupado = pl.concat([agrupado, total_geral], how="vertical")
 
-    return agrupado, df  # retorna também o original limpo
+    return agrupado, df
 
-def detectar_coluna_data(df):
-    """Tenta detectar automaticamente uma coluna de data."""
-    possiveis = [c for c in df.columns if "data" in c.lower()]
-    if possiveis:
-        return possiveis[0]
-    return None
+def gerar_comparativo(semana_ant, semana_atual):
+    comp = semana_ant.join(semana_atual, on="Base Entrega", how="outer", suffix="_Atual")
+    for etapa in ["Etapa 6", "Etapa 7", "Etapa 8", "Tempo Total"]:
+        comp = comp.with_columns([
+            pl.col(f"{etapa} (h)").cast(pl.Float64, strict=False).alias(f"{etapa} (h)"),
+            pl.col(f"{etapa} (h)_Atual").cast(pl.Float64, strict=False).alias(f"{etapa} (h)_Atual")
+        ])
+        comp = comp.with_columns([
+            (pl.col(f"{etapa} (h)_Atual") - pl.col(f"{etapa} (h)")).alias(f"{etapa} Δ (h)")
+        ])
+    return comp
 
 def calcular_media_por_dia(df):
-    col_data = detectar_coluna_data(df)
-    if not col_data:
-        print("⚠️ Nenhuma coluna de data encontrada — não foi possível gerar médias diárias.")
+    if "Data" not in df.columns:
+        print("⚠️ Coluna 'Data' não encontrada — não foi possível gerar médias diárias.")
         return None
 
     df = df.with_columns([
-        pl.col(col_data).str.slice(0, 10).alias("Data")
+        pl.col("Data").str.slice(0, 10).alias("Data")
     ])
 
     media_dia = (
@@ -158,59 +162,40 @@ def calcular_media_por_dia(df):
     )
     return media_dia
 
-def gerar_comparativo(semana_ant, semana_atual):
-    comp = semana_ant.join(semana_atual, on="Base Entrega", how="outer", suffix="_Atual")
+def separar_por_data(df):
+    if "Data" not in df.columns:
+        print("⚠️ Coluna 'Data' não encontrada — não será separado por data.")
+        return {}
+    df = df.with_columns(pl.col("Data").str.slice(0, 10).alias("Data"))
+    datas = df.select("Data").unique().to_series().to_list()
+    resultado = {}
+    for data in datas:
+        sub = df.filter(pl.col("Data") == data)
+        sub_agrupado = (
+            sub.group_by("PDD de Entrega")
+            .agg([
+                pl.mean("Tempo trânsito SC Destino->Base Entrega").alias("Etapa 6 (h)"),
+                pl.mean("Tempo médio processamento Base Entrega").alias("Etapa 7 (h)"),
+                pl.mean("Tempo médio Saída para Entrega->Entrega").alias("Etapa 8 (h)"),
+                pl.mean("Tempo Total (h)").alias("Tempo Total (h)")
+            ])
+            .rename({"PDD de Entrega": "Base Entrega"})
+        )
+        resultado[data] = sub_agrupado
+    return resultado
 
-    for etapa in ["Etapa 6", "Etapa 7", "Etapa 8", "Tempo Total"]:
-        comp = comp.with_columns([
-            pl.col(f"{etapa} (h)").cast(pl.Float64, strict=False).alias(f"{etapa} (h)"),
-            pl.col(f"{etapa} (h)_Atual").cast(pl.Float64, strict=False).alias(f"{etapa} (h)_Atual")
-        ])
-        comp = comp.with_columns([
-            (pl.col(f"{etapa} (h)_Atual") - pl.col(f"{etapa} (h)")).alias(f"{etapa} Δ (h)")
-        ])
-    return comp
+def exportar_base_consolidada(writer, df):
+    """Divide automaticamente a base consolidada em várias abas se ultrapassar o limite"""
+    total_linhas = df.height
+    num_abas = (total_linhas // LIMITE_EXCEL) + 1
 
-def resumo_final(semana_ant, semana_atual):
-    etapas = {
-        "Shipping Time": "Tempo Total (h)",
-        "Etapa 6": "Etapa 6 (h)",
-        "Etapa 7": "Etapa 7 (h)",
-        "Etapa 8": "Etapa 8 (h)"
-    }
-    print("\n📊 **Resumo Semanal:**")
-    for nome, col in etapas.items():
-        if col in semana_ant.columns and col in semana_atual.columns:
-            media_ant = semana_ant[col].mean()
-            media_at = semana_atual[col].mean()
-            diff = media_at - media_ant
-            arrow = "↑" if diff > 0 else "↓"
-            print(f"- {nome}: {media_at:.2f}h ({arrow}{abs(diff):.2f}h)")
-    print("")
+    print(f"🧾 Base consolidada contém {total_linhas:,} linhas — será dividida em {num_abas} aba(s).")
 
-def mostrar_top_ofensores(comp, etapa="Etapa 7 (h)", top_n=10):
-    base_col = "Base Entrega"
-    atual_col = f"{etapa}_Atual"
-    ant_col = etapa
-    delta_col = f"{etapa.split(' (')[0]} Δ (h)"
-
-    if not all(c in comp.columns for c in [base_col, ant_col, atual_col, delta_col]):
-        print(f"⚠️ Colunas necessárias não encontradas para {etapa}.")
-        return
-
-    ofensores = (
-        comp.select([base_col, ant_col, atual_col, delta_col])
-        .drop_nulls(delta_col)
-        .sort(delta_col, descending=True)
-        .head(top_n)
-    )
-
-    print(f"\n🔥 Top {top_n} Ofensores — {etapa}:")
-    print(f"{'Base Entrega':<25} {'Ant. (h)':>10} {'Atu. (h)':>10} {'Δ (h)':>10}")
-    print("-" * 60)
-    for row in ofensores.iter_rows():
-        base, ant, atual, delta = row
-        print(f"{base:<25} {ant:>10.2f} {atual:>10.2f} {delta:>10.2f}")
+    for i in range(num_abas):
+        inicio = i * LIMITE_EXCEL
+        fim = min((i + 1) * LIMITE_EXCEL, total_linhas)
+        aba_nome = f"Base Consolidada {i+1}"
+        df.slice(inicio, fim - inicio).to_pandas().to_excel(writer, sheet_name=aba_nome, index=False)
 
 # =================== EXECUÇÃO ===================
 
@@ -235,29 +220,37 @@ def main():
     df_atual = filtrar_por_uf(df_atual)
     df_ant = filtrar_por_uf(df_ant)
 
-    print("\n⏳ Calculando médias por base (PDD de Entrega)...")
+    print("\n⏳ Calculando médias por base...")
     semana_atual, df_atual_limpo = calcular_tempo_medio(df_atual)
     semana_anterior, _ = calcular_tempo_medio(df_ant)
 
     print("📈 Gerando comparativo...")
     comparativo = gerar_comparativo(semana_anterior, semana_atual)
-    resumo_final(semana_anterior, semana_atual)
 
-    mostrar_top_ofensores(comparativo, "Etapa 7 (h)", top_n=10)
-    mostrar_top_ofensores(comparativo, "Etapa 8 (h)", top_n=10)
-
-    # 📅 Média por dia (semana atual)
     media_por_dia = calcular_media_por_dia(df_atual_limpo)
+    por_data = separar_por_data(df_atual_limpo)
 
-    # 💾 Exportação com pandas.ExcelWriter
-    output_excel = os.path.join(OUTPUT_DIR, "Comparativo_ShippingTime.xlsx")
+    output_excel = os.path.join(OUTPUT_DIR, "Comparativo_ShippingTime_PorData.xlsx")
     with pd.ExcelWriter(output_excel, engine="xlsxwriter") as writer:
+        # 🔹 Abas principais
         comparativo.to_pandas().to_excel(writer, sheet_name="Comparativo Semanal", index=False)
         if media_por_dia is not None:
             media_por_dia.to_pandas().to_excel(writer, sheet_name="Média por Dia (Atual)", index=False)
 
-    print(f"\n✅ Comparativo salvo em:\n{output_excel}\n")
+        # 🔹 Abas separadas por Data
+        for data, df_data in por_data.items():
+            safe_name = str(data).replace("/", "-")
+            df_data.to_pandas().to_excel(writer, sheet_name=safe_name[:31], index=False)
 
+        # 🔹 Abas com base consolidada (divididas)
+        exportar_base_consolidada(writer, df_atual_limpo)
+
+    print(f"\n✅ Comparativo salvo em:\n{output_excel}\n")
+    print("📑 Abas criadas:")
+    print("- Comparativo Semanal")
+    print("- Média por Dia (Atual)")
+    print("- Uma aba por Data detectada")
+    print("- Base Consolidada (dividida automaticamente se necessário)")
 
 if __name__ == "__main__":
     main()
