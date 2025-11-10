@@ -5,12 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="git commit">
-      <change afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/Base/sla_processor.log" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Base/sla_processor.log" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/Franquias/sla_processor.log" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Franquias/sla_processor.log" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Novos/WhatsApp/WhatsApp.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/WhatsApp/WhatsApp.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Novos/teste.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/teste.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -341,15 +337,7 @@
       <workItem from="1762468651428" duration="528000" />
       <workItem from="1762514089639" duration="20660000" />
       <workItem from="1762773826350" duration="4793000" />
-      <workItem from="1762780481526" duration="8143000" />
-    </task>
-    <task id="LOCAL-00007" summary="git commit">
-      <option name="closed" value="true" />
-      <created>1760362749091</created>
-      <option name="number" value="00007" />
-      <option name="presentableId" value="LOCAL-00007" />
-      <option name="project" value="LOCAL" />
-      <updated>1760362749091</updated>
+      <workItem from="1762780481526" duration="23423000" />
     </task>
     <task id="LOCAL-00008" summary="git commit">
       <option name="closed" value="true" />
@@ -735,7 +723,15 @@
       <option name="project" value="LOCAL" />
       <updated>1762783221132</updated>
     </task>
-    <option name="localTasksCounter" value="56" />
+    <task id="LOCAL-00056" summary="git commit">
+      <option name="closed" value="true" />
+      <created>1762792681513</created>
+      <option name="number" value="00056" />
+      <option name="presentableId" value="LOCAL-00056" />
+      <option name="project" value="LOCAL" />
+      <updated>1762792681513</updated>
+    </task>
+    <option name="localTasksCounter" value="57" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -780,7 +776,7 @@
     <SUITE FILE_PATH="coverage/Bots$Local_Para_Teste_02.coverage" NAME="Local_Para_Teste_02 Coverage Results" MODIFIED="1762433044909" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$GP.coverage" NAME="GP Coverage Results" MODIFIED="1762775205013" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Bases_Aleatorias" />
     <SUITE FILE_PATH="coverage/Bots$glm_dev_helper.coverage" NAME="glm_dev_helper Coverage Results" MODIFIED="1760990372611" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base de Dados" />
-    <SUITE FILE_PATH="coverage/Bots$WhatsApp.coverage" NAME="WhatsApp Coverage Results" MODIFIED="1762792451794" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/WhatsApp" />
+    <SUITE FILE_PATH="coverage/Bots$WhatsApp.coverage" NAME="WhatsApp Coverage Results" MODIFIED="1762809013738" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/WhatsApp" />
     <SUITE FILE_PATH="coverage/Bots$Bots____T0_e_Custo.coverage" NAME="Bots -  T0 e Custo Coverage Results" MODIFIED="1762171768043" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
     <SUITE FILE_PATH="coverage/Bots$T_0.coverage" NAME="T-0 Coverage Results" MODIFIED="1761241507643" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatoriso Semanais" />
     <SUITE FILE_PATH="coverage/Bots$Junção.coverage" NAME="Junção Coverage Results" MODIFIED="1761739323331" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base de Dados" />
@@ -793,7 +789,7 @@
     <SUITE FILE_PATH="coverage/Bots$3__Fraquias___Custo.coverage" NAME="3- Fraquias - Custo Coverage Results" MODIFIED="1762791077479" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
     <SUITE FILE_PATH="coverage/Bots$1_1___T_0.coverage" NAME="1.1 - T-0 Coverage Results" MODIFIED="1759924093939" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$1__Regras_Sem_Movimentação.coverage" NAME="1- Regras Sem Movimentação Coverage Results" MODIFIED="1762786427768" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
-    <SUITE FILE_PATH="coverage/Bots$teste.coverage" NAME="teste Coverage Results" MODIFIED="1762439822879" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
+    <SUITE FILE_PATH="coverage/Bots$teste.coverage" NAME="teste Coverage Results" MODIFIED="1762797203479" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$revisor.coverage" NAME="revisor Coverage Results" MODIFIED="1758282388178" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bots$Bonificação.coverage" NAME="Bonificação Coverage Results" MODIFIED="1759520596338" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$Erro.coverage" NAME="Erro Coverage Results" MODIFIED="1762518728547" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/WhatsApp" />
