@@ -4,7 +4,6 @@ import logging
 import time
 from datetime import datetime
 from tqdm import tqdm
-import pandas as pd
 import polars as pl
 
 # ===========================================================
@@ -61,10 +60,7 @@ def encontrar_arquivos_por_prefixo(pasta, prefixo):
             arquivos = [os.path.join(pasta, nome) for nome in todos]
             logging.info("✅ Nenhum prefixo informado — todos os arquivos .xlsx serão processados.")
         else:
-            for nome in todos:
-                if prefixo.lower() in nome.lower():
-                    arquivos.append(os.path.join(pasta, nome))
-
+            arquivos = [os.path.join(pasta, f) for f in todos if prefixo.lower() in f.lower()]
             if arquivos:
                 logging.info(f"✅ {len(arquivos)} arquivo(s) encontrado(s) contendo '{prefixo}' no nome")
             else:
@@ -74,17 +70,12 @@ def encontrar_arquivos_por_prefixo(pasta, prefixo):
     return arquivos
 
 
-def ler_excel_inteligente(caminho):
-    """Usa Pandas ou Polars dependendo do tamanho."""
-    tamanho_mb = os.path.getsize(caminho) / (1024 ** 2)
+def ler_excel_polars(caminho):
+    """Leitura rápida com Polars, com fallback seguro."""
     nome = os.path.basename(caminho)
     try:
-        if tamanho_mb > 100:
-            logging.info(f"⚙️ [{nome}] Usando Polars Lazy Mode ({tamanho_mb:.1f} MB)...")
-            df = pl.read_excel(caminho).lazy().collect().to_pandas()
-        else:
-            logging.info(f"📄 [{nome}] Usando Pandas ({tamanho_mb:.1f} MB)")
-            df = pd.read_excel(caminho)
+        df = pl.read_excel(caminho)
+        logging.info(f"📄 [{nome}] Lido com sucesso ({len(df):,} linhas)")
         return df
     except Exception as e:
         logging.error(f"❌ Erro ao ler {nome}: {e}")
@@ -98,91 +89,109 @@ def adicionar_coordenador(df):
         logging.error("❌ Base de coordenadores não encontrada.")
         return df
 
-    ref = pd.read_excel(caminho_ref)
-    col_base_ref = "Nome da base"
-    col_uf_ref = "UF"
-    col_coord_ref = next((c for c in ref.columns if "coordenador" in c.lower()), None)
+    try:
+        ref = pl.read_excel(caminho_ref)
+        col_base_ref = "Nome da base"
+        col_uf_ref = "UF"
+        col_coord_ref = next((c for c in ref.columns if "coordenador" in c.lower()), None)
 
-    if not all(col in ref.columns for col in [col_base_ref, col_uf_ref]) or not col_coord_ref:
-        logging.error("❌ Colunas necessárias ausentes na base de referência.")
+        if not all(c in ref.columns for c in [col_base_ref, col_uf_ref]) or not col_coord_ref:
+            logging.error("❌ Colunas necessárias ausentes na base de referência.")
+            return df
+
+        ref = ref.with_columns([
+            pl.col(col_base_ref).cast(pl.Utf8).str.strip_chars().str.to_uppercase()
+        ])
+
+        df = df.with_columns([
+            pl.col(COLUNAS["base"]).cast(pl.Utf8).str.strip_chars().str.to_uppercase()
+        ])
+
+        df = df.join(
+            ref.select([
+                pl.col(col_base_ref).alias("base_ref"),
+                pl.col(col_uf_ref),
+                pl.col(col_coord_ref)
+            ]),
+            left_on=COLUNAS["base"],
+            right_on="base_ref",
+            how="left"
+        )
+
+        df = df.with_columns([
+            pl.col(col_uf_ref).fill_null("UF não encontrado").alias("UF"),
+            pl.col(col_coord_ref).fill_null("Coordenador não encontrado").alias(COLUNAS["coordenador"])
+        ])
+
+        return df.drop("base_ref")
+    except Exception as e:
+        logging.error(f"❌ Erro ao adicionar coordenador: {e}")
         return df
-
-    ref[col_base_ref] = ref[col_base_ref].astype(str).str.strip().str.upper()
-    df[COLUNAS["base"]] = df[COLUNAS["base"]].astype(str).str.strip().str.upper()
-
-    df = df.merge(ref[[col_base_ref, col_uf_ref, col_coord_ref]],
-                  left_on=COLUNAS["base"], right_on=col_base_ref, how="left")
-
-    df.rename(columns={col_coord_ref: COLUNAS["coordenador"], col_uf_ref: "UF"}, inplace=True)
-    df["UF"] = df["UF"].fillna("UF não encontrado")
-    df[COLUNAS["coordenador"]] = df[COLUNAS["coordenador"]].fillna("Coordenador não encontrado")
-    return df
 
 
 def processar_arquivos(lista_arquivos):
-    """Processa e gera coluna de entrega válida no domingo."""
     dfs = []
     for caminho in tqdm(lista_arquivos, desc="📦 Lendo planilhas", colour="green"):
-        df = ler_excel_inteligente(caminho)
+        df = ler_excel_polars(caminho)
         if df is None:
             continue
 
-        df.columns = df.columns.astype(str).str.strip()
+        # Normaliza colunas
+        df = df.rename({c: c.strip() for c in df.columns})
 
-        df["tempo_entrega_dt"] = pd.to_datetime(df.get(COLUNAS["tempo_entrega"]), errors="coerce")
-        df["horario_entrega_dt"] = pd.to_datetime(df.get(COLUNAS["horario_entrega"]), errors="coerce")
+        # Conversões de data
+        df = df.with_columns([
+            pl.col(COLUNAS["tempo_entrega"]).str.strptime(pl.Datetime, strict=False).alias("tempo_entrega_dt"),
+            pl.col(COLUNAS["horario_entrega"]).str.strptime(pl.Datetime, strict=False).alias("horario_entrega_dt")
+        ])
 
-        df["Entrega válida no domingo"] = (
-            (df["tempo_entrega_dt"].dt.dayofweek == 6)
-            & (df["horario_entrega_dt"].notna())
-            & (df[COLUNAS["assinatura"]].astype(str).str.strip() == "Recebimento com assinatura normal")
-        )
+        # Entrega válida no domingo
+        df = df.with_columns([
+            (
+                (pl.col("tempo_entrega_dt").dt.weekday() == 6)
+                & (pl.col("horario_entrega_dt").is_not_null())
+                & (pl.col(COLUNAS["assinatura"]).cast(pl.Utf8).str.strip_chars() == "Recebimento com assinatura normal")
+            ).alias("Entrega válida no domingo")
+        ])
 
         df = adicionar_coordenador(df)
         dfs.append(df)
 
     if not dfs:
         return None
-    return pd.concat(dfs, ignore_index=True)
+    return pl.concat(dfs, how="vertical")
+
 
 # ===========================================================
-# 📊 Geração do relatório final (atualizada)
+# 📊 Geração do relatório final
 # ===========================================================
 def gerar_relatorio(df, caminho_saida):
-    """Cria resumo geral, por UF, lista de motoristas e bases."""
     try:
-        total_pedidos = len(df)
-        total_motoristas = df[COLUNAS["motorista"]].nunique()
-        total_domingo = df["Entrega válida no domingo"].sum()
-        total_bases = df[COLUNAS["base"]].nunique()
+        total_pedidos = df.height
+        total_motoristas = df.select(pl.col(COLUNAS["motorista"]).n_unique()).item()
+        total_domingo = df.filter(pl.col("Entrega válida no domingo")).height
+        total_bases = df.select(pl.col(COLUNAS["base"]).n_unique()).item()
 
         logging.info(f"""
 📊 RESUMO GERAL:
 • Total de pedidos: {total_pedidos:,}
 • Motoristas únicos: {total_motoristas:,}
 • Entregas válidas no domingo: {total_domingo:,}
-• Bases distintas (geral): {total_bases:,}
+• Bases distintas: {total_bases:,}
 """)
 
         resumo_uf = (
-            df.groupby("UF")
-            .agg({
-                COLUNAS["pedido"]: "count",
-                COLUNAS["motorista"]: pd.Series.nunique,
-                COLUNAS["base"]: pd.Series.nunique,
-                "Entrega válida no domingo": "sum"
-            })
-            .reset_index()
-            .rename(columns={
-                COLUNAS["pedido"]: "Total de Pedidos Recebidos",
-                COLUNAS["motorista"]: "Motoristas Únicos",
-                COLUNAS["base"]: "Bases Distintas (Base de entrega)",
-                "Entrega válida no domingo": "Entregas válidas no domingo"
-            })
-            .sort_values("UF")
+            df.group_by("UF")
+            .agg([
+                pl.count(COLUNAS["pedido"]).alias("Total de Pedidos Recebidos"),
+                pl.col(COLUNAS["motorista"]).n_unique().alias("Motoristas Únicos"),
+                pl.col(COLUNAS["base"]).n_unique().alias("Bases Distintas"),
+                pl.col("Entrega válida no domingo").sum().alias("Entregas válidas no domingo")
+            ])
+            .sort("UF")
         )
 
-        resumo_geral = pd.DataFrame({
+        resumo_geral = pl.DataFrame({
             "Métrica": [
                 "Total de pedidos recebidos",
                 "Motoristas únicos (geral)",
@@ -192,40 +201,32 @@ def gerar_relatorio(df, caminho_saida):
             "Quantidade": [total_pedidos, total_motoristas, total_domingo, total_bases]
         })
 
-        # --- NOVO: Listas de motoristas e bases ---
         lista_motoristas = (
-            df.groupby(COLUNAS["motorista"])
-            .agg({COLUNAS["pedido"]: "count"})
-            .reset_index()
-            .rename(columns={
-                COLUNAS["motorista"]: "Motorista",
-                COLUNAS["pedido"]: "Total de Pedidos"
-            })
-            .sort_values("Total de Pedidos", ascending=False)
+            df.group_by(COLUNAS["motorista"])
+            .agg(pl.count(COLUNAS["pedido"]).alias("Total de Pedidos"))
+            .rename({COLUNAS["motorista"]: "Motorista"})
+            .sort("Total de Pedidos", descending=True)
         )
 
         lista_bases = (
-            df.groupby(COLUNAS["base"])
-            .agg({COLUNAS["pedido"]: "count"})
-            .reset_index()
-            .rename(columns={
-                COLUNAS["base"]: "Base de Entrega",
-                COLUNAS["pedido"]: "Total de Pedidos"
-            })
-            .sort_values("Total de Pedidos", ascending=False)
+            df.group_by(COLUNAS["base"])
+            .agg(pl.count(COLUNAS["pedido"]).alias("Total de Pedidos"))
+            .rename({COLUNAS["base"]: "Base de Entrega"})
+            .sort("Total de Pedidos", descending=True)
         )
 
-        with pd.ExcelWriter(caminho_saida, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False, sheet_name="Detalhes")
-            resumo_uf.to_excel(writer, index=False, sheet_name="Resumo por UF")
-            resumo_geral.to_excel(writer, index=False, sheet_name="Resumo Geral")
-            lista_motoristas.to_excel(writer, index=False, sheet_name="Motoristas")
-            lista_bases.to_excel(writer, index=False, sheet_name="Bases")
+        with pl.ExcelWriter(caminho_saida) as writer:
+            writer.write(df, sheet_name="Detalhes")
+            writer.write(resumo_uf, sheet_name="Resumo por UF")
+            writer.write(resumo_geral, sheet_name="Resumo Geral")
+            writer.write(lista_motoristas, sheet_name="Motoristas")
+            writer.write(lista_bases, sheet_name="Bases")
 
         logging.info(f"💾 Arquivo salvo com sucesso em:\n📍 {caminho_saida}")
 
     except Exception as e:
         logging.error(f"❌ Erro ao gerar relatório: {e}")
+
 
 # ===========================================================
 # 🚀 Execução Principal
@@ -249,6 +250,6 @@ if __name__ == "__main__":
             logging.error("❌ Nenhum dado processado.")
 
     fim = time.time()
-    duracao = fim - inicio
-    minutos, segundos = divmod(duracao, 60)
+    minutos, segundos = divmod(fim - inicio, 60)
     logging.info(f"⏱️ Tempo total de execução: {int(minutos)}m {int(segundos)}s")
+
