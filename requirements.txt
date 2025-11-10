@@ -1,0 +1,15 @@
+# Essenciais para o funcionamento do bot
+selenium
+pandas
+openpyxl
+tenacity
+filelock
+webdriver-manager
+
+# Para logs e interface melhoradas (opcionais, mas recomendados)
+loguru
+rich
+
+# Para performance e monitoramento (opcionais)
+polars
+psutil
