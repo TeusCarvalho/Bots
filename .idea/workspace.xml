@@ -5,9 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="git commit">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Novos/WhatsApp/WhatsApp.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/WhatsApp/WhatsApp.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/teste.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/teste.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -58,94 +57,94 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.1 - Sem_Movi_Regras.executor": "Run",
-    "Python.1- Franquias - Entrega Realizada.executor": "Run",
-    "Python.1- Regras Sem Movimentação.executor": "Run",
-    "Python.1-1. Bot-Sem Movimentação.executor": "Run",
-    "Python.1-2. T - 0.executor": "Run",
-    "Python.1-3. Custos e Arbitragem.executor": "Run",
-    "Python.1. T-0.executor": "Run",
-    "Python.1.1 - T-0.executor": "Run",
-    "Python.1.1.3- Sem Movimentação.executor": "Run",
-    "Python.1.2 - Custo.executor": "Run",
-    "Python.1.3- Bot Sem Movimentação.executor": "Run",
-    "Python.1.3.1 - Regras_Sem Movimentação.executor": "Run",
-    "Python.2- Custo.executor": "Run",
-    "Python.2- Franquias - Regras_Sem Movimentação.executor": "Run",
-    "Python.2. Ressarcimentos.executor": "Run",
-    "Python.3- Franquias - T0.executor": "Run",
-    "Python.3- Fraquias - Custo.executor": "Run",
-    "Python.3- SLA - Entrega Realizada.executor": "Run",
-    "Python.3- T-0.executor": "Run",
-    "Python.3. Sem Movimentação.executor": "Run",
-    "Python.4- Franquias - T0.executor": "Run",
-    "Python.4- Fraquias - Custo.executor": "Run",
-    "Python.4- SLA - Entrega Realizada.executor": "Run",
-    "Python.4. ShippingTime.executor": "Run",
-    "Python.Atualização_Hash.executor": "Run",
-    "Python.Atualização_Hash_S-Movi.executor": "Run",
-    "Python.Bonificação - Sem Movimentação.executor": "Run",
-    "Python.Bonificação.executor": "Run",
-    "Python.Bot Sem Movimentação.executor": "Run",
-    "Python.Bots -  T0 e Custo.executor": "Run",
-    "Python.Bots_Teste.executor": "Run",
-    "Python.Comparação.executor": "Run",
-    "Python.DropOFF.executor": "Run",
-    "Python.Erro.executor": "Run",
-    "Python.Franquias - Entrega Realizada.executor": "Run",
-    "Python.Franquias.executor": "Run",
-    "Python.Fraquias - Custo.executor": "Run",
-    "Python.GP.executor": "Run",
-    "Python.Junção.executor": "Run",
-    "Python.LangChain.executor": "Run",
-    "Python.Local_Para_Teste.executor": "Run",
-    "Python.Local_Para_Teste_02.executor": "Run",
-    "Python.Local_Para_Teste_2.executor": "Run",
-    "Python.Melhor Envio.executor": "Run",
-    "Python.Nova Regra.executor": "Run",
-    "Python.Novo - Custo.executor": "Run",
-    "Python.Novo - Sem Movimentação.executor": "Run",
-    "Python.Novo - T-0.executor": "Run",
-    "Python.Politicas_Bonificação.executor": "Run",
-    "Python.Rede_Teste.executor": "Run",
-    "Python.Regras.executor": "Run",
-    "Python.Retidos.executor": "Run",
-    "Python.Selenium.executor": "Run",
-    "Python.Sem Movimentação - Para Junção.executor": "Run",
-    "Python.Sem Movimentação.executor": "Run",
-    "Python.ShippingTime.executor": "Run",
-    "Python.ShippingTime_Antigo.executor": "Run",
-    "Python.T-0.executor": "Run",
-    "Python.Teste.executor": "Run",
-    "Python.Teste_Ollama.executor": "Run",
-    "Python.WhatsApp.executor": "Run",
-    "Python.app.executor": "Run",
-    "Python.geração_JSON.executor": "Run",
-    "Python.glm_dev_helper.executor": "Run",
-    "Python.main.executor": "Run",
-    "Python.motivacional_bot.executor": "Run",
-    "Python.revisor.executor": "Run",
-    "Python.teste.executor": "Run",
-    "Python.teste_Zapzap.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "master",
-    "junie.onboarding.icon.badge.shown": "true",
-    "last_opened_file_path": "C:/Users/J&T-099/PycharmProjects/Bots/Novos/Franquias",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
-    "to.speed.mode.migration.done": "true",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.1 - Sem_Movi_Regras.executor&quot;: &quot;Run&quot;,
+    &quot;Python.1- Franquias - Entrega Realizada.executor&quot;: &quot;Run&quot;,
+    &quot;Python.1- Regras Sem Movimentação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.1-1. Bot-Sem Movimentação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.1-2. T - 0.executor&quot;: &quot;Run&quot;,
+    &quot;Python.1-3. Custos e Arbitragem.executor&quot;: &quot;Run&quot;,
+    &quot;Python.1. T-0.executor&quot;: &quot;Run&quot;,
+    &quot;Python.1.1 - T-0.executor&quot;: &quot;Run&quot;,
+    &quot;Python.1.1.3- Sem Movimentação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.1.2 - Custo.executor&quot;: &quot;Run&quot;,
+    &quot;Python.1.3- Bot Sem Movimentação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.1.3.1 - Regras_Sem Movimentação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.2- Custo.executor&quot;: &quot;Run&quot;,
+    &quot;Python.2- Franquias - Regras_Sem Movimentação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.2. Ressarcimentos.executor&quot;: &quot;Run&quot;,
+    &quot;Python.3- Franquias - T0.executor&quot;: &quot;Run&quot;,
+    &quot;Python.3- Fraquias - Custo.executor&quot;: &quot;Run&quot;,
+    &quot;Python.3- SLA - Entrega Realizada.executor&quot;: &quot;Run&quot;,
+    &quot;Python.3- T-0.executor&quot;: &quot;Run&quot;,
+    &quot;Python.3. Sem Movimentação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.4- Franquias - T0.executor&quot;: &quot;Run&quot;,
+    &quot;Python.4- Fraquias - Custo.executor&quot;: &quot;Run&quot;,
+    &quot;Python.4- SLA - Entrega Realizada.executor&quot;: &quot;Run&quot;,
+    &quot;Python.4. ShippingTime.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Atualização_Hash.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Atualização_Hash_S-Movi.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Bonificação - Sem Movimentação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Bonificação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Bot Sem Movimentação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Bots -  T0 e Custo.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Bots_Teste.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Comparação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.DropOFF.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Erro.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Franquias - Entrega Realizada.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Franquias.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Fraquias - Custo.executor&quot;: &quot;Run&quot;,
+    &quot;Python.GP.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Junção.executor&quot;: &quot;Run&quot;,
+    &quot;Python.LangChain.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Local_Para_Teste.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Local_Para_Teste_02.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Local_Para_Teste_2.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Melhor Envio.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Nova Regra.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Novo - Custo.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Novo - Sem Movimentação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Novo - T-0.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Politicas_Bonificação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Rede_Teste.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Regras.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Retidos.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Selenium.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Sem Movimentação - Para Junção.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Sem Movimentação.executor&quot;: &quot;Run&quot;,
+    &quot;Python.ShippingTime.executor&quot;: &quot;Run&quot;,
+    &quot;Python.ShippingTime_Antigo.executor&quot;: &quot;Run&quot;,
+    &quot;Python.T-0.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Teste.executor&quot;: &quot;Run&quot;,
+    &quot;Python.Teste_Ollama.executor&quot;: &quot;Run&quot;,
+    &quot;Python.WhatsApp.executor&quot;: &quot;Run&quot;,
+    &quot;Python.app.executor&quot;: &quot;Run&quot;,
+    &quot;Python.geração_JSON.executor&quot;: &quot;Run&quot;,
+    &quot;Python.glm_dev_helper.executor&quot;: &quot;Run&quot;,
+    &quot;Python.main.executor&quot;: &quot;Run&quot;,
+    &quot;Python.motivacional_bot.executor&quot;: &quot;Run&quot;,
+    &quot;Python.revisor.executor&quot;: &quot;Run&quot;,
+    &quot;Python.teste.executor&quot;: &quot;Run&quot;,
+    &quot;Python.teste_Zapzap.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/J&amp;T-099/PycharmProjects/Bots/Novos/Franquias&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\J&amp;T-099\PycharmProjects\Bots\Novos\Franquias" />
@@ -337,15 +336,8 @@
       <workItem from="1762468651428" duration="528000" />
       <workItem from="1762514089639" duration="20660000" />
       <workItem from="1762773826350" duration="4793000" />
-      <workItem from="1762780481526" duration="23423000" />
-    </task>
-    <task id="LOCAL-00008" summary="git commit">
-      <option name="closed" value="true" />
-      <created>1760386731639</created>
-      <option name="number" value="00008" />
-      <option name="presentableId" value="LOCAL-00008" />
-      <option name="project" value="LOCAL" />
-      <updated>1760386731639</updated>
+      <workItem from="1762780481526" duration="23447000" />
+      <workItem from="1762859501731" duration="4176000" />
     </task>
     <task id="LOCAL-00009" summary="git commit">
       <option name="closed" value="true" />
@@ -731,7 +723,15 @@
       <option name="project" value="LOCAL" />
       <updated>1762792681513</updated>
     </task>
-    <option name="localTasksCounter" value="57" />
+    <task id="LOCAL-00057" summary="git commit">
+      <option name="closed" value="true" />
+      <created>1762809124718</created>
+      <option name="number" value="00057" />
+      <option name="presentableId" value="LOCAL-00057" />
+      <option name="project" value="LOCAL" />
+      <updated>1762809124718</updated>
+    </task>
+    <option name="localTasksCounter" value="58" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -776,7 +776,7 @@
     <SUITE FILE_PATH="coverage/Bots$Local_Para_Teste_02.coverage" NAME="Local_Para_Teste_02 Coverage Results" MODIFIED="1762433044909" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$GP.coverage" NAME="GP Coverage Results" MODIFIED="1762775205013" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Bases_Aleatorias" />
     <SUITE FILE_PATH="coverage/Bots$glm_dev_helper.coverage" NAME="glm_dev_helper Coverage Results" MODIFIED="1760990372611" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base de Dados" />
-    <SUITE FILE_PATH="coverage/Bots$WhatsApp.coverage" NAME="WhatsApp Coverage Results" MODIFIED="1762809013738" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/WhatsApp" />
+    <SUITE FILE_PATH="coverage/Bots$WhatsApp.coverage" NAME="WhatsApp Coverage Results" MODIFIED="1762862529838" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/WhatsApp" />
     <SUITE FILE_PATH="coverage/Bots$Bots____T0_e_Custo.coverage" NAME="Bots -  T0 e Custo Coverage Results" MODIFIED="1762171768043" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
     <SUITE FILE_PATH="coverage/Bots$T_0.coverage" NAME="T-0 Coverage Results" MODIFIED="1761241507643" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatoriso Semanais" />
     <SUITE FILE_PATH="coverage/Bots$Junção.coverage" NAME="Junção Coverage Results" MODIFIED="1761739323331" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base de Dados" />
@@ -788,7 +788,7 @@
     <SUITE FILE_PATH="coverage/Bots$Bots_Teste.coverage" NAME="Bots_Teste Coverage Results" MODIFIED="1758214824003" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bots$3__Fraquias___Custo.coverage" NAME="3- Fraquias - Custo Coverage Results" MODIFIED="1762791077479" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
     <SUITE FILE_PATH="coverage/Bots$1_1___T_0.coverage" NAME="1.1 - T-0 Coverage Results" MODIFIED="1759924093939" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
-    <SUITE FILE_PATH="coverage/Bots$1__Regras_Sem_Movimentação.coverage" NAME="1- Regras Sem Movimentação Coverage Results" MODIFIED="1762786427768" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
+    <SUITE FILE_PATH="coverage/Bots$1__Regras_Sem_Movimentação.coverage" NAME="1- Regras Sem Movimentação Coverage Results" MODIFIED="1762863691775" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
     <SUITE FILE_PATH="coverage/Bots$teste.coverage" NAME="teste Coverage Results" MODIFIED="1762797203479" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$revisor.coverage" NAME="revisor Coverage Results" MODIFIED="1758282388178" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bots$Bonificação.coverage" NAME="Bonificação Coverage Results" MODIFIED="1759520596338" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
