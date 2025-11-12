@@ -369,3 +369,20 @@ ModuleNotFoundError: No module named 'pyarrow'
 2025-11-11 09:34:22,972 - INFO - ✅ Card enviado com sucesso ao Feishu!
 2025-11-11 09:34:22,974 - INFO - 
 🏁 Processo concluído com sucesso!
+2025-11-12 09:25:14,304 - INFO - 🚀 Iniciando processamento turbo...
+2025-11-12 09:25:31,503 - WARNING - Could not determine dtype for column 17, falling back to string
+2025-11-12 09:25:31,505 - WARNING - Could not determine dtype for column 18, falling back to string
+2025-11-12 09:25:34,362 - INFO - Total de 2476990 registros lidos e consolidados.
+2025-11-12 09:25:34,367 - INFO - Coluna de entrega detectada: 'ENTREGUE NO PRAZO？'
+2025-11-12 09:25:34,367 - INFO - Filtrando pela data prevista de entrega (hoje)...
+2025-11-12 09:25:34,396 - INFO - 121920 registros restantes após o filtro de data.
+2025-11-12 09:25:34,417 - INFO - 48266 registros restantes após o filtro de bases válidas.
+2025-11-12 09:25:34,417 - INFO - Gerando resumo de SLA por base...
+2025-11-12 09:25:34,496 - INFO - Verificando relatórios antigos em 'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada' para arquivar...
+2025-11-12 09:25:34,507 - INFO - Relatório antigo movido: 'Resumo_Consolidado_20251111.xlsx' -> 'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada\Nova pasta'
+2025-11-12 09:26:05,411 - INFO - 📄 Relatório completo salvo em: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada\Resumo_Consolidado_20251112.xlsx
+2025-11-12 09:26:05,411 - INFO -   -> Aba 'Resumo SLA' com 53 linhas.
+2025-11-12 09:26:05,411 - INFO -   -> Aba 'Dados Completos' com 48266 linhas.
+2025-11-12 09:26:13,493 - INFO - ✅ Card enviado com sucesso ao Feishu!
+2025-11-12 09:26:13,494 - INFO - 
+🏁 Processo concluído com sucesso!

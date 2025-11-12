@@ -63,16 +63,33 @@ def get_latest_file(folder: str):
 
 
 def read_file_auto(path: str) -> pl.LazyFrame:
-    """Lê automaticamente CSV, XLS ou XLSX"""
+    """Lê automaticamente CSV, XLS ou XLSX (com fallback inteligente)"""
+    import pandas as pd
+
     ext = os.path.splitext(path)[1].lower()
     print(f"📖 Lendo arquivo detectado como: {ext.upper()}")
 
-    if ext == ".csv":
-        return pl.read_csv(path, ignore_errors=True).lazy()
-    elif ext in [".xls", ".xlsx"]:
-        return pl.read_excel(path, infer_schema_length=1000).lazy()
-    else:
-        raise ValueError(f"❌ Formato de arquivo não suportado: {ext}")
+    try:
+        if ext == ".csv":
+            return pl.read_csv(path, ignore_errors=True).lazy()
+
+        elif ext == ".xlsx":
+            return pl.read_excel(path, infer_schema_length=1000).lazy()
+
+        elif ext == ".xls":
+            try:
+                # tenta com xlrd (para arquivos .xls reais)
+                df = pd.read_excel(path, engine="xlrd")
+            except Exception:
+                # fallback para openpyxl se for um .xlsx disfarçado
+                df = pd.read_excel(path, engine="openpyxl")
+            return pl.from_pandas(df).lazy()
+
+        else:
+            raise ValueError(f"❌ Formato de arquivo não suportado: {ext}")
+
+    except Exception as e:
+        raise RuntimeError(f"Erro ao ler o arquivo {path}: {e}")
 
 
 # ============================================================

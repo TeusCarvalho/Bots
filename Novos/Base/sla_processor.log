@@ -574,3 +574,92 @@ Traceback (most recent call last):
     ...<2 lines>...
     )
 ValueError: This sheet is too large! Your sheet size is: 2284564, 36 Max sheet size is: 1048576, 16384
+2025-11-12 08:43:06,567 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-12 08:43:12,542 - WARNING - Could not determine dtype for column 17, falling back to string
+2025-11-12 08:43:12,542 - WARNING - Could not determine dtype for column 18, falling back to string
+2025-11-12 08:43:14,096 - INFO - 📥 Total de 2476990 registros lidos.
+2025-11-12 08:43:14,264 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251111.xlsx
+2025-11-12 08:43:16,612 - CRITICAL - Erro fatal no processamento: This sheet is too large! Your sheet size is: 2476990, 36 Max sheet size is: 1048576, 16384
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 190, in <module>
+    df.to_pandas().to_excel(w, index=False, sheet_name='Dados Completos')
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\pandas\util\_decorators.py", line 333, in wrapper
+    return func(*args, **kwargs)
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\pandas\core\generic.py", line 2439, in to_excel
+    formatter.write(
+    ~~~~~~~~~~~~~~~^
+        excel_writer,
+        ^^^^^^^^^^^^^
+    ...<6 lines>...
+        engine_kwargs=engine_kwargs,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\pandas\io\formats\excel.py", line 931, in write
+    raise ValueError(
+    ...<2 lines>...
+    )
+ValueError: This sheet is too large! Your sheet size is: 2476990, 36 Max sheet size is: 1048576, 16384
+2025-11-12 08:46:02,952 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-12 08:46:08,363 - WARNING - Could not determine dtype for column 17, falling back to string
+2025-11-12 08:46:08,363 - WARNING - Could not determine dtype for column 18, falling back to string
+2025-11-12 08:46:10,061 - INFO - 📥 Total de 2476990 registros lidos.
+2025-11-12 08:46:10,214 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251112.xlsx
+2025-11-12 08:53:24,369 - INFO - 💾 Salvados 1000000 registros na planilha 'Dados Completos'
+2025-11-12 09:12:36,327 - INFO - 💾 Salvados 1000000 registros na planilha 'Dados Completos_2'
+2025-11-12 09:26:55,236 - INFO - 💾 Salvados 476990 registros na planilha 'Dados Completos_3'
+2025-11-12 09:45:25,713 - INFO - 📊 João Melo: SLA Hoje = 93.58% | Ontem = 95.54%
+2025-11-12 09:45:30,589 - INFO - ✅ Card enviado com sucesso para João Melo
+2025-11-12 09:45:30,593 - INFO - ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2025-11-12 09:45:30,593 - INFO - 📬 Envio concluído: 1 ✅ | 0 ❌ | 0 ⏩ sem base.
+2025-11-12 09:45:30,593 - INFO - ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2025-11-12 09:45:30,593 - INFO - 🏁 Processamento concluído com sucesso!
+2025-11-12 09:47:46,872 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-12 09:47:54,678 - WARNING - Could not determine dtype for column 17, falling back to string
+2025-11-12 09:47:54,678 - WARNING - Could not determine dtype for column 18, falling back to string
+2025-11-12 09:47:57,261 - INFO - 📥 Total de 2476990 registros lidos.
+2025-11-12 09:47:57,715 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251112.xlsx
+2025-11-12 09:56:18,650 - INFO - 💾 Salvados 1000000 registros na planilha 'Dados Completos'
+2025-11-12 10:13:02,812 - INFO - 💾 Salvados 1000000 registros na planilha 'Dados Completos_2'
+2025-11-12 10:25:31,378 - INFO - 💾 Salvados 476990 registros na planilha 'Dados Completos_3'
+2025-11-12 10:43:40,868 - INFO - 📊 João Melo: SLA Hoje = 93.58% | Ontem = 95.54%
+2025-11-12 10:43:44,201 - INFO - ✅ Card enviado com sucesso para João Melo
+2025-11-12 10:43:44,269 - INFO - 📊 Johas Vieira: SLA Hoje = 68.30% | Ontem = 88.78%
+2025-11-12 10:43:45,778 - INFO - ✅ Card enviado com sucesso para Johas Vieira
+2025-11-12 10:43:45,828 - INFO - 📊 Anderson Matheus: SLA Hoje = 55.06% | Ontem = 87.14%
+2025-11-12 10:43:47,443 - INFO - ✅ Card enviado com sucesso para Anderson Matheus
+2025-11-12 10:43:47,490 - INFO - 📊 Marcelo Medina: SLA Hoje = 69.70% | Ontem = 91.85%
+2025-11-12 10:43:49,030 - INFO - ✅ Card enviado com sucesso para Marcelo Medina
+2025-11-12 10:43:49,070 - INFO - 📊 Odária Fereira: SLA Hoje = 90.65% | Ontem = 97.92%
+2025-11-12 10:43:50,812 - INFO - ✅ Card enviado com sucesso para Odária Fereira
+2025-11-12 10:43:50,852 - INFO - 📊 Rodrigo Castro: SLA Hoje = 80.90% | Ontem = 96.93%
+2025-11-12 10:43:52,460 - INFO - ✅ Card enviado com sucesso para Rodrigo Castro
+2025-11-12 10:43:52,512 - INFO - 📊 Orlean Nascimento: SLA Hoje = 30.99% | Ontem = 89.36%
+2025-11-12 10:43:54,109 - INFO - ✅ Card enviado com sucesso para Orlean Nascimento
+2025-11-12 10:43:54,152 - INFO - 📊 Jose Marlon: SLA Hoje = 53.49% | Ontem = 78.07%
+2025-11-12 10:43:55,747 - INFO - ✅ Card enviado com sucesso para Jose Marlon
+2025-11-12 10:43:55,782 - INFO - 📊 Emerson Silva: SLA Hoje = 84.51% | Ontem = 83.54%
+2025-11-12 10:43:57,301 - INFO - ✅ Card enviado com sucesso para Emerson Silva
+2025-11-12 10:43:57,378 - INFO - 📊 Marcos Caique: SLA Hoje = 76.47% | Ontem = 91.22%
+2025-11-12 10:43:58,968 - INFO - ✅ Card enviado com sucesso para Marcos Caique
+2025-11-12 10:43:58,970 - INFO - ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2025-11-12 10:43:58,970 - INFO - 📬 Envio concluído: 10 ✅ | 0 ❌ | 0 ⏩ sem base.
+2025-11-12 10:43:58,970 - INFO - ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2025-11-12 10:43:58,970 - INFO - 🏁 Processamento concluído com sucesso!
+2025-11-12 14:19:19,759 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-12 14:19:26,105 - INFO - 📥 Total de 490381 registros lidos.
+2025-11-12 14:19:26,467 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251112.xlsx
+2025-11-12 14:21:44,866 - INFO - 💾 Salvados 490381 registros na planilha 'Dados Completos'
+2025-11-12 14:24:18,147 - WARNING - ⏩ Nenhuma base vinculada a João Melo, card não enviado.
+2025-11-12 14:24:18,147 - INFO - ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2025-11-12 14:24:18,148 - INFO - 📬 Envio concluído: 0 ✅ | 0 ❌ | 1 ⏩ sem base.
+2025-11-12 14:24:18,148 - INFO - 🏁 Processamento concluído com sucesso!
+2025-11-12 14:29:15,270 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-12 14:29:18,390 - INFO - 📥 Total de 153808 registros lidos.
+2025-11-12 14:29:18,510 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251112.xlsx
+2025-11-12 14:29:47,536 - INFO - 💾 Salvados 153808 registros na planilha 'Dados Completos'
+2025-11-12 14:30:33,409 - WARNING - ⏩ Nenhuma base vinculada a João Melo, card não enviado.
+2025-11-12 14:30:33,409 - INFO - ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2025-11-12 14:30:33,409 - INFO - 📬 Envio concluído: 0 ✅ | 0 ❌ | 1 ⏩ sem base.
+2025-11-12 14:30:33,409 - INFO - 🏁 Processamento concluído com sucesso!
