@@ -25,11 +25,11 @@ logging.basicConfig(
     ]
 )
 
+os.environ["POLARS_MAX_THREADS"] = str(multiprocessing.cpu_count())
+
 # ==========================================================
 # ⚙️ CONFIGURAÇÕES GERAIS
 # ==========================================================
-os.environ["POLARS_MAX_THREADS"] = str(multiprocessing.cpu_count())
-
 PASTA_ENTRADA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\SLA - Entrega Realizada"
 PASTA_COORDENADOR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
 PASTA_SAIDA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\SLA - Entrega Realizada"
@@ -40,147 +40,123 @@ ARQUIVO_SAIDA = os.path.join(PASTA_SAIDA, f"Resumo_Consolidado_{DATA_HOJE}.xlsx"
 
 LINK_PASTA = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/EvIP3oIiLJRAqcB1SZ_1nmYBXLIYSJkIns5Pf_Xz2OqY_w?e=OEXsJN"
 
-# ==========================================================
-# 🧭 WEBHOOKS POR COORDENADOR
-# ==========================================================
 COORDENADOR_WEBHOOKS = {
-    "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/3663dd30-722c-45d6-9e3c-1d4e2838f112",
-    "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/0b907801-c73e-4de8-9f84-682d7b54f6fd",
-    "Anderson Matheus": "https://open.feishu.cn/open-apis/bot/v2/hook/261cefd4-5528-4760-b18e-49a0249718c7",
-    "Marcelo Medina": "https://open.feishu.cn/open-apis/bot/v2/hook/b749fd36-d287-460e-b1e2-c78bfb4c1946",
-    "Odária Fereira": "https://open.feishu.cn/open-apis/bot/v2/hook/48c4db73-b5a4-4007-96af-f5d28301f0c1",
-    "Rodrigo Castro": "https://open.feishu.cn/open-apis/bot/v2/hook/606ed22b-dc49-451d-9bfe-0a8829dbe76e",
-    "Orlean Nascimento": "https://open.feishu.cn/open-apis/bot/v2/hook/840f79b0-1eff-42fe-aae0-433c9edbad80",
-    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/95c8e4d2-27aa-4811-b6bf-ebf99cdfd42d",
-    "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/63751a67-efe8-40e4-b841-b290a4819836",
-    "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/3ddc5962-2d32-4b2d-92d9-a4bc95ac3393",
+    "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b"
 }
 
-# ==========================================================
-# ⚡️ FUNÇÕES AUXILIARES
-# ==========================================================
 EXTS = (".xlsx", ".xls", ".csv")
-
 def cor_percentual(pct: float) -> str:
     if pct < 0.95:
         return "🔴"
     elif pct < 0.97:
         return "🟡"
-    else:
-        return "🟢"
+    return "🟢"
+
 
 def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo_arquivo: str):
     os.makedirs(pasta_destino, exist_ok=True)
-    arquivos = [f for f in os.listdir(pasta_origem) if f.startswith(prefixo_arquivo) and f.endswith('.xlsx')]
-    for arquivo in arquivos:
-        try:
-            shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo))
-            logging.info(f"📦 Relatório antigo movido: {arquivo}")
-        except Exception as e:
-            logging.error(f"Erro ao mover o arquivo '{arquivo}': {e}")
+    for arquivo in os.listdir(pasta_origem):
+        if arquivo.startswith(prefixo_arquivo) and arquivo.endswith(".xlsx"):
+            try:
+                shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo))
+                logging.info(f"📦 Relatório antigo movido: {arquivo}")
+            except Exception as e:
+                logging.error(f"Erro ao mover '{arquivo}': {e}")
+
 
 def ler_planilha_rapido(caminho: str) -> pl.DataFrame:
     try:
-        if caminho.endswith(".csv"):
+        if caminho.lower().endswith(".csv"):
             return pl.read_csv(caminho, ignore_errors=True)
         return pl.read_excel(caminho)
     except Exception as e:
         logging.error(f"Falha ao ler {os.path.basename(caminho)}: {e}")
         return pl.DataFrame()
 
+
 def consolidar_planilhas(pasta_entrada: str) -> pl.DataFrame:
-    arquivos = [os.path.join(pasta_entrada, f)
-                for f in os.listdir(pasta_entrada)
-                if f.endswith(EXTS) and not f.startswith("~$")]
+    arquivos = [os.path.join(pasta_entrada, f) for f in os.listdir(pasta_entrada) if f.endswith(EXTS)]
     if not arquivos:
-        raise FileNotFoundError("❌ Nenhum arquivo Excel/CSV encontrado na pasta de entrada.")
+        raise FileNotFoundError("❌ Nenhum arquivo Excel/CSV encontrado.")
     with ThreadPoolExecutor(max_workers=min(16, len(arquivos))) as executor:
         dfs = list(executor.map(ler_planilha_rapido, arquivos))
     dfs_validos = [df for df in dfs if not df.is_empty()]
     if not dfs_validos:
         raise ValueError("Nenhum arquivo pôde ser lido com sucesso.")
-    return pl.concat(dfs_validos, how="vertical_relaxed")
+    return pl.concat(dfs_validos, how="vertical_relaxed").rename({c: c.strip().upper() for c in dfs_validos[0].columns})
+def normalizar_entregue(df: pl.DataFrame, col_entregue: str, novo_nome="_ENTREGUE_BOOL") -> pl.DataFrame:
+    """Corrige tipos mistos e cria coluna booleana sem erros."""
+    txt = pl.col(col_entregue).cast(pl.Utf8, strict=False).str.to_lowercase().str.strip_chars()
+    num = pl.col(col_entregue).cast(pl.Int64, strict=False).fill_null(0)
+    valores_true = {"y", "yes", "sim", "s", "true", "1", "entregue", "ok", "done"}
+    expr = txt.is_in(list(valores_true)) | (num == 1) | (txt == "t") | (txt == "verdadeiro") | (txt == "entrega realizada")
+    return df.with_columns(expr.alias(novo_nome))
 
-def detectar_coluna_entregue(df: pl.DataFrame) -> str:
-    for col in df.columns:
-        if "entregue" in col.lower():
-            return col
-    raise KeyError("❌ Coluna de status de entrega não encontrada.")
 
-def calcular_sla(df: pl.DataFrame, col_entregue: str) -> float:
-    if df.is_empty():
-        return 0.0
-    total = df.height
-    entregues = (df[col_entregue] == "Y").sum() + (df[col_entregue] == "y").sum()
-    return entregues / total if total > 0 else 0.0
+def garantir_coluna_data(df: pl.DataFrame, nome_coluna: str) -> pl.DataFrame:
+    """Converte a coluna para Date, evitando erro de tipo."""
+    if nome_coluna not in df.columns:
+        raise KeyError(f"Coluna '{nome_coluna}' não encontrada.")
 
-def salvar_relatorio_completo(df_dados: pl.DataFrame, df_resumo: pd.DataFrame, caminho_arquivo: str):
-    try:
-        os.makedirs(os.path.dirname(caminho_arquivo), exist_ok=True)
-        with pd.ExcelWriter(caminho_arquivo, engine='openpyxl') as writer:
-            df_resumo.to_excel(writer, index=False, sheet_name='Resumo SLA')
-            df_dados.to_pandas().to_excel(writer, index=False, sheet_name='Dados Completos')
-        logging.info(f"📄 Relatório salvo em: {caminho_arquivo}")
-    except Exception as e:
-        logging.error(f"⚠️ Falha ao salvar o relatório: {e}")
+    tipo = df[nome_coluna].dtype
 
-def enviar_card_feishu(resumo_df: pd.DataFrame, webhook: str, coordenador: str, sla_atual: float, sla_anterior: float):
-    try:
-        data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
-        bases_coord = resumo_df["Base De Entrega"].nunique()
-
-        piores = resumo_df.sort_values(by="% Entregues").head(3)
-        melhores = resumo_df.sort_values(by="% Entregues", ascending=False).head(3)
-
-        linhas_piores = [
-            f"{i}. {cor_percentual(row['% Entregues'])} **{row['Base De Entrega']}** — {row['% Entregues']:.2%}"
-            for i, row in enumerate(piores.to_dict('records'), 1)
-        ]
-        medalhas = ["🥇", "🥈", "🥉"]
-        linhas_melhores = [
-            f"{medalhas[i - 1]} {cor_percentual(row['% Entregues'])} **{row['Base De Entrega']}** — {row['% Entregues']:.2%}"
-            for i, row in enumerate(melhores.to_dict('records'), 1)
-        ]
-
-        conteudo = (
-            f"👤 **Coordenador:** {coordenador}\n"
-            f"📅 **Atualizado em:** {data_geracao}\n"
-            f"🏢 **Bases Avaliadas:** {bases_coord}\n"
-            f"📈 **SLA do dia atual:** {sla_atual:.2%}\n"
-            f"📉 **SLA do dia anterior:** {sla_anterior:.2%}\n\n"
-            f"🔻 **3 Piores SLAs:**\n" + "\n".join(linhas_piores) +
-            "\n\n🏆 **Top 3 Melhores:**\n" + "\n".join(linhas_melhores)
+    # ✅ compatível com Polars novo
+    if tipo == pl.Date:
+        return df
+    if tipo == pl.Datetime:
+        return df.with_columns(pl.col(nome_coluna).dt.date().alias(nome_coluna))
+    if tipo == pl.Utf8:
+        formatos = ["%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"]
+        expr = None
+        for f in formatos:
+            tentativa = pl.col(nome_coluna).str.strptime(pl.Date, f, strict=False)
+            expr = tentativa if expr is None else expr.fill_null(tentativa)
+        return df.with_columns(expr.alias(nome_coluna))
+    if tipo in (pl.Int64, pl.Float64):
+        base = datetime(1899, 12, 30)
+        return df.with_columns(
+            (pl.col(nome_coluna).cast(pl.Int64) * 86400)
+            .dt.datetime("s", "UTC")
+            .dt.date()
+            .alias(nome_coluna)
         )
 
-        payload = {
-            "msg_type": "interactive",
-            "card": {
-                "config": {"wide_screen_mode": True},
-                "header": {
-                    "template": "blue",
-                    "title": {"tag": "plain_text", "content": f"📊 SLA - Entrega Realizada ({coordenador})"}
-                },
-                "elements": [
-                    {"tag": "div", "text": {"tag": "lark_md", "content": conteudo}},
-                    {"tag": "hr"},
-                    {"tag": "action", "actions": [
-                        {"tag": "button",
-                         "text": {"tag": "plain_text", "content": "📂 Abrir Pasta no OneDrive"},
-                         "url": LINK_PASTA,
-                         "type": "default"}
-                    ]}
-                ]
-            }
-        }
+    raise TypeError(f"⚠️ Tipo inesperado para '{nome_coluna}': {tipo}")
 
-        resp = requests.post(webhook, json=payload, timeout=10)
-        resp.raise_for_status()
-        logging.info(f"✅ Card enviado para {coordenador}")
+def enviar_card_feishu(resumo_df: pd.DataFrame, webhook: str, coordenador: str, sla_atual: float, sla_anterior: float) -> bool:
+    try:
+        if resumo_df.empty:
+            logging.warning(f"⚠️ Nenhum dado encontrado para {coordenador}.")
+            return False
+        data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
+        bases_coord = resumo_df["Base De Entrega"].nunique()
+        piores = resumo_df.sort_values(by="% Entregues").head(3)
+        melhores = resumo_df.sort_values(by="% Entregues", ascending=False).head(3)
+        linhas_piores = [f"{i}. {cor_percentual(r['% Entregues'])} **{r['Base De Entrega']}** — {r['% Entregues']:.2%}" for i, r in enumerate(piores.to_dict('records'), 1)]
+        medalhas = ["🥇", "🥈", "🥉"]
+        linhas_melhores = [f"{medalhas[i - 1]} {cor_percentual(r['% Entregues'])} **{r['Base De Entrega']}** — {r['% Entregues']:.2%}" for i, r in enumerate(melhores.to_dict('records'), 1)]
+        conteudo = (f"👤 **Coordenador:** {coordenador}\n📅 **Atualizado em:** {data_geracao}\n🏢 **Bases Avaliadas:** {bases_coord}\n"
+                    f"📈 **SLA Hoje:** {sla_atual:.2%}\n📉 **SLA Ontem:** {sla_anterior:.2%}\n\n🔻 **3 Piores Bases:**\n" + "\n".join(linhas_piores) +
+                    "\n\n🏆 **Top 3 Melhores:**\n" + "\n".join(linhas_melhores))
+        payload = {"msg_type": "interactive", "card": {"config": {"wide_screen_mode": True},
+                   "header": {"template": "blue", "title": {"tag": "plain_text", "content": f"📊 SLA - Entrega Realizada ({coordenador})"}},
+                   "elements": [{"tag": "div", "text": {"tag": "lark_md", "content": conteudo}},
+                                {"tag": "hr"},
+                                {"tag": "action", "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "📂 Abrir Pasta no OneDrive"},
+                                                               "url": LINK_PASTA, "type": "default"}]}]}}
+        r = requests.post(webhook, json=payload, timeout=12)
+        if r.status_code == 200:
+            logging.info(f"✅ Card enviado com sucesso para {coordenador}")
+            return True
+        logging.error(f"🚨 Falha ao enviar card para {coordenador} (status {r.status_code})")
+        return False
     except Exception as e:
-        logging.error(f"🚨 Falha ao enviar card para {coordenador}: {e}")
+        logging.error(f"❌ Erro no envio do card para {coordenador}: {e}")
+        return False
+
 
 # ==========================================================
-# 🚀 EXECUÇÃO PRINCIPAL (v2.2)
+# 🚀 EXECUÇÃO PRINCIPAL
 # ==========================================================
 if __name__ == "__main__":
     logging.info("🚀 Iniciando processamento SLA por coordenador...")
@@ -188,109 +164,50 @@ if __name__ == "__main__":
     try:
         df = consolidar_planilhas(PASTA_ENTRADA)
         logging.info(f"📥 Total de {df.height} registros lidos.")
-
         df = df.rename({c: c.strip().upper() for c in df.columns})
-        col_entregue = detectar_coluna_entregue(df)
 
-        if "DATA PREVISTA DE ENTREGA" not in df.columns:
-            raise KeyError("❌ Coluna 'DATA PREVISTA DE ENTREGA' não encontrada.")
+        col_entregue = [c for c in df.columns if "ENTREGUE" in c.upper()][0]
+        df = normalizar_entregue(df, col_entregue)
+        df = garantir_coluna_data(df, "DATA PREVISTA DE ENTREGA")
 
-        tipo = df["DATA PREVISTA DE ENTREGA"].dtype
-        if tipo == pl.Utf8:
-            df = df.with_columns(pl.col("DATA PREVISTA DE ENTREGA").str.strptime(pl.Date, "%Y-%m-%d", strict=False))
-        elif tipo == pl.Datetime:
-            df = df.with_columns(pl.col("DATA PREVISTA DE ENTREGA").dt.date().alias("DATA PREVISTA DE ENTREGA"))
+        hoje, ontem = datetime.now().date(), datetime.now().date() - timedelta(days=1)
+        df_hoje, df_ontem = df.filter(pl.col("DATA PREVISTA DE ENTREGA") == hoje), df.filter(pl.col("DATA PREVISTA DE ENTREGA") == ontem)
 
-        hoje = datetime.now().date()
-        ontem = hoje - timedelta(days=1)
-
-        df_hoje = df.filter(pl.col("DATA PREVISTA DE ENTREGA") == hoje)
-        df_ontem = df.filter(pl.col("DATA PREVISTA DE ENTREGA") == ontem)
-
-        coord_df = pl.read_excel(PASTA_COORDENADOR).rename({
-            "Nome da base": "BASE DE ENTREGA",
-            "Coordenadores": "COORDENADOR"
-        })
+        coord_df = pl.read_excel(PASTA_COORDENADOR).rename({"Nome da base": "BASE DE ENTREGA", "Coordenadores": "COORDENADOR"})
         df = df.join(coord_df, on="BASE DE ENTREGA", how="left")
 
-        resumo = (
-            df_hoje.join(coord_df, on="BASE DE ENTREGA", how="left")
-            .group_by(["BASE DE ENTREGA", "COORDENADOR"])
-            .agg([
-                pl.count().alias("Total"),
-                (pl.col(col_entregue) == "Y").sum().alias("Entregues"),
-                ((pl.col(col_entregue) != "Y") | pl.col(col_entregue).is_null()).sum().alias("Nao_Entregues"),
-            ])
-            .with_columns((pl.col("Entregues") / pl.col("Total")).alias("% Entregues"))
-            .sort("% Entregues")
-        )
-
+        resumo = (df_hoje.join(coord_df, on="BASE DE ENTREGA", how="left")
+                  .group_by(["BASE DE ENTREGA", "COORDENADOR"])
+                  .agg([pl.count().alias("Total"),
+                        pl.col("_ENTREGUE_BOOL").cast(pl.Int64).sum().alias("Entregues")])
+                  .with_columns((pl.col("Entregues") / pl.col("Total")).alias("% Entregues"))
+                  .sort("% Entregues"))
         resumo_pd = resumo.to_pandas().rename(columns={"BASE DE ENTREGA": "Base De Entrega"})
 
         arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, "Resumo_Consolidado_")
-        salvar_relatorio_completo(df, resumo_pd, ARQUIVO_SAIDA)
+        with pd.ExcelWriter(ARQUIVO_SAIDA, engine='openpyxl') as w:
+            resumo_pd.to_excel(w, index=False, sheet_name='Resumo SLA')
+            df.to_pandas().to_excel(w, index=False, sheet_name='Dados Completos')
 
-        # ✅ SLA individual por coordenador
+        total_sucesso = total_falha = total_sem_base = 0
         for coordenador, webhook in COORDENADOR_WEBHOOKS.items():
             sub_df = resumo_pd[resumo_pd["COORDENADOR"] == coordenador]
             if not sub_df.empty:
-                bases_coord = sub_df["Base De Entrega"].unique()
-                df_hoje_coord = df_hoje.filter(pl.col("BASE DE ENTREGA").is_in(bases_coord))
-                df_ontem_coord = df_ontem.filter(pl.col("BASE DE ENTREGA").is_in(bases_coord))
-
-                sla_hoje_coord = calcular_sla(df_hoje_coord, col_entregue)
-                sla_ontem_coord = calcular_sla(df_ontem_coord, col_entregue)
-
-                logging.info(f"📊 {coordenador}: SLA Hoje = {sla_hoje_coord:.2%} | Ontem = {sla_ontem_coord:.2%}")
-                enviar_card_feishu(sub_df, webhook, coordenador, sla_hoje_coord, sla_ontem_coord)
+                bases = sub_df["Base De Entrega"].dropna().unique().tolist()
+                sla_hoje = (df_hoje.filter(pl.col("BASE DE ENTREGA").is_in(bases))["_ENTREGUE_BOOL"].cast(pl.Int64).sum() / df_hoje.filter(pl.col("BASE DE ENTREGA").is_in(bases)).height) if df_hoje.height else 0
+                sla_ontem = (df_ontem.filter(pl.col("BASE DE ENTREGA").is_in(bases))["_ENTREGUE_BOOL"].cast(pl.Int64).sum() / df_ontem.filter(pl.col("BASE DE ENTREGA").is_in(bases)).height) if df_ontem.height else 0
+                logging.info(f"📊 {coordenador}: SLA Hoje = {sla_hoje:.2%} | Ontem = {sla_ontem:.2%}")
+                if enviar_card_feishu(sub_df, webhook, coordenador, sla_hoje, sla_ontem):
+                    total_sucesso += 1
+                else:
+                    total_falha += 1
             else:
-                logging.info(f"ℹ️ Nenhuma base encontrada para {coordenador}")
+                logging.warning(f"⏩ Nenhuma base vinculada a {coordenador}, card não enviado.")
+                total_sem_base += 1
 
-        # ==========================================================
-        # 💾 SALVAR CONSOLIDADO GERAL E ARQUIVAR ANTIGOS
-        # ==========================================================
-        try:
-            os.makedirs(PASTA_SAIDA, exist_ok=True)
-            os.makedirs(PASTA_ARQUIVO, exist_ok=True)
-
-            arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, "Consolidado_Geral_")
-
-            DATAHORA_ATUAL = datetime.now().strftime("%Y%m%d_%H%M%S")
-            CAMINHO_CONSOLIDADO = os.path.join(
-                PASTA_SAIDA, f"Consolidado_Geral_{DATAHORA_ATUAL}.xlsx"
-            )
-
-            df_completo = (
-                df.join(coord_df, on="BASE DE ENTREGA", how="left")
-                  .select([
-                      "BASE DE ENTREGA",
-                      "COORDENADOR",
-                      "DATA PREVISTA DE ENTREGA",
-                      col_entregue
-                  ])
-            )
-
-            resumo_geral = (
-                df_completo.group_by(["BASE DE ENTREGA", "COORDENADOR"])
-                .agg([
-                    pl.count().alias("Total"),
-                    (pl.col(col_entregue) == "Y").sum().alias("Entregues"),
-                    ((pl.col(col_entregue) != "Y") | pl.col(col_entregue).is_null()).sum().alias("Nao_Entregues"),
-                ])
-                .with_columns((pl.col("Entregues") / pl.col("Total")).alias("% Entregues"))
-                .sort("% Entregues", descending=True)
-            )
-
-            resumo_geral_pd = resumo_geral.to_pandas()
-            with pd.ExcelWriter(CAMINHO_CONSOLIDADO, engine="openpyxl") as writer:
-                resumo_geral_pd.to_excel(writer, index=False, sheet_name="Resumo Consolidado")
-                df_completo.to_pandas().to_excel(writer, index=False, sheet_name="Detalhamento")
-
-            logging.info(f"💾 Consolidado geral salvo em: {CAMINHO_CONSOLIDADO}")
-
-        except Exception as e:
-            logging.error(f"⚠️ Erro ao salvar o consolidado geral: {e}")
-
+        logging.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        logging.info(f"📬 Envio concluído: {total_sucesso} ✅ | {total_falha} ❌ | {total_sem_base} ⏩ sem base.")
+        logging.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         logging.info("🏁 Processamento concluído com sucesso!")
 
     except Exception as e:

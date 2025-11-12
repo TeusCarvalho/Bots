@@ -333,3 +333,244 @@ NameError: name 'COORDENADOR_WEBHOOKS' is not defined
 2025-11-10 13:08:40,226 - INFO - 📦 Relatório antigo movido: Consolidado_Geral_20251107_081539.xlsx
 2025-11-10 13:08:40,484 - ERROR - ⚠️ Erro ao salvar o consolidado geral: This sheet is too large! Your sheet size is: 1975541, 4 Max sheet size is: 1048576, 16384
 2025-11-10 13:08:40,493 - INFO - 🏁 Processamento concluído com sucesso!
+2025-11-11 09:31:07,869 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-11 09:31:07,871 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092700.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,874 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092706.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,874 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092848.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,875 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092900.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,875 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092906.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,876 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092912.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,876 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092800.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,876 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092826.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,877 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092808.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,877 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092816.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,877 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092742.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,878 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092840.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,878 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092754.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,878 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092714.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,879 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092832.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,879 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092748.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,880 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092918.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:07,880 - CRITICAL - Erro fatal no processamento: Nenhum arquivo pôde ser lido com sucesso.
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 189, in <module>
+    df = consolidar_planilhas(PASTA_ENTRADA)
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 101, in consolidar_planilhas
+    raise ValueError("Nenhum arquivo pôde ser lido com sucesso.")
+ValueError: Nenhum arquivo pôde ser lido com sucesso.
+2025-11-11 09:31:53,652 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-11 09:31:53,656 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092700.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,658 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092808.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,658 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092742.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,658 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092918.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,659 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092840.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,659 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092848.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,659 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092826.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,660 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092900.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,660 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092706.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,660 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092816.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,661 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092912.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,661 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092800.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,662 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092754.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,662 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092832.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,662 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092906.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,663 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092748.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,663 - ERROR - Falha ao ler 实际签收(detalhes)2209120251111092714.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:53,664 - CRITICAL - Erro fatal no processamento: Nenhum arquivo pôde ser lido com sucesso.
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 189, in <module>
+    df = consolidar_planilhas(PASTA_ENTRADA)
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 101, in consolidar_planilhas
+    raise ValueError("Nenhum arquivo pôde ser lido com sucesso.")
+ValueError: Nenhum arquivo pôde ser lido com sucesso.
+2025-11-11 09:32:30,215 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-11 09:32:43,523 - WARNING - Could not determine dtype for column 13, falling back to string
+2025-11-11 09:32:53,854 - INFO - 📥 Total de 2284564 registros lidos.
+2025-11-11 09:32:53,993 - CRITICAL - Erro fatal no processamento: No module named 'pyarrow'
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 228, in <module>
+    resumo_pd = resumo.to_pandas().rename(columns={"BASE DE ENTREGA": "Base De Entrega"})
+                ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\dataframe\frame.py", line 2562, in to_pandas
+    return self._to_pandas_without_object_columns(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, use_pyarrow_extension_array=use_pyarrow_extension_array, **kwargs
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\dataframe\frame.py", line 2613, in _to_pandas_without_object_columns
+    record_batches = df._df.to_pandas()
+ModuleNotFoundError: No module named 'pyarrow'
+2025-11-11 09:33:25,340 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-11 09:33:30,684 - WARNING - Could not determine dtype for column 13, falling back to string
+2025-11-11 09:33:33,241 - INFO - 📥 Total de 2284564 registros lidos.
+2025-11-11 09:33:33,364 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251110.xlsx
+2025-11-11 09:33:35,836 - ERROR - ⚠️ Falha ao salvar o relatório: This sheet is too large! Your sheet size is: 2284564, 35 Max sheet size is: 1048576, 16384
+2025-11-11 09:33:36,004 - INFO - 📊 João Melo: SLA Hoje = 89.09% | Ontem = 83.00%
+2025-11-11 09:33:40,516 - INFO - ✅ Card enviado para João Melo
+2025-11-11 09:33:40,553 - INFO - 📊 Johas Vieira: SLA Hoje = 47.27% | Ontem = 82.34%
+2025-11-11 09:33:42,156 - INFO - ✅ Card enviado para Johas Vieira
+2025-11-11 09:33:42,193 - INFO - 📊 Anderson Matheus: SLA Hoje = 52.48% | Ontem = 81.99%
+2025-11-11 09:33:43,754 - INFO - ✅ Card enviado para Anderson Matheus
+2025-11-11 09:33:43,784 - INFO - 📊 Marcelo Medina: SLA Hoje = 61.07% | Ontem = 93.40%
+2025-11-11 09:33:45,373 - INFO - ✅ Card enviado para Marcelo Medina
+2025-11-11 09:33:45,400 - INFO - 📊 Odária Fereira: SLA Hoje = 46.37% | Ontem = 92.46%
+2025-11-11 09:33:46,878 - INFO - ✅ Card enviado para Odária Fereira
+2025-11-11 09:33:46,903 - INFO - 📊 Rodrigo Castro: SLA Hoje = 76.40% | Ontem = 88.58%
+2025-11-11 09:33:48,594 - INFO - ✅ Card enviado para Rodrigo Castro
+2025-11-11 09:33:48,621 - INFO - 📊 Orlean Nascimento: SLA Hoje = 39.81% | Ontem = 88.61%
+2025-11-11 09:33:50,106 - INFO - ✅ Card enviado para Orlean Nascimento
+2025-11-11 09:33:50,134 - INFO - 📊 Jose Marlon: SLA Hoje = 56.41% | Ontem = 79.74%
+2025-11-11 09:33:51,683 - INFO - ✅ Card enviado para Jose Marlon
+2025-11-11 09:33:51,707 - INFO - 📊 Emerson Silva: SLA Hoje = 73.47% | Ontem = 92.77%
+2025-11-11 09:33:53,188 - INFO - ✅ Card enviado para Emerson Silva
+2025-11-11 09:33:53,224 - INFO - 📊 Marcos Caique: SLA Hoje = 79.51% | Ontem = 91.46%
+2025-11-11 09:33:54,959 - INFO - ✅ Card enviado para Marcos Caique
+2025-11-11 09:33:54,962 - INFO - 📦 Relatório antigo movido: Consolidado_Geral_20251110_130840.xlsx
+2025-11-11 09:33:55,414 - ERROR - ⚠️ Erro ao salvar o consolidado geral: This sheet is too large! Your sheet size is: 2284564, 4 Max sheet size is: 1048576, 16384
+2025-11-11 09:33:55,432 - INFO - 🏁 Processamento concluído com sucesso!
+2025-11-11 15:27:55,954 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-11 15:28:03,705 - WARNING - Could not determine dtype for column 13, falling back to string
+2025-11-11 15:28:07,059 - INFO - 📥 Total de 2284564 registros lidos.
+2025-11-11 15:28:07,059 - CRITICAL - Erro fatal no processamento: 'ExprStringNameSpace' object has no attribute 'strip'
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 254, in <module>
+    df = normalizar_entregue(df, col_entregue, novo_nome="_ENTREGUE_BOOL")
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 149, in normalizar_entregue
+    txt = serie.cast(pl.Utf8, strict=False).str.to_lowercase().str.strip()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ExprStringNameSpace' object has no attribute 'strip'
+2025-11-11 15:32:51,377 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-11 15:32:56,828 - WARNING - Could not determine dtype for column 13, falling back to string
+2025-11-11 15:32:59,382 - INFO - 📥 Total de 2284564 registros lidos.
+2025-11-11 15:32:59,392 - CRITICAL - Erro fatal no processamento: cannot compare string with numeric type (i32)
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 242, in <module>
+    df = normalizar_entregue(df, col_entregue, novo_nome="_ENTREGUE_BOOL")
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 154, in normalizar_entregue
+    df_final = df.with_columns(entregou.alias(novo_nome))
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\dataframe\frame.py", line 10310, in with_columns
+    .collect(optimizations=QueryOptFlags._eager())
+     ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\_utils\deprecation.py", line 97, in wrapper
+    return function(*args, **kwargs)
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\lazyframe\opt_flags.py", line 328, in wrapper
+    return function(*args, **kwargs)
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\lazyframe\frame.py", line 2422, in collect
+    return wrap_df(ldf.collect(engine, callback))
+                   ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+polars.exceptions.ComputeError: cannot compare string with numeric type (i32)
+2025-11-11 15:43:55,695 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-11 15:44:01,675 - WARNING - Could not determine dtype for column 13, falling back to string
+2025-11-11 15:44:04,544 - INFO - 📥 Total de 2284564 registros lidos.
+2025-11-11 15:44:04,552 - CRITICAL - Erro fatal no processamento: casting from Utf8View to Boolean not supported
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 202, in <module>
+    df = normalizar_entregue(df, col_entregue)
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 119, in normalizar_entregue
+    df_final = df.with_columns(entregou_expr.alias(novo_nome))
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\dataframe\frame.py", line 10310, in with_columns
+    .collect(optimizations=QueryOptFlags._eager())
+     ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\_utils\deprecation.py", line 97, in wrapper
+    return function(*args, **kwargs)
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\lazyframe\opt_flags.py", line 328, in wrapper
+    return function(*args, **kwargs)
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\lazyframe\frame.py", line 2422, in collect
+    return wrap_df(ldf.collect(engine, callback))
+                   ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+polars.exceptions.InvalidOperationError: casting from Utf8View to Boolean not supported
+2025-11-11 15:44:49,399 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-11 15:44:55,314 - WARNING - Could not determine dtype for column 13, falling back to string
+2025-11-11 15:44:58,362 - INFO - 📥 Total de 2284564 registros lidos.
+2025-11-11 15:44:58,397 - INFO - 🧮 Coluna 'ENTREGUE NO PRAZO？' normalizada → '_ENTREGUE_BOOL' criada com sucesso.
+2025-11-11 15:44:58,407 - CRITICAL - Erro fatal no processamento: invalid series dtype: expected `String`, got `datetime[ms]` for series with name `DATA PREVISTA DE ENTREGA`
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 225, in <module>
+    df = df.with_columns(pl.col("DATA PREVISTA DE ENTREGA").str.strptime(pl.Date, "%Y-%m-%d", strict=False))
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\dataframe\frame.py", line 10310, in with_columns
+    .collect(optimizations=QueryOptFlags._eager())
+     ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\_utils\deprecation.py", line 97, in wrapper
+    return function(*args, **kwargs)
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\lazyframe\opt_flags.py", line 328, in wrapper
+    return function(*args, **kwargs)
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\lazyframe\frame.py", line 2422, in collect
+    return wrap_df(ldf.collect(engine, callback))
+                   ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+polars.exceptions.SchemaError: invalid series dtype: expected `String`, got `datetime[ms]` for series with name `DATA PREVISTA DE ENTREGA`
+2025-11-11 15:47:48,092 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-11 15:47:53,132 - WARNING - Could not determine dtype for column 13, falling back to string
+2025-11-11 15:47:55,575 - INFO - 📥 Total de 2284564 registros lidos.
+2025-11-11 15:47:55,608 - CRITICAL - Erro fatal no processamento: module 'polars.datatypes' has no attribute 'is_date'
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 162, in <module>
+    df = garantir_coluna_data(df, "DATA PREVISTA DE ENTREGA")
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 102, in garantir_coluna_data
+    if pl.datatypes.is_date(tipo):
+       ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'polars.datatypes' has no attribute 'is_date'
+2025-11-11 17:20:48,467 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-11 17:20:54,062 - WARNING - Could not determine dtype for column 13, falling back to string
+2025-11-11 17:20:56,535 - INFO - 📥 Total de 2284564 registros lidos.
+2025-11-11 17:20:56,684 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251111.xlsx
+2025-11-11 17:22:01,659 - INFO - 🚀 Iniciando processamento SLA por coordenador...
+2025-11-11 17:22:06,753 - WARNING - Could not determine dtype for column 13, falling back to string
+2025-11-11 17:22:09,534 - INFO - 📥 Total de 2284564 registros lidos.
+2025-11-11 17:22:09,690 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251111.xlsx
+2025-11-11 17:22:11,984 - CRITICAL - Erro fatal no processamento: This sheet is too large! Your sheet size is: 2284564, 36 Max sheet size is: 1048576, 16384
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada.py", line 190, in <module>
+    df.to_pandas().to_excel(w, index=False, sheet_name='Dados Completos')
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\pandas\util\_decorators.py", line 333, in wrapper
+    return func(*args, **kwargs)
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\pandas\core\generic.py", line 2439, in to_excel
+    formatter.write(
+    ~~~~~~~~~~~~~~~^
+        excel_writer,
+        ^^^^^^^^^^^^^
+    ...<6 lines>...
+        engine_kwargs=engine_kwargs,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\pandas\io\formats\excel.py", line 931, in write
+    raise ValueError(
+    ...<2 lines>...
+    )
+ValueError: This sheet is too large! Your sheet size is: 2284564, 36 Max sheet size is: 1048576, 16384

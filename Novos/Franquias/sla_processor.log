@@ -247,3 +247,125 @@
 2025-11-10 13:09:03,599 - INFO - ✅ Card enviado com sucesso ao Feishu!
 2025-11-10 13:09:03,600 - INFO - 
 🏁 Processo concluído com sucesso!
+2025-11-11 09:31:23,542 - INFO - 🚀 Iniciando processamento turbo...
+2025-11-11 09:31:24,447 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092700.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,449 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092706.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,450 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092714.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,451 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092742.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,452 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092748.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,453 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092754.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,454 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092800.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,455 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092808.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,456 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092816.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,457 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092826.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,458 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092832.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,459 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092840.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,460 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092848.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,461 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092900.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,462 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092906.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,462 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092912.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,463 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092918.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:24,917 - CRITICAL - Erro de valor ou processamento: Nenhum arquivo pôde ser lido com sucesso. Verifique o log para detalhes.
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Franquias\1- Franquias - Entrega Realizada.py", line 242, in <module>
+    df = consolidar_planilhas(PASTA_ENTRADA)
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Franquias\1- Franquias - Entrega Realizada.py", line 137, in consolidar_planilhas
+    raise ValueError("Nenhum arquivo pôde ser lido com sucesso. Verifique o log para detalhes.")
+ValueError: Nenhum arquivo pôde ser lido com sucesso. Verifique o log para detalhes.
+2025-11-11 09:31:33,922 - INFO - 🚀 Iniciando processamento turbo...
+2025-11-11 09:31:34,746 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092700.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,747 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092706.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,748 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092714.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,749 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092742.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,750 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092748.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,750 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092754.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,751 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092800.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,751 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092808.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,752 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092816.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,752 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092826.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,753 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092832.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,753 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092840.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,753 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092848.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,754 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092906.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,754 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092900.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,755 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092912.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:34,755 - ERROR - Falha ao ler o arquivo 实际签收(detalhes)2209120251111092918.xlsx: required package 'fastexcel' not found.
+Please install using the command `pip install fastexcel`.
+2025-11-11 09:31:35,253 - CRITICAL - Erro de valor ou processamento: Nenhum arquivo pôde ser lido com sucesso. Verifique o log para detalhes.
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Franquias\1- Franquias - Entrega Realizada.py", line 242, in <module>
+    df = consolidar_planilhas(PASTA_ENTRADA)
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Franquias\1- Franquias - Entrega Realizada.py", line 137, in consolidar_planilhas
+    raise ValueError("Nenhum arquivo pôde ser lido com sucesso. Verifique o log para detalhes.")
+ValueError: Nenhum arquivo pôde ser lido com sucesso. Verifique o log para detalhes.
+2025-11-11 09:32:36,362 - INFO - 🚀 Iniciando processamento turbo...
+2025-11-11 09:32:46,011 - WARNING - Could not determine dtype for column 13, falling back to string
+2025-11-11 09:32:49,021 - INFO - Total de 2284564 registros lidos e consolidados.
+2025-11-11 09:32:49,022 - INFO - Coluna de entrega detectada: 'ENTREGUE NO PRAZO？'
+2025-11-11 09:32:49,022 - INFO - Filtrando pela data prevista de entrega (hoje)...
+2025-11-11 09:32:49,042 - INFO - 116559 registros restantes após o filtro de data.
+2025-11-11 09:32:49,048 - INFO - 44420 registros restantes após o filtro de bases válidas.
+2025-11-11 09:32:49,048 - INFO - Gerando resumo de SLA por base...
+2025-11-11 09:32:49,057 - CRITICAL - Ocorreu um erro inesperado e fatal: No module named 'pyarrow'
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Franquias\1- Franquias - Entrega Realizada.py", line 288, in <module>
+    resumo_pd = resumo.to_pandas()
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\dataframe\frame.py", line 2562, in to_pandas
+    return self._to_pandas_without_object_columns(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, use_pyarrow_extension_array=use_pyarrow_extension_array, **kwargs
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\J&T-099\PycharmProjects\Bots\.venv\Lib\site-packages\polars\dataframe\frame.py", line 2613, in _to_pandas_without_object_columns
+    record_batches = df._df.to_pandas()
+ModuleNotFoundError: No module named 'pyarrow'
+2025-11-11 09:33:52,158 - INFO - 🚀 Iniciando processamento turbo...
+2025-11-11 09:33:59,661 - WARNING - Could not determine dtype for column 13, falling back to string
+2025-11-11 09:34:01,935 - INFO - Total de 2284564 registros lidos e consolidados.
+2025-11-11 09:34:01,935 - INFO - Coluna de entrega detectada: 'ENTREGUE NO PRAZO？'
+2025-11-11 09:34:01,936 - INFO - Filtrando pela data prevista de entrega (hoje)...
+2025-11-11 09:34:01,954 - INFO - 116559 registros restantes após o filtro de data.
+2025-11-11 09:34:01,959 - INFO - 44420 registros restantes após o filtro de bases válidas.
+2025-11-11 09:34:01,959 - INFO - Gerando resumo de SLA por base...
+2025-11-11 09:34:01,968 - INFO - Verificando relatórios antigos em 'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada' para arquivar...
+2025-11-11 09:34:01,969 - INFO - Relatório antigo movido: 'Resumo_Consolidado_20251110.xlsx' -> 'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada\Nova pasta'
+2025-11-11 09:34:21,298 - INFO - 📄 Relatório completo salvo em: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada\Resumo_Consolidado_20251111.xlsx
+2025-11-11 09:34:21,298 - INFO -   -> Aba 'Resumo SLA' com 53 linhas.
+2025-11-11 09:34:21,298 - INFO -   -> Aba 'Dados Completos' com 44420 linhas.
+2025-11-11 09:34:22,972 - INFO - ✅ Card enviado com sucesso ao Feishu!
+2025-11-11 09:34:22,974 - INFO - 
+🏁 Processo concluído com sucesso!
