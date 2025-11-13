@@ -205,7 +205,7 @@ def analisar_retidos():
         print(f"\033[95m🧹 Cluster Retidos (1–5 dias) → Removidos: {removidos_cluster} | Mantidos: {df_ret.height}\033[0m")
 
     # Seleção e padronização de colunas importantes
-    col_pedido_ret = safe_pick(df_ret, COL_PEDIDO_RET, ["pedido", "运单", "jms"])
+    col_pedido_ret = safe_pick(df_ret, COL_PEDIDO_RET, ["Número do Pedido JMS 运单号"])
     col_data_ret   = safe_pick(df_ret, COL_DATA_ATUALIZACAO_RET, ["data", "atualiza", "更新"])
     col_regional   = safe_pick(df_ret, COL_REGIONAL_RET, ["regional", "区域"])
     col_base_entrega = safe_pick(df_ret, "Base de Entrega 派件网点", ["base", "网点", "派件"])

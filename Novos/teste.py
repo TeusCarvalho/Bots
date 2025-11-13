@@ -16,7 +16,7 @@ PASTA_SAIDA     = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Á
 CAMINHO_COORDENADOR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
 
 # ============== COLUNAS PADRÃO (NOMES-ALVO) ================
-COL_PEDIDO_RET           = "Remessa"
+COL_PEDIDO_RET           = "Número do Pedido JMS 运单号"
 COL_DATA_ATUALIZACAO_RET = "Data prevista de entrega"
 COL_REGIONAL_RET         = "Regional 区域"
 
