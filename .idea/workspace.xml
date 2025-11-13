@@ -6,7 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="git commit">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/Base de Dados/Retidos.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Base de Dados/Retidos.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -341,14 +340,8 @@
       <workItem from="1762945987157" duration="10436000" />
       <workItem from="1762968714516" duration="12000" />
       <workItem from="1762977372798" duration="3451000" />
-    </task>
-    <task id="LOCAL-00012" summary="git commit">
-      <option name="closed" value="true" />
-      <created>1760536363605</created>
-      <option name="number" value="00012" />
-      <option name="presentableId" value="LOCAL-00012" />
-      <option name="project" value="LOCAL" />
-      <updated>1760536363605</updated>
+      <workItem from="1762981111614" duration="84000" />
+      <workItem from="1763031573782" duration="941000" />
     </task>
     <task id="LOCAL-00013" summary="git commit">
       <option name="closed" value="true" />
@@ -734,7 +727,15 @@
       <option name="project" value="LOCAL" />
       <updated>1762968723699</updated>
     </task>
-    <option name="localTasksCounter" value="61" />
+    <task id="LOCAL-00061" summary="git commit">
+      <option name="closed" value="true" />
+      <created>1762981183021</created>
+      <option name="number" value="00061" />
+      <option name="presentableId" value="LOCAL-00061" />
+      <option name="project" value="LOCAL" />
+      <updated>1762981183021</updated>
+    </task>
+    <option name="localTasksCounter" value="62" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
