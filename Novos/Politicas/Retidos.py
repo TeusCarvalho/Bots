@@ -1,4 +1,4 @@
-
+# -*- coding: utf-8 -*-
 import os
 import polars as pl
 from datetime import datetime
@@ -41,6 +41,7 @@ FEISHU_WEBHOOKS = {
     # "Anderson Matheus": "...",
     # "Marcelo Medina":  "...",
 }
+
 # ============================================================
 # 🧩 FUNÇÕES AUXILIARES
 # ============================================================
@@ -125,15 +126,16 @@ def salvar_resultado(df: pl.DataFrame, caminho_saida: str, nome_base: str) -> st
 
     print(f"\n✅ Resultado salvo em: {out}")
     return out
+
 # ============================================================
-# 💬 FEISHU – ENVIO DE CARD
+# 💬 FEISHU – ENVIO DE CARD (NÃO SERÁ USADO POR ENQUANTO)
 # ============================================================
 def _get_webhook_for(coord: str) -> str:
     """Retorna webhook específico do coordenador, ou o default (teste)."""
     return FEISHU_WEBHOOKS.get(coord, DEFAULT_FEISHU_WEBHOOK)
 
 def enviar_card_feishu(coordenador: str, qtd_retidos: int, percentual_regional: float, url_relatorio: str | None = None):
-    """Envia um card por coordenador com os principais indicadores."""
+    """Envia um card por coordenador com os principais indicadores (DESATIVADO NO FLUXO)."""
     webhook = _get_webhook_for(coordenador)
     if not webhook:
         print(f"   ⚠️ Sem webhook para {coordenador}. Pulei envio.")
@@ -158,29 +160,6 @@ def enviar_card_feishu(coordenador: str, qtd_retidos: int, percentual_regional: 
                         )
                     }
                 },
-                {"tag": "hr"},
-                {
-                    "tag": "action",
-                    "actions": [
-                        {
-                            "tag": "button",
-                            "text": {"tag": "plain_text", "content": "📊 Abrir Relatório"},
-                            "url": (url_relatorio or "https://open.feishu.cn"),
-                            "type": "default"
-                        },
-                        {
-                            "tag": "button",
-                            "text": {"tag": "plain_text", "content": "🔄 Atualizar"},
-                            "type": "primary"
-                        }
-                    ]
-                },
-                {
-                    "tag": "note",
-                    "elements": [
-                        {"tag": "plain_text", "content": "Card automático – Política de Bonificação • bb 🤖"}
-                    ]
-                }
             ]
         }
     }
@@ -218,13 +197,12 @@ def analisar_retidos():
         )
         df_ret = df_ret.filter(
             ~(
-                    pl.col(col_cluster).str.contains("1 到 2") |
-                    pl.col(col_cluster).str.contains("3 到 5")
+                pl.col(col_cluster).str.contains("1 到 2") |
+                pl.col(col_cluster).str.contains("3 到 5")
             )
         )
         removidos_cluster = total_antes - df_ret.height
-        print(
-            f"\033[95m🧹 Cluster Retidos (1–5 dias) → Removidos: {removidos_cluster} | Mantidos: {df_ret.height}\033[0m")
+        print(f"\033[95m🧹 Cluster Retidos (1–5 dias) → Removidos: {removidos_cluster} | Mantidos: {df_ret.height}\033[0m")
 
     # Seleção e padronização de colunas importantes
     col_pedido_ret = safe_pick(df_ret, COL_PEDIDO_RET, ["pedido", "运单", "jms"])
@@ -329,12 +307,15 @@ def analisar_retidos():
                 pl.when(
                     (pl.col(COL_DATA_ATUALIZACAO_RET) <= pl.col("Prazo_Limite")) &
                     pl.col("Prazo_Limite").is_not_null()
-                ).then(pl.lit("Dentro do Prazo")).otherwise(pl.lit("Fora do Prazo")).alias("Status_Custodia")
+                )
+                .then(pl.lit("Dentro do Prazo"))
+                .otherwise(pl.lit("Fora do Prazo"))
+                .alias("Status_Custodia")
             )
+
             removidos_cust = df_join.filter(pl.col("Status_Custodia") == "Dentro do Prazo").height
             df_final = df_join.filter(pl.col("Status_Custodia") == "Fora do Prazo")
             print(f"\033[94m🔵 Custódia → Removidos: {removidos_cust} | Mantidos: {df_final.height}\033[0m")
-
     # ---------- 5) BASE LISTA (comparativo) ----------
     df_lista = ler_planilhas(PASTA_BASE_LISTA, "Base Retidos (Lista)")
     if not df_lista.is_empty():
@@ -350,7 +331,7 @@ def analisar_retidos():
             if "Base de Entrega 派件网点" in df_final.columns:
                 df_resumo = (
                     df_final.group_by("Base de Entrega 派件网点")
-                    .agg(pl.count().alias("Qtd_Retidos"))
+                    .agg(pl.len().alias("Qtd_Retidos"))
                     .rename({"Base de Entrega 派件网点": "Nome da Base de Entrega"})
                 )
 
@@ -361,10 +342,8 @@ def analisar_retidos():
                     .round(2)
                     .alias("Percentual_Retidos")
                 ])
-                # formata visual
-                df_compara = df_compara.with_columns(
-                    (pl.col("Percentual_Retidos").cast(pl.Utf8) + pl.lit(" %")).alias("Percentual_Retidos")
-                )
+
+                # formata visual opcional
                 df_compara = df_compara.select([
                     "Nome da Base de Entrega", "Qtd_Entregas_>10d", "Qtd_Retidos", "Percentual_Retidos"
                 ]).sort("Qtd_Retidos", descending=True)
@@ -375,6 +354,32 @@ def analisar_retidos():
                     print(f"\n📊 Comparativo com Base Lista exportado: {out_lista}")
                 except Exception as e:
                     print(f"\033[91m❌ Erro ao salvar comparativo Base Lista: {e}\033[0m")
+
+                # ---------- TOP 5 BASES NO TERMINAL ----------
+                try:
+                    top5 = (
+                        df_compara
+                        .with_columns(
+                            (pl.col("Qtd_Entregas_>10d") - pl.col("Qtd_Retidos")).alias("Diferença_Lista_vs_Retidos")
+                        )
+                        .sort("Percentual_Retidos", descending=True)
+                        .head(5)
+                    )
+
+                    print("\n==============================")
+                    print("🏆 TOP 5 BASES – DIAGNÓSTICO")
+                    print("==============================")
+                    for row in top5.iter_rows(named=True):
+                        print(f"""
+Base: {row['Nome da Base de Entrega']}
+  • Retidos encontrados ............ {row['Qtd_Retidos']}
+  • Lista >10 dias ................. {row['Qtd_Entregas_>10d']}
+  • Percentual calculado ........... {row['Percentual_Retidos']} %
+  • Diferença (Lista - Retidos) .... {row['Diferença_Lista_vs_Retidos']}
+""")
+                    print("==============================\n")
+                except Exception as e:
+                    print(f"⚠️ Erro ao exibir top 5 no terminal: {e}")
 
     # ---------- 6) COORDENADORES (merge) ----------
     if os.path.exists(CAMINHO_COORDENADOR):
@@ -408,17 +413,19 @@ def analisar_retidos():
     # ---------- 7) SALVAR RESULTADO FINAL ----------
     out_final = salvar_resultado(df_final, PASTA_SAIDA, NOME_ARQUIVO_FINAL)
 
-    # ---------- 8) ENVIAR CARDS FEISHU (por coordenador) ----------
+    # ---------- 8) ENVIAR CARDS FEISHU (DESATIVADO) ----------
     if "Coordenador" in df_final.columns:
         coords_unicos = df_final.select("Coordenador").unique().to_series().drop_nulls().to_list()
         total_amostra = df_final.height if df_final.height else 1
-        print(f"\n📢 Enviando cards para {len(coords_unicos)} coordenadores...")
+        print(f"\n📢 Envio de cards Feishu está DESATIVADO neste modo de teste.")
+        print(f"   Coordenadores impactados: {len(coords_unicos)}")
         for coord in coords_unicos:
             qtd = df_final.filter(pl.col("Coordenador") == coord).height
             percentual = (qtd / total_amostra) * 100.0
-            enviar_card_feishu(coord, qtd, percentual, url_relatorio=None)
+            print(f"   - {coord}: {qtd} pedidos ({percentual:.2f}%)")
+            # enviar_card_feishu(coord, qtd, percentual, url_relatorio=None)  # <- DESATIVADO
     else:
-        print("\033[93m⚠️ Coluna 'Coordenador' não encontrada. Nenhum card enviado.\033[0m")
+        print("\033[93m⚠️ Coluna 'Coordenador' não encontrada. Nenhum card preparado.\033[0m")
 
     # ---------- 9) RESUMO NO CONSOLE ----------
     print("\n==============================")
@@ -431,6 +438,7 @@ def analisar_retidos():
     print(f"🔵 Removidos por Custódia: {removidos_cust}")
     print(f"✅ Pedidos restantes (fora do prazo): {df_final.height}")
     print(f"📄 Arquivo final: {out_final}")
+
 # ============================================================
 # ▶️ EXECUÇÃO
 # ============================================================
