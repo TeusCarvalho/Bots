@@ -1,151 +1,168 @@
 # -*- coding: utf-8 -*-
 import os
+import json
+import logging
 import polars as pl
 from datetime import datetime
 import requests
 
-# ============== CAMINHOS PRINCIPAIS ========================
-PASTA_RETIDOS   = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Politicas de Bonificação\06 - Retidos"
-PASTA_DEVOLUCAO = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Politicas de Bonificação\00.3 - Base Devolução"
-PASTA_PROBLEMATICOS = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Politicas de Bonificação\00.2 - Base de Problematicos (Gestão de Anormalidade)"
-PASTA_CUSTODIA  = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Politicas de Bonificação\00.4 - Base Custodia"
-PASTA_BASE_LISTA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Politicas de Bonificação\00.1 - Base Retidos(Lista)"
-PASTA_SAIDA     = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Politicas de Bonificação\Resultados"
-
-# Coordenadores
-CAMINHO_COORDENADOR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
-
-# ============== COLUNAS PADRÃO (NOMES-ALVO) ================
-COL_PEDIDO_RET           = "Número do Pedido JMS 运单号"
-COL_DATA_ATUALIZACAO_RET = "Data da Atualização 更新日期"
-COL_REGIONAL_RET         = "Regional 区域"
-
-COL_PEDIDO_DEV            = "Número de pedido JMS"
-COL_DATA_SOLICITACAO_DEV  = "Tempo de solicitação"
-
-COL_PEDIDO_CUST           = "Número de pedido JMS"
-COL_DATA_REGISTRO_CUST    = "data de registro"
-
-# ============== PARÂMETROS GERAIS ==========================
-REGIONAIS_DESEJADAS = ["GP", "PA", "GO"]
-PRAZO_CUSTODIA_DIAS = 9
-NOME_ARQUIVO_FINAL  = "resultado_final_analise_retidos"
-EXCEL_ROW_LIMIT = 1_048_000
-
-# ============== FEISHU (Webhooks) ==========================
-# Durante o teste, usar um único webhook para todos os coordenadores:
-DEFAULT_FEISHU_WEBHOOK = "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b"
-FEISHU_WEBHOOKS = {
-    # mapeie por nome se quiser individualizar posteriormente
-    # "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/aaaa...",
-    # "Anderson Matheus": "...",
-    # "Marcelo Medina":  "...",
-}
 
 # ============================================================
-# 🧩 FUNÇÕES AUXILIARES
+# 🧩 FUNÇÕES AUXILIARES (GLOBAIS)
 # ============================================================
+
+def setup_logging():
+    """Configura o sistema de logging para console e arquivo."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler("analise_retidos.log", encoding="utf-8"),
+            logging.StreamHandler()
+        ]
+    )
+
+
 def converter_datetime(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
-    """Converte coluna (string) para datetime, tolerante a múltiplos formatos."""
+    """Converte coluna para datetime com tratamento robusto de erros e múltiplos formatos."""
     if coluna not in df.columns:
         return df
-    try:
-        df = df.with_columns(pl.col(coluna).str.to_datetime(strict=False))
-    except Exception:
-        for fmt in ["%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S",
-                    "%Y/%m/%d %H:%M", "%d/%m/%Y", "%Y-%m-%d"]:
-            try:
-                df = df.with_columns(pl.col(coluna).str.strptime(pl.Datetime, fmt, strict=False))
-                break
-            except Exception:
-                continue
-    return df.filter(pl.col(coluna).is_not_null())
 
-def detectar_coluna(df: pl.DataFrame, candidatos) -> str | None:
-    """Encontra uma coluna por aproximação (case-insensitive, substring)."""
-    cols_low = {c.lower(): c for c in df.columns}
+    formatos_comuns = [
+        "%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%Y/%m/%d %H:%M:%S",
+        "%Y-%m-%d %H:%M", "%d/%m/%Y %H:%M", "%Y/%m/%d %H:%M",
+        "%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y%m%d"
+    ]
+
+    for fmt in formatos_comuns:
+        try:
+            df_temp = df.with_columns(
+                pl.col(coluna).str.strptime(pl.Datetime, fmt, strict=False)
+            )
+            if df_temp.filter(pl.col(coluna).is_not_null()).height > 0:
+                logging.info(f"✔️ Coluna '{coluna}' convertida usando o formato: {fmt}")
+                return df_temp.filter(pl.col(coluna).is_not_null())
+        except pl.ComputeError:
+            continue
+
+    logging.warning(f"⚠️ Não foi possível converter a coluna '{coluna}' para datetime com os formatos conhecidos.")
+    return df
+
+
+def detectar_coluna(df: pl.DataFrame, candidatos: list[str]) -> str | None:
+    """Encontra a primeira coluna no DataFrame que corresponde a um dos candidatos."""
+    cols_lower = {c.lower(): c for c in df.columns}
     for cand in candidatos:
-        cand = cand.lower()
-        for low, original in cols_low.items():
-            if cand in low:
+        cand_lower = cand.lower()
+        if cand_lower in cols_lower:
+            return cols_lower[cand_lower]
+        for low, original in cols_lower.items():
+            if cand_lower in low:
                 return original
     return None
 
-def safe_pick(df: pl.DataFrame, preferido: str, candidatos_extra) -> str | None:
-    """Prefere um nome de coluna padrão; caso não exista, detecta por candidatos."""
+
+def safe_pick(df: pl.DataFrame, preferido: str, candidatos_extra: list[str]) -> str | None:
+    """Retorna a coluna preferida ou detecta uma alternativa."""
     if preferido in df.columns:
         return preferido
     return detectar_coluna(df, candidatos_extra)
 
+
 def limpar_pedidos(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
-    """Padroniza a coluna de pedido como string stripada."""
+    """Padroniza a coluna de pedido como string, sem espaços extras."""
     if coluna in df.columns:
         df = df.with_columns(pl.col(coluna).cast(pl.Utf8).str.strip_chars())
     return df
 
+
 def ler_planilhas(pasta: str, nome_base: str) -> pl.DataFrame:
-    """Lê todos os .xls/.xlsx de uma pasta (ignora arquivos temporários ~)."""
+    """Lê todos os .xls/.xlsx de uma pasta e os concatena."""
     if not os.path.exists(pasta):
-        print(f"\033[91m❌ Pasta '{pasta}' não encontrada.\033[0m")
+        logging.error(f"❌ Pasta '{pasta}' não encontrada.")
         return pl.DataFrame()
 
-    arquivos = [os.path.join(pasta, f) for f in os.listdir(pasta)
-                if f.lower().endswith((".xls", ".xlsx")) and not f.startswith("~$")]
+    arquivos = [f for f in os.listdir(pasta) if f.lower().endswith((".xls", ".xlsx")) and not f.startswith("~$")]
     if not arquivos:
-        print(f"\033[93m⚠️ Nenhum arquivo Excel encontrado em {nome_base}.\033[0m")
+        logging.warning(f"⚠️ Nenhum arquivo Excel encontrado em '{nome_base}'.")
         return pl.DataFrame()
 
-    print(f"📂 {len(arquivos)} arquivo(s) encontrado(s) em {nome_base}:")
+    logging.info(f"📂 Lendo {len(arquivos)} arquivo(s) em '{nome_base}':")
     dfs = []
     for arq in arquivos:
+        caminho_completo = os.path.join(pasta, arq)
         try:
-            df_raw = pl.read_excel(arq)
+            df_raw = pl.read_excel(caminho_completo)
             df = next(iter(df_raw.values())) if isinstance(df_raw, dict) else df_raw
             dfs.append(df)
-            print(f"   ✅ {os.path.basename(arq)} ({df.height} linhas)")
+            logging.info(f"   ✅ {arq} ({df.height} linhas)")
         except Exception as e:
-            print(f"\033[91m   ❌ Erro ao ler {os.path.basename(arq)}: {e}\033[0m")
+            logging.error(f"   ❌ Erro ao ler {arq}: {e}")
 
-    return pl.concat(dfs, how="diagonal_relaxed") if dfs else pl.DataFrame()
+    if not dfs:
+        return pl.DataFrame()
 
-def salvar_resultado(df: pl.DataFrame, caminho_saida: str, nome_base: str) -> str:
-    """Salva em XLSX se caber na folha do Excel, senão em CSV."""
-    if not os.path.exists(caminho_saida):
-        os.makedirs(caminho_saida)
-        print(f"\033[94m📁 Pasta criada: {caminho_saida}\033[0m")
+    return pl.concat(dfs, how="diagonal_relaxed")
+
+
+def salvar_resultado(df: pl.DataFrame, caminho_saida: str, nome_base: str, excel_row_limit: int) -> str:
+    """Salva o DataFrame em XLSX ou CSV, dependendo do tamanho."""
+    os.makedirs(caminho_saida, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    extensao = "csv" if df.height >= excel_row_limit else "xlsx"
+    nome_arquivo = f"{nome_base}_{timestamp}.{extensao}"
+    caminho_final = os.path.join(caminho_saida, nome_arquivo)
+
+    if extensao == "csv":
+        df.write_csv(caminho_final)
+    else:
+        df.write_excel(caminho_final)
+
+    logging.info(f"✅ Resultado salvo em: {caminho_final}")
+    return caminho_final
+
+
+def salvar_relatorio_intermediario(df: pl.DataFrame, nome_base: str, config: dict):
+    """Salva um DataFrame intermediário em uma subpasta 'Intermediarios' se habilitado na config."""
+    if not config["parametros"].get("gerar_relatorios_intermediarios", False):
+        return
+
+    pasta_saida_intermediarios = os.path.join(config["caminhos"]["pasta_saida"], "Intermediarios")
+    os.makedirs(pasta_saida_intermediarios, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = os.path.join(
-        caminho_saida,
-        f"{nome_base}_{timestamp}.{'csv' if df.height >= EXCEL_ROW_LIMIT else 'xlsx'}"
-    )
-    if out.endswith(".csv"):
-        df.write_csv(out)
-    else:
-        df.write_excel(out)
+    nome_arquivo = f"{nome_base}_{timestamp}.xlsx"
+    caminho_final = os.path.join(pasta_saida_intermediarios, nome_arquivo)
 
-    print(f"\n✅ Resultado salvo em: {out}")
-    return out
+    try:
+        df.write_excel(caminho_final)
+        logging.info(f"📄 Relatório intermediário salvo: {caminho_final}")
+    except Exception as e:
+        logging.error(f"❌ Erro ao salvar relatório intermediário '{nome_base}': {e}")
+
 
 # ============================================================
-# 💬 FEISHU – ENVIO DE CARD (NÃO SERÁ USADO POR ENQUANTO)
+# 💬 FEISHU – ENVIO DE CARD
 # ============================================================
-def _get_webhook_for(coord: str) -> str:
-    """Retorna webhook específico do coordenador, ou o default (teste)."""
-    return FEISHU_WEBHOOKS.get(coord, DEFAULT_FEISHU_WEBHOOK)
+def _get_webhook_for(coord: str, webhooks: dict, default_webhook: str) -> str:
+    """Retorna o webhook específico de um coordenador ou o padrão."""
+    return webhooks.get(coord, default_webhook)
 
-def enviar_card_feishu(coordenador: str, qtd_retidos: int, percentual_regional: float, url_relatorio: str | None = None):
-    """Envia um card por coordenador com os principais indicadores (DESATIVADO NO FLUXO)."""
-    webhook = _get_webhook_for(coordenador)
+
+def enviar_card_feishu(coordenador: str, qtd_retidos: int, percentual_regional: float, feishu_config: dict,
+                       url_relatorio: str | None = None):
+    """Envia um card formatado para o Feishu com os resultados."""
+    webhook = _get_webhook_for(coordenador, feishu_config.get("webhooks_especificos", {}),
+                               feishu_config.get("default_webhook"))
     if not webhook:
-        print(f"   ⚠️ Sem webhook para {coordenador}. Pulei envio.")
+        logging.warning(f"   ⚠️ Sem webhook para {coordenador}. Envio cancelado.")
         return
 
     card = {
         "msg_type": "interactive",
         "card": {
             "header": {
-                "title": {"tag": "plain_text", "content": f"🚚 Retidos – {coordenador}"},
+                "title": {"tag": "plain_text", "content": f"🚚 Análise de Retidos – {coordenador}"},
                 "template": "turquoise"
             },
             "elements": [
@@ -155,8 +172,8 @@ def enviar_card_feishu(coordenador: str, qtd_retidos: int, percentual_regional: 
                         "tag": "lark_md",
                         "content": (
                             f"**Pedidos fora do prazo:** {qtd_retidos}\n"
-                            f"**% sobre total (amostra):** {percentual_regional:.2f}%\n"
-                            f"Atualizado em {datetime.now():%d/%m/%Y %H:%M}"
+                            f"**% sobre o total da análise:** {percentual_regional:.2f}%\n"
+                            f"📅 Atualizado em {datetime.now():%d/%m/%Y %H:%M}"
                         )
                     }
                 },
@@ -165,226 +182,252 @@ def enviar_card_feishu(coordenador: str, qtd_retidos: int, percentual_regional: 
     }
 
     try:
-        resp = requests.post(webhook, json=card)
-        if resp.status_code == 200:
-            print(f"   💬 Card enviado para {coordenador}.")
-        else:
-            print(f"   ⚠️ Erro ao enviar para {coordenador}: {resp.status_code} - {resp.text}")
-    except Exception as e:
-        print(f"   ❌ Falha ao enviar card para {coordenador}: {e}")
+        resp = requests.post(webhook, json=card, timeout=10)
+        resp.raise_for_status()
+        logging.info(f"   💬 Card enviado com sucesso para {coordenador}.")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"   ❌ Falha ao enviar card para {coordenador}: {e}")
+
+
 # ============================================================
-# 🚀 ANÁLISE PRINCIPAL
+# 🚀 CLASSE PRINCIPAL DE ANÁLISE
 # ============================================================
-def analisar_retidos():
-    print("\n==============================")
-    print("🚀 INICIANDO ANÁLISE COMPLETA")
-    print("==============================")
+class AnaliseRetidos:
+    def __init__(self, config_filename: str = 'config.json'):
+        self.logger = logging.getLogger(__name__)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(script_dir, config_filename)
 
-    removidos_dev = removidos_cust = removidos_cluster = removidos_prob = 0
+        self.config = self._carregar_configuracoes(config_path)
+        self.removidos = {
+            "cluster": 0, "devolucao": 0, "problematicos": 0, "custodia": 0
+        }
+        self.total_inicial_filtrado = 0
+        self.df_total_por_base = pl.DataFrame()  # Armazenará o total de pedidos por base
 
-    # ---------- 1) RETIDOS ----------
-    df_ret = ler_planilhas(PASTA_RETIDOS, "Retidos")
-    if df_ret.is_empty():
-        print("❌ Nenhum dado em Retidos.")
-        return
-
-    # Remover clusters "1 到 2" e "3 到 5" → mantém 6 dias ou mais
-    col_cluster = safe_pick(df_ret, "Cluster Retidos 分类", ["cluster", "分类", "retidos"])
-    if col_cluster and col_cluster in df_ret.columns:
-        total_antes = df_ret.height
-        df_ret = df_ret.with_columns(
-            pl.col(col_cluster).cast(pl.Utf8).str.strip_chars().str.to_lowercase().alias(col_cluster)
-        )
-        df_ret = df_ret.filter(
-            ~(
-                pl.col(col_cluster).str.contains("1 到 2") |
-                pl.col(col_cluster).str.contains("3 到 5")
-            )
-        )
-        removidos_cluster = total_antes - df_ret.height
-        print(f"\033[95m🧹 Cluster Retidos (1–5 dias) → Removidos: {removidos_cluster} | Mantidos: {df_ret.height}\033[0m")
-
-    # Seleção e padronização de colunas importantes
-    col_pedido_ret = safe_pick(df_ret, COL_PEDIDO_RET, ["Número do Pedido JMS 运单号"])
-    col_data_ret   = safe_pick(df_ret, COL_DATA_ATUALIZACAO_RET, ["data", "atualiza", "更新"])
-    col_regional   = safe_pick(df_ret, COL_REGIONAL_RET, ["regional", "区域"])
-    col_base_entrega = safe_pick(df_ret, "Base de Entrega 派件网点", ["base", "网点", "派件"])
-
-    cols = [c for c in [col_pedido_ret, col_data_ret, col_regional, col_base_entrega] if c]
-    df_ret = df_ret.select(cols).rename({
-        col_pedido_ret: COL_PEDIDO_RET,
-        col_data_ret: COL_DATA_ATUALIZACAO_RET,
-        col_regional: COL_REGIONAL_RET if col_regional else None,
-        col_base_entrega: "Base de Entrega 派件网点" if col_base_entrega else None
-    })
-
-    df_ret = limpar_pedidos(df_ret, COL_PEDIDO_RET)
-    df_ret = converter_datetime(df_ret, COL_DATA_ATUALIZACAO_RET)
-
-    # Filtra regionais de interesse, se existir a coluna
-    if COL_REGIONAL_RET in df_ret.columns:
-        df_ret = df_ret.filter(pl.col(COL_REGIONAL_RET).is_in(REGIONAIS_DESEJADAS))
-
-    total_inicial_filtrado = df_ret.height
-    print(f"\033[92m🟢 Retidos filtrados ({', '.join(REGIONAIS_DESEJADAS)}): {total_inicial_filtrado}\033[0m")
-
-    # ---------- 2) DEVOLUÇÃO ----------
-    df_dev = ler_planilhas(PASTA_DEVOLUCAO, "Devolução")
-    if not df_dev.is_empty():
-        col_pedido_dev = safe_pick(df_dev, COL_PEDIDO_DEV, ["pedido", "jms"])
-        col_data_dev   = safe_pick(df_dev, COL_DATA_SOLICITACAO_DEV, ["solicit", "data"])
-        if col_pedido_dev and col_data_dev:
-            df_dev = (
-                df_dev
-                .select([col_pedido_dev, col_data_dev])
-                .rename({col_pedido_dev: COL_PEDIDO_DEV, col_data_dev: COL_DATA_SOLICITACAO_DEV})
-            )
-            df_dev = limpar_pedidos(df_dev, COL_PEDIDO_DEV)
-            df_dev = converter_datetime(df_dev, COL_DATA_SOLICITACAO_DEV)
-            df_dev = df_dev.group_by(COL_PEDIDO_DEV).agg(pl.col(COL_DATA_SOLICITACAO_DEV).min())
-
-            df_merge = df_ret.join(df_dev, left_on=COL_PEDIDO_RET, right_on=COL_PEDIDO_DEV, how="left")
-            df_merge = df_merge.with_columns(
-                ((pl.col(COL_DATA_SOLICITACAO_DEV) > pl.col(COL_DATA_ATUALIZACAO_RET))
-                 & pl.col(COL_DATA_SOLICITACAO_DEV).is_not_null()).alias("Remover_Dev")
-            )
-            removidos_dev = df_merge.filter(pl.col("Remover_Dev")).height
-            df_ret = df_merge.filter(~pl.col("Remover_Dev")).drop(
-                ["Remover_Dev", COL_PEDIDO_DEV, COL_DATA_SOLICITACAO_DEV], strict=False
-            )
-            print(f"\033[93m🟡 Devolução → Removidos: {removidos_dev} | Mantidos: {df_ret.height}\033[0m")
-
-    # ---------- 3) PROBLEMÁTICOS ----------
-    df_prob = ler_planilhas(PASTA_PROBLEMATICOS, "Problemáticos")
-    if not df_prob.is_empty():
-        col_pedido_prob = safe_pick(df_prob, "Número de pedido JMS", ["pedido", "jms"])
-        col_data_prob   = safe_pick(df_prob, "data de registro", ["data", "registro", "anormal"])
-        if col_pedido_prob and col_data_prob:
-            df_prob = (
-                df_prob.select([col_pedido_prob, col_data_prob]).rename({
-                    col_pedido_prob: "Número de pedido JMS",
-                    col_data_prob: "data de registro"
-                })
-            )
-            df_prob = limpar_pedidos(df_prob, "Número de pedido JMS")
-            df_prob = converter_datetime(df_prob, "data de registro")
-            df_prob = df_prob.group_by("Número de pedido JMS").agg(pl.col("data de registro").min())
-
-            df_merge_prob = df_ret.join(df_prob, left_on=COL_PEDIDO_RET, right_on="Número de pedido JMS", how="left")
-            df_merge_prob = df_merge_prob.with_columns(
-                ((pl.col("data de registro") >= pl.col(COL_DATA_ATUALIZACAO_RET))
-                 & pl.col("data de registro").is_not_null()).alias("Remover_Prob")
-            )
-            removidos_prob = df_merge_prob.filter(pl.col("Remover_Prob")).height
-            df_ret = df_merge_prob.filter(~pl.col("Remover_Prob")).drop(
-                ["Remover_Prob", "Número de pedido JMS", "data de registro"], strict=False
-            )
-            print(f"\033[38;5;208m🟠 Problemáticos → Removidos: {removidos_prob} | Mantidos: {df_ret.height}\033[0m")
-
-    # ---------- 4) CUSTÓDIA ----------
-    df_final = df_ret
-    df_cust = ler_planilhas(PASTA_CUSTODIA, "Custódia")
-    if not df_cust.is_empty():
-        col_pedido_c = safe_pick(df_cust, COL_PEDIDO_CUST, ["pedido", "jms"])
-        col_data_c   = safe_pick(df_cust, COL_DATA_REGISTRO_CUST, ["data", "registro"])
-        if col_pedido_c and col_data_c:
-            df_cust = (
-                df_cust
-                .select([col_pedido_c, col_data_c])
-                .rename({col_pedido_c: COL_PEDIDO_CUST, col_data_c: COL_DATA_REGISTRO_CUST})
-            )
-            df_cust = limpar_pedidos(df_cust, COL_PEDIDO_CUST)
-            df_cust = converter_datetime(df_cust, COL_DATA_REGISTRO_CUST)
-            df_cust = df_cust.group_by(COL_PEDIDO_CUST).agg(
-                pl.col(COL_DATA_REGISTRO_CUST).min().alias(COL_DATA_REGISTRO_CUST)
-            )
-            df_cust = df_cust.with_columns(
-                (pl.col(COL_DATA_REGISTRO_CUST) + pl.duration(days=PRAZO_CUSTODIA_DIAS)).alias("Prazo_Limite")
-            )
-
-            df_join = df_ret.join(df_cust, left_on=COL_PEDIDO_RET, right_on=COL_PEDIDO_CUST, how="left")
-            df_join = df_join.with_columns(
-                pl.when(
-                    (pl.col(COL_DATA_ATUALIZACAO_RET) <= pl.col("Prazo_Limite")) &
-                    pl.col("Prazo_Limite").is_not_null()
-                )
-                .then(pl.lit("Dentro do Prazo"))
-                .otherwise(pl.lit("Fora do Prazo"))
-                .alias("Status_Custodia")
-            )
-
-            removidos_cust = df_join.filter(pl.col("Status_Custodia") == "Dentro do Prazo").height
-            df_final = df_join.filter(pl.col("Status_Custodia") == "Fora do Prazo")
-            print(f"\033[94m🔵 Custódia → Removidos: {removidos_cust} | Mantidos: {df_final.height}\033[0m")
-    # ---------- 5) BASE LISTA (comparativo) ----------
-    df_lista = ler_planilhas(PASTA_BASE_LISTA, "Base Retidos (Lista)")
-    if not df_lista.is_empty():
-        col_base_lista = safe_pick(df_lista, "Nome da base de entrega", ["base", "entrega", "网点"])
-        col_qtd_lista  = safe_pick(df_lista, "Qtd a entregar há mais de 10 dias", ["qtd", "10", "dias"])
-        if col_base_lista and col_qtd_lista:
-            df_lista = df_lista.select([col_base_lista, col_qtd_lista]).rename({
-                col_base_lista: "Nome da Base de Entrega",
-                col_qtd_lista: "Qtd_Entregas_>10d"
-            })
-            df_lista = df_lista.with_columns(pl.col("Qtd_Entregas_>10d").cast(pl.Int64, strict=False))
-
-            if "Base de Entrega 派件网点" in df_final.columns:
-                df_resumo = (
-                    df_final.group_by("Base de Entrega 派件网点")
-                    .agg(pl.len().alias("Qtd_Retidos"))
-                    .rename({"Base de Entrega 派件网点": "Nome da Base de Entrega"})
-                )
-
-                df_compara = df_lista.join(df_resumo, on="Nome da Base de Entrega", how="left")
-                df_compara = df_compara.with_columns([
-                    pl.col("Qtd_Retidos").fill_null(0).cast(pl.Int64).alias("Qtd_Retidos"),
-                    ((pl.col("Qtd_Retidos") / pl.col("Qtd_Entregas_>10d")) * 100)
-                    .round(2)
-                    .alias("Percentual_Retidos")
-                ])
-
-                # formata visual opcional
-                df_compara = df_compara.select([
-                    "Nome da Base de Entrega", "Qtd_Entregas_>10d", "Qtd_Retidos", "Percentual_Retidos"
-                ]).sort("Qtd_Retidos", descending=True)
-
-                out_lista = os.path.join(PASTA_SAIDA, f"Comparativo_Base_Lista_{datetime.now():%Y%m%d_%H%M%S}.xlsx")
-                try:
-                    df_compara.write_excel(out_lista)
-                    print(f"\n📊 Comparativo com Base Lista exportado: {out_lista}")
-                except Exception as e:
-                    print(f"\033[91m❌ Erro ao salvar comparativo Base Lista: {e}\033[0m")
-
-                # ---------- TOP 5 BASES NO TERMINAL ----------
-                try:
-                    top5 = (
-                        df_compara
-                        .with_columns(
-                            (pl.col("Qtd_Entregas_>10d") - pl.col("Qtd_Retidos")).alias("Diferença_Lista_vs_Retidos")
-                        )
-                        .sort("Percentual_Retidos", descending=True)
-                        .head(5)
-                    )
-
-                    print("\n==============================")
-                    print("🏆 TOP 5 BASES – DIAGNÓSTICO")
-                    print("==============================")
-                    for row in top5.iter_rows(named=True):
-                        print(f"""
-Base: {row['Nome da Base de Entrega']}
-  • Retidos encontrados ............ {row['Qtd_Retidos']}
-  • Lista >10 dias ................. {row['Qtd_Entregas_>10d']}
-  • Percentual calculado ........... {row['Percentual_Retidos']} %
-  • Diferença (Lista - Retidos) .... {row['Diferença_Lista_vs_Retidos']}
-""")
-                    print("==============================\n")
-                except Exception as e:
-                    print(f"⚠️ Erro ao exibir top 5 no terminal: {e}")
-
-    # ---------- 6) COORDENADORES (merge) ----------
-    if os.path.exists(CAMINHO_COORDENADOR):
+    def _carregar_configuracoes(self, path: str) -> dict:
+        """Carrega as configurações do arquivo JSON."""
         try:
-            df_coord_raw = pl.read_excel(CAMINHO_COORDENADOR)
+            with open(path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            self.logger.info(f"✔️ Configurações carregadas de '{path}'.")
+            return config
+        except FileNotFoundError:
+            self.logger.error(f"❌ Arquivo de configuração '{path}' não encontrado. Abortando.")
+            raise
+        except json.JSONDecodeError as e:
+            self.logger.error(f"❌ Erro ao ler o arquivo de configuração: {e}. Abortando.")
+            raise
+
+    def executar(self):
+        """Orquestra todo o fluxo da análise."""
+        self.logger.info("\n" + "=" * 30 + "\n🚀 INICIANDO ANÁLISE COMPLETA\n" + "=" * 30)
+
+        df_final = self._processar_dados()
+        if df_final is None or df_final.is_empty():
+            self.logger.warning("🔚 Análise finalizada sem dados resultantes.")
+            return
+
+        df_final = self._enriquecer_com_coordenadores(df_final)
+        self._gerar_relatorio_comparativo(df_final)
+        caminho_final = self._salvar_resultado_final(df_final)
+        self._enviar_notificacoes_feishu(df_final)
+        self._exibir_resumo_console(caminho_final)
+
+    def _processar_dados(self) -> pl.DataFrame | None:
+        """Executa as etapas principais de filtragem e junção dos dados."""
+        df = self._ler_e_preparar_retidos()
+        if df is None: return None
+
+        # Salva o estado inicial após os primeiros filtros
+        salvar_relatorio_intermediario(df, "00_Retidos_Iniciais", self.config)
+
+        df = self._aplicar_filtro_devolucao(df)
+        df = self._aplicar_filtro_problematicos(df)
+        df = self._aplicar_filtro_custodia(df)
+
+        return df
+
+    def _ler_e_preparar_retidos(self) -> pl.DataFrame | None:
+        """Lê a base de retidos e aplica os filtros iniciais."""
+        df_ret = ler_planilhas(self.config["caminhos"]["pasta_retidos"], "Retidos")
+        if df_ret.is_empty():
+            self.logger.error("❌ Nenhum dado em Retidos. Análise não pode continuar.")
+            return None
+
+        # NOVO: Filtrar por "Dias Retidos" em vez de "Cluster"
+        col_dias = safe_pick(df_ret, "Dias Retidos 滞留日", ["dias", "滞留日", "retidos dias"])
+        if col_dias:
+            total_antes = df_ret.height
+            # Converte a coluna para número (se for string) e filtra para manter apenas dias > 6
+            df_ret = df_ret.with_columns(pl.col(col_dias).cast(pl.Int64, strict=False))
+            df_ret = df_ret.filter(pl.col(col_dias) > 6)
+            self.removidos["cluster"] = total_antes - df_ret.height
+            self.logger.info(
+                f"🧹 Dias Retidos (<= 6 dias) → Removidos: {self.removidos['cluster']} | Mantidos: {df_ret.height}")
+
+        # NOVO: Calcular o total de pedidos por base ANTES de qualquer filtro
+        col_base_total = safe_pick(df_ret, "Base de Entrega 派件网点", ["base", "网点", "派件"])
+        if col_base_total:
+            self.df_total_por_base = (
+                df_ret
+                .select([col_base_total])
+                .rename({col_base_total: "Base de Entrega_Raw"})
+                .with_columns(
+                    pl.col("Base de Entrega_Raw").str.strip_chars().str.to_uppercase().alias("Base de Entrega_Clean"))
+                .group_by("Base de Entrega_Clean")
+                .agg(pl.len().alias("Total de Pedidos"))
+            )
+
+        cols_map = {
+            "pedido": safe_pick(df_ret, self.config["colunas"]["col_pedido_ret"],
+                                ["Número do Pedido JMS 运单号", "pedido"]),
+            "data": safe_pick(df_ret, self.config["colunas"]["col_data_atualizacao_ret"], ["data", "atualiza", "更新"]),
+            "regional": safe_pick(df_ret, self.config["colunas"]["col_regional_ret"], ["regional", "区域"]),
+            "base_entrega": safe_pick(df_ret, "Base de Entrega 派件网点", ["base", "网点", "派件"])
+        }
+
+        cols_validas = {k: v for k, v in cols_map.items() if v}
+        df_ret = df_ret.select(list(cols_validas.values())).rename({
+            cols_validas["pedido"]: self.config["colunas"]["col_pedido_ret"],
+            cols_validas["data"]: self.config["colunas"]["col_data_atualizacao_ret"],
+            cols_validas["regional"]: self.config["colunas"]["col_regional_ret"],
+            cols_validas["base_entrega"]: "Base de Entrega 派件网点"
+        })
+
+        df_ret = limpar_pedidos(df_ret, self.config["colunas"]["col_pedido_ret"])
+        df_ret = converter_datetime(df_ret, self.config["colunas"]["col_data_atualizacao_ret"])
+
+        if self.config["colunas"]["col_regional_ret"] in df_ret.columns:
+            df_ret = df_ret.filter(pl.col(self.config["colunas"]["col_regional_ret"]).is_in(
+                self.config["parametros"]["regionais_desejadas"]))
+
+        self.total_inicial_filtrado = df_ret.height
+        self.logger.info(f"🟢 Retidos iniciais (após filtros): {self.total_inicial_filtrado}")
+        return df_ret
+
+    def _aplicar_filtro_devolucao(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Remove pedidos que foram para devolução após a atualização."""
+        df_dev = ler_planilhas(self.config["caminhos"]["pasta_devolucao"], "Devolução")
+        if df_dev.is_empty(): return df
+
+        col_pedido_dev = safe_pick(df_dev, self.config["colunas"]["col_pedido_dev"], ["pedido", "jms"])
+        col_data_dev = safe_pick(df_dev, self.config["colunas"]["col_data_solicitacao_dev"], ["solicit", "data"])
+        if not (col_pedido_dev and col_data_dev): return df
+
+        df_dev = (
+            df_dev.select([col_pedido_dev, col_data_dev])
+            .rename({col_pedido_dev: self.config["colunas"]["col_pedido_dev"],
+                     col_data_dev: self.config["colunas"]["col_data_solicitacao_dev"]})
+            .pipe(limpar_pedidos, self.config["colunas"]["col_pedido_dev"])
+            .pipe(converter_datetime, self.config["colunas"]["col_data_solicitacao_dev"])
+            .group_by(self.config["colunas"]["col_pedido_dev"]).agg(
+                pl.col(self.config["colunas"]["col_data_solicitacao_dev"]).min())
+        )
+
+        df_merge = df.join(df_dev, left_on=self.config["colunas"]["col_pedido_ret"],
+                           right_on=self.config["colunas"]["col_pedido_dev"], how="left")
+
+        df_removidos = df_merge.filter(
+            (pl.col(self.config["colunas"]["col_data_solicitacao_dev"]) > pl.col(
+                self.config["colunas"]["col_data_atualizacao_ret"])) &
+            pl.col(self.config["colunas"]["col_data_solicitacao_dev"]).is_not_null()
+        )
+
+        salvar_relatorio_intermediario(df_removidos, "01_Removidos_Devolucao", self.config)
+
+        pedidos_para_remover = df_removidos.select(self.config["colunas"]["col_pedido_ret"]).to_series()
+
+        removidos_count = pedidos_para_remover.len()
+        self.removidos["devolucao"] = removidos_count
+        self.logger.info(f"🟡 Devolução → Removidos: {removidos_count} | Mantidos: {df.height - removidos_count}")
+
+        return df.filter(~pl.col(self.config["colunas"]["col_pedido_ret"]).is_in(pedidos_para_remover))
+
+    def _aplicar_filtro_problematicos(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Remove pedidos que se tornaram problemáticos após a atualização."""
+        df_prob = ler_planilhas(self.config["caminhos"]["pasta_problematicos"], "Problemáticos")
+        if df_prob.is_empty(): return df
+
+        col_pedido_prob = safe_pick(df_prob, "Número de pedido JMS", ["pedido", "jms"])
+        col_data_prob = safe_pick(df_prob, "data de registro", ["data", "registro", "anormal"])
+        if not (col_pedido_prob and col_data_prob): return df
+
+        df_prob = (
+            df_prob.select([col_pedido_prob, col_data_prob])
+            .rename({col_pedido_prob: "Número de pedido JMS", col_data_prob: "data de registro"})
+            .pipe(limpar_pedidos, "Número de pedido JMS")
+            .pipe(converter_datetime, "data de registro")
+            .group_by("Número de pedido JMS").agg(pl.col("data de registro").min())
+        )
+
+        df_merge = df.join(df_prob, left_on=self.config["colunas"]["col_pedido_ret"], right_on="Número de pedido JMS",
+                           how="left")
+
+        df_removidos = df_merge.filter(
+            (pl.col("data de registro") >= pl.col(self.config["colunas"]["col_data_atualizacao_ret"])) &
+            pl.col("data de registro").is_not_null()
+        )
+
+        salvar_relatorio_intermediario(df_removidos, "02_Removidos_Problematicos", self.config)
+
+        pedidos_para_remover = df_removidos.select(self.config["colunas"]["col_pedido_ret"]).to_series()
+
+        removidos_count = pedidos_para_remover.len()
+        self.removidos["problematicos"] = removidos_count
+        self.logger.info(f"🟠 Problemáticos → Removidos: {removidos_count} | Mantidos: {df.height - removidos_count}")
+
+        return df.filter(~pl.col(self.config["colunas"]["col_pedido_ret"]).is_in(pedidos_para_remover))
+
+    def _aplicar_filtro_custodia(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Identifica pedidos em custódia e remove os que estão dentro do prazo."""
+        df_cust = ler_planilhas(self.config["caminhos"]["pasta_custodia"], "Custódia")
+        if df_cust.is_empty(): return df
+
+        col_pedido_c = safe_pick(df_cust, self.config["colunas"]["col_pedido_cust"], ["pedido", "jms"])
+        col_data_c = safe_pick(df_cust, self.config["colunas"]["col_data_registro_cust"], ["data", "registro"])
+        if not (col_pedido_c and col_data_c): return df
+
+        df_cust = (
+            df_cust.select([col_pedido_c, col_data_c])
+            .rename({col_pedido_c: self.config["colunas"]["col_pedido_cust"],
+                     col_data_c: self.config["colunas"]["col_data_registro_cust"]})
+            .pipe(limpar_pedidos, self.config["colunas"]["col_pedido_cust"])
+            .pipe(converter_datetime, self.config["colunas"]["col_data_registro_cust"])
+            .group_by(self.config["colunas"]["col_pedido_cust"]).agg(
+                pl.col(self.config["colunas"]["col_data_registro_cust"]).min())
+            .with_columns(
+                (pl.col(self.config["colunas"]["col_data_registro_cust"]) + pl.duration(
+                    days=self.config["parametros"]["prazo_custodia_dias"])).alias("Prazo_Limite")
+            )
+        )
+
+        df_join = df.join(df_cust, left_on=self.config["colunas"]["col_pedido_ret"],
+                          right_on=self.config["colunas"]["col_pedido_cust"], how="left")
+        df_join = df_join.with_columns(
+            pl.when(
+                (pl.col(self.config["colunas"]["col_data_atualizacao_ret"]) <= pl.col("Prazo_Limite")) &
+                pl.col("Prazo_Limite").is_not_null()
+            ).then(pl.lit("Dentro do Prazo")).otherwise(pl.lit("Fora do Prazo")).alias("Status_Custodia")
+        )
+
+        df_removidos = df_join.filter(pl.col("Status_Custodia") == "Dentro do Prazo")
+        salvar_relatorio_intermediario(df_removidos, "03_Removidos_Custodia", self.config)
+
+        self.removidos["custodia"] = df_removidos.height
+        self.logger.info(
+            f"🔵 Custódia → Removidos: {self.removidos['custodia']} | Mantidos: {df_join.height - self.removidos['custodia']}")
+
+        return df_join.filter(pl.col("Status_Custodia") == "Fora do Prazo")
+
+    def _enriquecer_com_coordenadores(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Adiciona a coluna de coordenadores ao DataFrame final."""
+        if not os.path.exists(self.config["caminhos"]["caminho_coordenador"]):
+            self.logger.warning("⚠️ Planilha de Coordenadores não encontrada; seguindo sem coordenador.")
+            return df
+
+        try:
+            df_coord_raw = pl.read_excel(self.config["caminhos"]["caminho_coordenador"])
             df_coord = next(iter(df_coord_raw.values())) if isinstance(df_coord_raw, dict) else df_coord_raw
 
             col_base_coord = detectar_coluna(df_coord, ["nome da base", "base", "entrega"])
@@ -395,52 +438,132 @@ Base: {row['Nome da Base de Entrega']}
                     col_base_coord: "Nome da Base de Entrega",
                     col_coord: "Coordenador"
                 })
-                if "Base de Entrega 派件网点" in df_final.columns:
-                    df_final = df_final.join(
-                        df_coord,
-                        left_on="Base de Entrega 派件网点",
-                        right_on="Nome da Base de Entrega",
-                        how="left"
-                    )
-                print(f"\033[96m👥 Coordenadores adicionados com sucesso.\033[0m")
+                if "Base de Entrega 派件网点" in df.columns:
+                    return df.join(df_coord, left_on="Base de Entrega 派件网点", right_on="Nome da Base de Entrega",
+                                   how="left")
+
             else:
-                print("\033[93m⚠️ Colunas 'Nome da base' ou 'Coordenadores' não encontradas em Base_Atualizada.xlsx.\033[0m")
+                self.logger.warning(
+                    "⚠️ Colunas 'Nome da base' ou 'Coordenadores' não encontradas na planilha de coordenadores.")
+                return df
         except Exception as e:
-            print(f"\033[91m❌ Erro ao integrar coordenadores: {e}\033[0m")
-    else:
-        print("\033[93m⚠️ Planilha de Coordenadores não encontrada; seguindo sem coordenador.\033[0m")
+            self.logger.error(f"❌ Erro ao integrar coordenadores: {e}")
+            return df
 
-    # ---------- 7) SALVAR RESULTADO FINAL ----------
-    out_final = salvar_resultado(df_final, PASTA_SAIDA, NOME_ARQUIVO_FINAL)
+    def _gerar_relatorio_comparativo(self, df_final: pl.DataFrame):
+        """Gera o relatório final com Total, Lista e Retidos por base."""
+        if self.df_total_por_base.is_empty():
+            self.logger.warning("⚠️ Pulando relatório comparativo: dados de total por base não encontrados.")
+            return
 
-    # ---------- 8) ENVIAR CARDS FEISHU (DESATIVADO) ----------
-    if "Coordenador" in df_final.columns:
-        coords_unicos = df_final.select("Coordenador").unique().to_series().drop_nulls().to_list()
-        total_amostra = df_final.height if df_final.height else 1
-        print(f"\n📢 Envio de cards Feishu está DESATIVADO neste modo de teste.")
-        print(f"   Coordenadores impactados: {len(coords_unicos)}")
+        # --- PASSO 1: Preparar o resumo dos retidos encontrados na análise ---
+        df_resumo = (
+            df_final
+            .group_by("Base de Entrega 派件网点")
+            .agg(pl.len().alias("Retidos (Análise Final)"))
+            .rename({"Base de Entrega 派件网点": "Base de Entrega_Raw"})
+        ).with_columns(
+            pl.col("Base de Entrega_Raw").str.strip_chars().str.to_uppercase().alias("Base de Entrega_Clean")
+        )
+
+        # --- PASSO 2: Preparar a base da lista ---
+        df_lista = ler_planilhas(self.config["caminhos"]["pasta_base_lista"], "Base Retidos (Lista)")
+        if df_lista.is_empty():
+            self.logger.warning("⚠️ Pulando relatório comparativo: 'Base Lista' não encontrada.")
+            return
+
+        col_base_lista = safe_pick(df_lista, "Nome da base de entrega", ["base", "entrega", "网点"])
+        col_qtd_lista = safe_pick(df_lista, "Qtd a entregar há mais de 10 dias", ["qtd", "10", "dias"])
+        if not (col_base_lista and col_qtd_lista): return
+
+        df_lista = df_lista.select([col_base_lista, col_qtd_lista]).rename({
+            col_base_lista: "Base de Entrega_Raw",
+            col_qtd_lista: "Entregas (Lista > 10d)"
+        }).with_columns([
+            pl.col("Entregas (Lista > 10d)").cast(pl.Int64, strict=False),
+            pl.col("Base de Entrega_Raw").str.strip_chars().str.to_uppercase().alias("Base de Entrega_Clean")
+        ])
+
+        # --- PASSO 3: Juntar as três tabelas ---
+        df_compara = self.df_total_por_base.join(
+            df_lista, on="Base de Entrega_Clean", how="left"
+        ).join(
+            df_resumo, on="Base de Entrega_Clean", how="left"
+        ).with_columns([
+            pl.col("Entregas (Lista > 10d)").fill_null(0).cast(pl.Int64),
+            pl.col("Retidos (Análise Final)").fill_null(0).cast(pl.Int64),
+        ]).sort("Total de Pedidos", descending=True)
+
+        # --- PASSO 4: Selecionar e salvar o relatório final ---
+        df_final_report = df_compara.select([
+            "Base de Entrega_Raw",
+            "Total de Pedidos",
+            "Entregas (Lista > 10d)",
+            "Retidos (Análise Final)"
+        ]).rename({
+            "Base de Entrega_Raw": "Base de Entrega"
+        })
+
+        out_lista = salvar_resultado(df_final_report, self.config["caminhos"]["pasta_saida"], "Resumo_Geral_Por_Base",
+                                     self.config["parametros"]["excel_row_limit"])
+
+        self.logger.info("\n🏆 TOP 5 BASES – RESUMO GERAL")
+        for row in df_final_report.head(5).iter_rows(named=True):
+            self.logger.info(
+                f"Base: {row['Base de Entrega']} | "
+                f"Total: {row['Total de Pedidos']} | "
+                f"Lista >10d: {row['Entregas (Lista > 10d)']} | "
+                f"Retidos: {row['Retidos (Análise Final)']}"
+            )
+        self.logger.info("=" * 30)
+
+    def _salvar_resultado_final(self, df: pl.DataFrame) -> str:
+        """Salva o DataFrame final processado."""
+        return salvar_resultado(
+            df,
+            self.config["caminhos"]["pasta_saida"],
+            self.config["parametros"]["nome_arquivo_final"],
+            self.config["parametros"]["excel_row_limit"]
+        )
+
+    def _enviar_notificacoes_feishu(self, df: pl.DataFrame):
+        """Prepara e envia os cards para o Feishu (DESATIVADO por padrão)."""
+        self.logger.info("\n📢 Envio de cards Feishu está DESATIVADO neste modo de teste.")
+        if "Coordenador" not in df.columns:
+            self.logger.warning("⚠️ Coluna 'Coordenador' não encontrada. Nenhum card preparado.")
+            return
+
+        coords_unicos = df.select("Coordenador").unique().to_series().drop_nulls().to_list()
+        total_amostra = df.height if df.height > 0 else 1
+        self.logger.info(f"   Coordenadores impactados: {len(coords_unicos)}")
+
         for coord in coords_unicos:
-            qtd = df_final.filter(pl.col("Coordenador") == coord).height
+            qtd = df.filter(pl.col("Coordenador") == coord).height
             percentual = (qtd / total_amostra) * 100.0
-            print(f"   - {coord}: {qtd} pedidos ({percentual:.2f}%)")
-            # enviar_card_feishu(coord, qtd, percentual, url_relatorio=None)  # <- DESATIVADO
-    else:
-        print("\033[93m⚠️ Coluna 'Coordenador' não encontrada. Nenhum card preparado.\033[0m")
+            self.logger.info(f"   - {coord}: {qtd} pedidos ({percentual:.2f}%)")
+            # enviar_card_feishu(coord, qtd, percentual, self.config["feishu"])
 
-    # ---------- 9) RESUMO NO CONSOLE ----------
-    print("\n==============================")
-    print("📦 RESUMO FINAL DE PROCESSAMENTO")
-    print("==============================")
-    print(f"📊 Total Retidos iniciais (após filtro regional): {total_inicial_filtrado + removidos_cluster}")
-    print(f"🟣 Removidos por Cluster (1–5 dias): {removidos_cluster}")
-    print(f"🟡 Removidos por Devolução: {removidos_dev}")
-    print(f"🟠 Removidos por Problemáticos: {removidos_prob}")
-    print(f"🔵 Removidos por Custódia: {removidos_cust}")
-    print(f"✅ Pedidos restantes (fora do prazo): {df_final.height}")
-    print(f"📄 Arquivo final: {out_final}")
+    def _exibir_resumo_console(self, caminho_final: str):
+        """Exibe um resumo detalhado de todo o processamento no console."""
+        self.logger.info("\n" + "=" * 30 + "\n📦 RESUMO FINAL DE PROCESSAMENTO\n" + "=" * 30)
+        self.logger.info(f"📊 Total Retidos iniciais (após filtro regional): {self.total_inicial_filtrado}")
+        self.logger.info(f"🟣 Removidos por Dias Retidos (<= 6 dias): {self.removidos['cluster']}")
+        self.logger.info(f"🟡 Removidos por Devolução: {self.removidos['devolucao']}")
+        self.logger.info(f"🟠 Removidos por Problemáticos: {self.removidos['problematicos']}")
+        self.logger.info(f"🔵 Removidos por Custódia: {self.removidos['custodia']}")
+        total_final = self.total_inicial_filtrado - sum(self.removidos.values())
+        self.logger.info(f"✅ Pedidos restantes (fora do prazo): {total_final}")
+        self.logger.info(f"📄 Arquivo final: {caminho_final}")
+        self.logger.info("=" * 30 + "\n")
+
 
 # ============================================================
 # ▶️ EXECUÇÃO
 # ============================================================
 if __name__ == "__main__":
-    analisar_retidos()
+    setup_logging()
+    try:
+        analisador = AnaliseRetidos()
+        analisador.executar()
+    except Exception as e:
+        logging.critical(f"Ocorreu um erro crítico e a execução foi interrompida: {e}", exc_info=True)
