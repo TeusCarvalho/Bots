@@ -832,3 +832,9 @@ ValueError: This sheet is too large! Your sheet size is: 2476990, 36 Max sheet s
 2025-11-13 08:58:57,920 - INFO - ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 2025-11-13 08:58:57,936 - INFO - 📦 Relatório antigo movido: Resumo_Consolidado_20251113.xlsx
 2025-11-13 09:00:29,854 - INFO - 🏁 Processamento concluído (v2.4)!
+2025-11-14 08:46:22,076 - INFO - 🚀 Iniciando processamento SLA (v2.5)...
+2025-11-14 08:46:25,821 - INFO - 📥 Registros carregados: 153919
+2025-11-14 08:46:25,826 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-11-14 08:46:25,909 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251113.xlsx
+2025-11-14 08:46:28,864 - INFO - 📨 Card enviado para João Melo
+2025-11-14 08:46:28,865 - INFO - 🏁 Processamento concluído (v2.5)
