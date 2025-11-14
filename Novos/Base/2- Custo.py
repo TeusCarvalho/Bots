@@ -56,64 +56,6 @@ def carregar_excel(path):
 def to_float_safe(series):
     return pd.to_numeric(series.astype(str).str.replace(",", ".").str.extract(r"(\d+\.?\d*)")[0], errors="coerce").fillna(0)
 
-def enviar_card_feishu(coordenador, df_resumo):
-    try:
-        total_custo = df_resumo["Custo_Total_R$"].sum()
-        total_bases = df_resumo["Base responsável"].nunique()
-        total_pedidos = df_resumo["Total_Pedidos"].sum()
-
-        top_bases = (
-            df_resumo.groupby("Base responsável")["Custo_Total_R$"]
-            .sum()
-            .sort_values(ascending=False)
-            .head(5)
-            .reset_index()
-        )
-
-        linhas_top = [
-            f"{i}. 💸 **{row['Base responsável']}** — {format_currency(row['Custo_Total_R$'])}"
-            for i, row in enumerate(top_bases.to_dict("records"), 1)
-        ]
-
-        conteudo = (
-            f"👤 **Coordenador:** {coordenador}\n"
-            f"📅 **Atualizado em:** {datetime.now():%d/%m/%Y %H:%M}\n"
-            f"📦 **Total de pedidos:** {int(total_pedidos):,}\n"
-            f"💰 **Custo total:** {format_currency(total_custo)}\n"
-            f"🏢 **Bases Avaliadas:** {int(total_bases)}\n\n"
-            f"🔻 **5 Maiores Custos:**\n" + "\n".join(linhas_top)
-        )
-
-        payload = {
-            "msg_type": "interactive",
-            "card": {
-                "config": {"wide_screen_mode": True},
-                "header": {"template": "turquoise",
-                           "title": {"tag": "plain_text", "content": f"💰 Custos - {coordenador}"}},
-                "elements": [
-                    {"tag": "div", "text": {"tag": "lark_md", "content": conteudo}},
-                    {"tag": "hr"},
-                    {"tag": "action", "actions": [
-                        {"tag": "button",
-                         "text": {"tag": "plain_text", "content": "📂 Abrir Pasta no OneDrive"},
-                         "url": LINK_PASTA, "type": "default"}
-                    ]}
-                ]
-            }
-        }
-
-        webhook = COORDENADOR_WEBHOOKS.get(coordenador)
-        if not webhook:
-            print(f"⚠️ Nenhum webhook configurado para {coordenador}, pulando envio.")
-            return
-
-        resp = requests.post(webhook, json=payload, timeout=10)
-        resp.raise_for_status()
-        print(f"✅ Card enviado para {coordenador}")
-
-    except Exception as e:
-        print(f"🚨 Falha ao enviar card para {coordenador}: {e}")
-
 # ======================================================
 # 🚀 PROCESSAMENTO PRINCIPAL
 # ======================================================
@@ -126,6 +68,29 @@ if __name__ == "__main__":
 
         df = carregar_excel(FILE_PATH)
         print(f"📄 Planilha carregada ({len(df):,} linhas)".replace(",", "."))
+
+        # ======================================================
+        # 🔎 FILTRA APENAS AS REGIONAIS GP, GO E PA
+        # ======================================================
+        if "Regional responsável" in df.columns:
+
+            df["Regional responsável"] = (
+                df["Regional responsável"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+            regionais_validas = ["GP", "GO", "PA"]
+            antes = len(df)
+
+            df = df[df["Regional responsável"].isin(regionais_validas)]
+            depois = len(df)
+
+            print(f"🏢 Regionais filtradas: Mantidas apenas GP, GO e PA ({antes} → {depois} linhas).")
+
+        else:
+            print("⚠️ Coluna 'Regional responsável' não encontrada. Filtro ignorado.")
 
         # 🔧 Normaliza e junta coordenadores
         df_coord = pd.read_excel(COORDENADOR_PATH)
@@ -169,11 +134,6 @@ if __name__ == "__main__":
             resumo_coord.to_excel(writer, index=False, sheet_name="Resumo_por_Coordenador")
 
         print(f"\n💾 Arquivo salvo com sucesso em:\n{ARQUIVO_SAIDA}\n")
-
-        for coordenador in resumo_coord["Coordenadores"].dropna().unique():
-            sub_df = resumo_coord[resumo_coord["Coordenadores"] == coordenador]
-            if not sub_df.empty:
-                enviar_card_feishu(coordenador, sub_df)
 
         print("\n🏁 Processo concluído com sucesso!")
 

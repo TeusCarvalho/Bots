@@ -838,3 +838,18 @@ ValueError: This sheet is too large! Your sheet size is: 2476990, 36 Max sheet s
 2025-11-14 08:46:25,909 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251113.xlsx
 2025-11-14 08:46:28,864 - INFO - 📨 Card enviado para João Melo
 2025-11-14 08:46:28,865 - INFO - 🏁 Processamento concluído (v2.5)
+2025-11-14 08:47:51,457 - INFO - 🚀 Iniciando processamento SLA (v2.5)...
+2025-11-14 08:47:54,772 - INFO - 📥 Registros carregados: 153919
+2025-11-14 08:47:54,773 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-11-14 08:47:54,804 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251114.xlsx
+2025-11-14 08:47:56,942 - INFO - 📨 Card enviado para João Melo
+2025-11-14 08:47:58,400 - INFO - 📨 Card enviado para Johas Vieira
+2025-11-14 08:47:59,906 - INFO - 📨 Card enviado para Anderson Matheus
+2025-11-14 08:48:01,404 - INFO - 📨 Card enviado para Marcelo Medina
+2025-11-14 08:48:02,984 - INFO - 📨 Card enviado para Odária Fereira
+2025-11-14 08:48:04,548 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-11-14 08:48:06,049 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-11-14 08:48:07,699 - INFO - 📨 Card enviado para Jose Marlon
+2025-11-14 08:48:09,235 - INFO - 📨 Card enviado para Emerson Silva
+2025-11-14 08:48:10,677 - INFO - 📨 Card enviado para Marcos Caique
+2025-11-14 08:48:10,678 - INFO - 🏁 Processamento concluído (v2.5)
