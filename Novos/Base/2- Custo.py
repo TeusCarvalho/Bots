@@ -16,6 +16,7 @@ OUTPUT_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Custos - Co
 LINK_PASTA = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/EvIP3oIiLJRAqcB1SZ_1nmYBXLIYSJkIns5Pf_Xz2OqY_w?e=OEXsJN"
 
 DATA_ATUAL = datetime.now().strftime("%Y%m%d_%H%M%S")
+DATA_HUMANA = datetime.now().strftime("%d/%m/%Y %H:%M")
 ARQUIVO_SAIDA = os.path.join(OUTPUT_DIR, f"Custos_Consolidado_{DATA_ATUAL}.xlsx")
 
 # ======================================================
@@ -35,14 +36,8 @@ COORDENADOR_WEBHOOKS = {
 }
 
 # ======================================================
-# 🧩 FUNÇÕES AUXILIARES
+# 🔧 FUNÇÕES AUXILIARES
 # ======================================================
-def format_currency(value):
-    try:
-        return f"R$ {float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    except Exception:
-        return "R$ 0,00"
-
 def encontrar_arquivo_entrada(pasta):
     arquivos = [f for f in os.listdir(pasta) if f.lower().endswith((".xls", ".xlsx")) and not f.startswith("~$")]
     if not arquivos:
@@ -57,6 +52,78 @@ def to_float_safe(series):
     return pd.to_numeric(series.astype(str).str.replace(",", ".").str.extract(r"(\d+\.?\d*)")[0], errors="coerce").fillna(0)
 
 # ======================================================
+# 🎨 CARD FEISHU IGUAL AO DA IMAGEM
+# ======================================================
+def enviar_card_feishu_card(webhook, nome_coord, total_pedidos, custo_total, bases, top5):
+    custo_fmt = f"R$ {custo_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    elementos_top5 = []
+    for base, custo in top5:
+        custo_b_fmt = f"R$ {custo:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        elementos_top5.append({
+            "tag": "div",
+            "text": {
+                "tag": "lark_md",
+                "content": f"🪙 **{base} — {custo_b_fmt}**"
+            }
+        })
+
+    card = {
+        "msg_type": "interactive",
+        "card": {
+            "header": {
+                "template": "green",
+                "title": {
+                    "tag": "plain_text",
+                    "content": f"💰 Custos - {nome_coord}"
+                }
+            },
+            "elements": [
+                {
+                    "tag": "div",
+                    "text": {
+                        "tag": "lark_md",
+                        "content": (
+                            f"👤 **Coordenador:** {nome_coord}\n"
+                            f"📅 **Atualizado em:** {DATA_HUMANA}\n"
+                            f"📦 **Total de pedidos:** {total_pedidos}\n"
+                            f"💰 **Custo total:** {custo_fmt}\n"
+                            f"🏢 **Bases Avaliadas:** {len(bases)}\n"
+                        )
+                    }
+                },
+                {"tag": "hr"},
+                {
+                    "tag": "div",
+                    "text": {
+                        "tag": "lark_md",
+                        "content": "🔻 **5 Maiores Custos:**"
+                    }
+                },
+                *elementos_top5,
+                {"tag": "hr"},
+                {
+                    "tag": "action",
+                    "actions": [
+                        {
+                            "tag": "button",
+                            "text": {
+                                "tag": "plain_text",
+                                "content": "📁 Abrir Pasta no OneDrive"
+                            },
+                            "url": LINK_PASTA,
+                            "type": "primary"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+
+    requests.post(webhook, json=card)
+
+
+# ======================================================
 # 🚀 PROCESSAMENTO PRINCIPAL
 # ======================================================
 if __name__ == "__main__":
@@ -69,73 +136,79 @@ if __name__ == "__main__":
         df = carregar_excel(FILE_PATH)
         print(f"📄 Planilha carregada ({len(df):,} linhas)".replace(",", "."))
 
-        # ======================================================
-        # 🔎 FILTRA APENAS AS REGIONAIS GP, GO E PA
-        # ======================================================
-        if "Regional responsável" in df.columns:
-
-            df["Regional responsável"] = (
-                df["Regional responsável"]
-                .astype(str)
-                .str.strip()
-                .str.upper()
-            )
-
-            regionais_validas = ["GP", "GO", "PA"]
+        # 🔥 Remover remessas com sufixo "-001"
+        if "Remessa" in df.columns:
             antes = len(df)
+            df["Remessa"] = df["Remessa"].astype(str).str.strip()
+            df = df[~df["Remessa"].str.contains("-", na=False)]
+            print(f"🧹 Removidas {antes - len(df)} remessas com sufixo '-XX'.")
 
-            df = df[df["Regional responsável"].isin(regionais_validas)]
-            depois = len(df)
+        # 🔎 Filtrar GP / GO / PA
+        df["Regional responsável"] = df["Regional responsável"].astype(str).str.upper().str.strip()
+        df = df[df["Regional responsável"].isin(["GP", "GO", "PA"])]
 
-            print(f"🏢 Regionais filtradas: Mantidas apenas GP, GO e PA ({antes} → {depois} linhas).")
-
-        else:
-            print("⚠️ Coluna 'Regional responsável' não encontrada. Filtro ignorado.")
-
-        # 🔧 Normaliza e junta coordenadores
+        # 🔧 Vincular coordenadores
         df_coord = pd.read_excel(COORDENADOR_PATH)
-        coord_col = "Coordenadores" if "Coordenadores" in df_coord.columns else "Coordenador"
-        df_coord.rename(columns={coord_col: "Coordenadores"}, inplace=True)
+        col_coord = "Coordenadores" if "Coordenadores" in df_coord.columns else "Coordenador"
+        df_coord.rename(columns={col_coord: "Coordenadores"}, inplace=True)
 
-        df["Base responsável"] = df["Base responsável"].astype(str).str.strip().str.upper()
-        df_coord["Nome da base"] = df_coord["Nome da base"].astype(str).str.strip().str.upper()
+        df["Base responsável"] = df["Base responsável"].astype(str).str.upper().str.strip()
+        df_coord["Nome da base"] = df_coord["Nome da base"].astype(str).str.upper().str.strip()
 
         df = pd.merge(
             df, df_coord[["Nome da base", "Coordenadores"]],
             left_on="Base responsável", right_on="Nome da base", how="left"
         ).drop(columns=["Nome da base"], errors="ignore")
 
-        print("👥 Coordenadores vinculados com sucesso.")
+        print("👥 Coordenadores vinculados.")
 
-        # 💰 Converte 'Valor a pagar (yuan)' em float
-        if "Valor a pagar (yuan)" in df.columns:
-            df["Custo_R$"] = to_float_safe(df["Valor a pagar (yuan)"])
-        else:
-            df["Custo_R$"] = 0
+        # 💰 Converter valor
+        df["Custo_R$"] = to_float_safe(df["Valor a pagar (yuan)"]) if "Valor a pagar (yuan)" in df.columns else 0
 
-        # 🧮 Resumo de custos
-        resumo_coord = (
-            df.groupby(["Coordenadores", "Base responsável"], dropna=False)
-            .agg({
-                "Remessa": "count",
-                "Custo_R$": "sum"
-            })
-            .reset_index()
-        )
-
-        resumo_coord.rename(columns={
-            "Remessa": "Total_Pedidos",
-            "Custo_R$": "Custo_Total_R$"
-        }, inplace=True)
-
+        # 💾 Salvar Excel
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         with pd.ExcelWriter(ARQUIVO_SAIDA, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, sheet_name="Base_Processada")
-            resumo_coord.to_excel(writer, index=False, sheet_name="Resumo_por_Coordenador")
 
-        print(f"\n💾 Arquivo salvo com sucesso em:\n{ARQUIVO_SAIDA}\n")
+        print(f"💾 Arquivo salvo em:\n{ARQUIVO_SAIDA}\n")
+
+        # ======================================================
+        # 📤 Enviar cards no Feishu
+        # ======================================================
+        print("📤 Enviando cards Feishu...\n")
+
+        coordenadores = sorted(df["Coordenadores"].dropna().unique())
+
+        for coord in coordenadores:
+            if coord not in COORDENADOR_WEBHOOKS:
+                print(f"⚠️ Sem webhook para: {coord}")
+                continue
+
+            df_c = df[df["Coordenadores"] == coord]
+            total_pedidos = len(df_c)
+            custo_total = df_c["Custo_R$"].sum()
+            bases = sorted(df_c["Base responsável"].unique())
+
+            top5 = (
+                df_c.groupby("Base responsável")["Custo_R$"]
+                .sum()
+                .sort_values(ascending=False)
+                .head(5)
+                .items()
+            )
+
+            enviar_card_feishu_card(
+                webhook=COORDENADOR_WEBHOOKS[coord],
+                nome_coord=coord,
+                total_pedidos=total_pedidos,
+                custo_total=custo_total,
+                bases=bases,
+                top5=top5
+            )
+
+            print(f"✔ Enviado para {coord} ({total_pedidos} pedidos).")
 
         print("\n🏁 Processo concluído com sucesso!")
 
     except Exception as e:
-        print(f"\n❌ Erro ao processar:\n{e}")
+        print(f"\n❌ ERRO:\n{e}")

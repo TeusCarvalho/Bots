@@ -8,6 +8,7 @@ import pandas as pd
 import multiprocessing
 import logging
 import shutil
+import unicodedata
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
@@ -24,6 +25,9 @@ logging.basicConfig(
 
 os.environ["POLARS_MAX_THREADS"] = str(multiprocessing.cpu_count())
 
+# ============================================================
+# Caminhos
+# ============================================================
 PASTA_ENTRADA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\SLA - Entrega Realizada"
 PASTA_COORDENADOR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
 PASTA_SAIDA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\SLA - Entrega Realizada"
@@ -53,12 +57,51 @@ COORDENADOR_WEBHOOKS = {
 
 EXTS = (".xlsx", ".xls", ".csv")
 
+# ============================================================
+# 🔧 Normalização para garantir JOIN
+# ============================================================
+def normalizar(s):
+    if s is None:
+        return ""
+    s = str(s).upper().strip()
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    while "  " in s:
+        s = s.replace("  ", " ")
+    return s
+
+
+# ============================================================
+# 🗓️ Cálculo de data inteligente (v2.8)
+# ============================================================
+def calcular_data_base():
+    hoje = datetime.now().date()
+    dia = hoje.weekday()  # 0=Seg, 1=Ter, ..., 5=Sáb, 6=Dom
+
+    # Sábado e Domingo → NÃO RODAR
+    if dia in (5, 6):
+        logging.warning("⛔ Hoje é sábado ou domingo. Execução cancelada.")
+        return None
+
+    # Segunda → pegar sexta-feira
+    if dia == 0:
+        return hoje - timedelta(days=3)
+
+    # Terça a Sexta → ontem
+    return hoje - timedelta(days=1)
+
+
+# ============================================================
+# Funções auxiliares
+# ============================================================
 def cor_percentual(p: float) -> str:
     if p < 0.95:
         return "🔴"
     elif p < 0.97:
         return "🟡"
     return "🟢"
+
+
 def arquivar_relatorios_antigos(pasta_origem, pasta_destino, prefixo):
     os.makedirs(pasta_destino, exist_ok=True)
     for arquivo in os.listdir(pasta_origem):
@@ -101,6 +144,8 @@ def consolidar_planilhas(pasta_entrada):
         raise ValueError("Falha ao ler todos os arquivos.")
 
     return pl.concat(validos, how="vertical_relaxed")
+
+
 def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
     if coluna not in df.columns:
         raise KeyError(f"Coluna '{coluna}' não encontrada.")
@@ -125,6 +170,11 @@ def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
         return df.with_columns(expr.dt.date().alias(coluna))
 
     raise TypeError(f"Tipo inválido para coluna '{coluna}': {tipo}")
+
+
+# ============================================================
+# Envio do card via Feishu
+# ============================================================
 def enviar_card_feishu(resumo: pd.DataFrame, webhook: str, coord: str, sla: float):
     try:
         if resumo.empty:
@@ -165,7 +215,7 @@ def enviar_card_feishu(resumo: pd.DataFrame, webhook: str, coord: str, sla: floa
                 "header": {
                     "template": "blue",
                     "title": {"tag": "plain_text",
-                              "content": f"SLA - Entrega no Prazo (Ontem) — {coord}"}
+                              "content": f"SLA - Entrega no Prazo — {coord}"}
                 },
                 "elements": [
                     {"tag": "div", "text": {"tag": "lark_md", "content": conteudo}},
@@ -182,8 +232,7 @@ def enviar_card_feishu(resumo: pd.DataFrame, webhook: str, coord: str, sla: floa
 
         if r.status_code != 200:
             logging.error(
-                f"❌ ERRO ao enviar card para {coord}. "
-                f"Status: {r.status_code}. Resposta: {r.text}"
+                f"❌ ERRO ao enviar card para {coord}. Status: {r.status_code}. Resposta: {r.text}"
             )
             return False
 
@@ -195,21 +244,33 @@ def enviar_card_feishu(resumo: pd.DataFrame, webhook: str, coord: str, sla: floa
             f"❌ Falha no envio para {coord}. Erro: {e}. Webhook: {webhook}"
         )
         return False
+
+
+# ============================================================
+# 🚀 Execução principal v2.8
+# ============================================================
 if __name__ == "__main__":
-    logging.info("🚀 Iniciando processamento SLA (v2.5)...")
+    logging.info("🚀 Iniciando processamento SLA (v2.8)...")
 
     try:
+        # 0) Calcular data-base
+        data_base = calcular_data_base()
+        if data_base is None:
+            exit()
+
+        logging.info(f"📅 Data usada para cálculo SLA: {data_base}")
+
         # 1) Ler planilhas
         df = consolidar_planilhas(PASTA_ENTRADA)
         logging.info(f"📥 Registros carregados: {df.height}")
 
-        # 2) Padronizar nomes
+        # 2) Padronizar nomes colunas
         df = df.rename({c: c.strip().upper() for c in df.columns})
 
-        # 3) Garantir data prevista
+        # 3) Garantir conversão correta da data
         df = garantir_coluna_data(df, "DATA PREVISTA DE ENTREGA")
 
-        # 4) Detectar coluna ENTREGUE NO PRAZO
+        # 4) Detectar a coluna ENTREGUE NO PRAZO
         colunas = list(df.columns)
         col_upper = [c.upper() for c in colunas]
 
@@ -226,26 +287,39 @@ if __name__ == "__main__":
 
         logging.info(f"📌 Coluna detectada: {col_entregue}")
 
-        # 5) Normalizar Y
+        # 5) Converter Y/N → 1/0
         df = df.with_columns(
             pl.when(pl.col(col_entregue).cast(pl.Utf8).str.to_uppercase() == "Y")
             .then(1).otherwise(0).alias("_ENTREGUE_PRAZO")
         )
 
-        hoje = datetime.now().date()
-        ontem = hoje - timedelta(days=1)
+        # 6) Filtrar somente registros da data-base
+        df_ontem = df.filter(pl.col("DATA PREVISTA DE ENTREGA") == data_base)
+        logging.info(f"📊 Registros para {data_base}: {df_ontem.height}")
 
-        df_ontem = df.filter(pl.col("DATA PREVISTA DE ENTREGA") == ontem)
-
-        # 6) Coordenadores
+        # 7) Carregar Excel dos coordenadores
         coord_df = pl.read_excel(PASTA_COORDENADOR).rename({
             "Nome da base": "BASE DE ENTREGA",
             "Coordenadores": "COORDENADOR"
         })
 
-        df_ontem = df_ontem.join(coord_df, on="BASE DE ENTREGA", how="left")
+        # 8) Normalizar nomes de base em ambos
+        df_ontem = df_ontem.with_columns(
+            pl.col("BASE DE ENTREGA").map_elements(normalizar).alias("BASE_NORM")
+        )
 
-        # 7) Resumo
+        coord_df = coord_df.with_columns(
+            pl.col("BASE DE ENTREGA").map_elements(normalizar).alias("BASE_NORM")
+        )
+
+        # 9) JOIN corrigido
+        df_ontem = df_ontem.join(coord_df, on="BASE_NORM", how="left")
+
+        # Diagnóstico do JOIN
+        sem_coord = df_ontem.filter(pl.col("COORDENADOR").is_null()).height
+        logging.info(f"🧩 Registros sem coordenador após join: {sem_coord}")
+
+        # 10) Resumo por coordenador
         if df_ontem.is_empty():
             resumo_pd = pd.DataFrame(columns=[
                 "Base De Entrega", "COORDENADOR",
@@ -262,17 +336,18 @@ if __name__ == "__main__":
                 ])
                 .sort("% SLA Cumprido", descending=True)
             )
+
             resumo_pd = resumo.to_pandas().rename(columns={
                 "BASE DE ENTREGA": "Base De Entrega"
             })
 
-        # 8) Exportar Excel
+        # 11) Exportar Excel
         arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, "Resumo_Consolidado_")
 
         with pd.ExcelWriter(ARQUIVO_SAIDA, engine="openpyxl") as w:
             resumo_pd.to_excel(w, index=False, sheet_name="Resumo SLA")
 
-        # 9) Enviar card
+        # 12) Enviar cards
         for coord, webhook in COORDENADOR_WEBHOOKS.items():
             sub = resumo_pd[resumo_pd["COORDENADOR"] == coord]
 
@@ -283,7 +358,7 @@ if __name__ == "__main__":
             sla = sub["% SLA Cumprido"].mean()
             enviar_card_feishu(sub, webhook, coord, sla)
 
-        logging.info("🏁 Processamento concluído (v2.5)")
+        logging.info("🏁 Processamento concluído (v2.8)")
 
     except Exception as e:
         logging.critical(f"❌ ERRO FATAL: {e}", exc_info=True)

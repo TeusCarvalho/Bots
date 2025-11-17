@@ -853,3 +853,84 @@ ValueError: This sheet is too large! Your sheet size is: 2476990, 36 Max sheet s
 2025-11-14 08:48:09,235 - INFO - 📨 Card enviado para Emerson Silva
 2025-11-14 08:48:10,677 - INFO - 📨 Card enviado para Marcos Caique
 2025-11-14 08:48:10,678 - INFO - 🏁 Processamento concluído (v2.5)
+2025-11-17 14:06:17,420 - INFO - 🚀 Iniciando processamento SLA (v2.5)...
+2025-11-17 14:06:22,225 - INFO - 📥 Registros carregados: 163914
+2025-11-17 14:06:22,227 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-11-17 14:06:22,243 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251114.xlsx
+2025-11-17 14:06:22,381 - WARNING - ⚠️ Nenhuma base encontrada para João Melo
+2025-11-17 14:06:22,382 - WARNING - ⚠️ Nenhuma base encontrada para Johas Vieira
+2025-11-17 14:06:22,382 - WARNING - ⚠️ Nenhuma base encontrada para Anderson Matheus
+2025-11-17 14:06:22,382 - WARNING - ⚠️ Nenhuma base encontrada para Marcelo Medina
+2025-11-17 14:06:22,382 - WARNING - ⚠️ Nenhuma base encontrada para Odária Fereira
+2025-11-17 14:06:22,382 - WARNING - ⚠️ Nenhuma base encontrada para Rodrigo Castro
+2025-11-17 14:06:22,382 - WARNING - ⚠️ Nenhuma base encontrada para Orlean Nascimento
+2025-11-17 14:06:22,383 - WARNING - ⚠️ Nenhuma base encontrada para Jose Marlon
+2025-11-17 14:06:22,383 - WARNING - ⚠️ Nenhuma base encontrada para Emerson Silva
+2025-11-17 14:06:22,383 - WARNING - ⚠️ Nenhuma base encontrada para Marcos Caique
+2025-11-17 14:06:22,383 - INFO - 🏁 Processamento concluído (v2.5)
+2025-11-17 14:14:29,612 - INFO - 🚀 Iniciando processamento SLA (v2.5)...
+2025-11-17 14:14:33,071 - INFO - 📥 Registros carregados: 163914
+2025-11-17 14:14:33,072 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-11-17 14:14:33,081 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251117.xlsx
+2025-11-17 14:14:33,200 - WARNING - ⚠️ Nenhuma base encontrada para João Melo
+2025-11-17 14:14:33,200 - WARNING - ⚠️ Nenhuma base encontrada para Johas Vieira
+2025-11-17 14:14:33,200 - WARNING - ⚠️ Nenhuma base encontrada para Anderson Matheus
+2025-11-17 14:14:33,201 - WARNING - ⚠️ Nenhuma base encontrada para Marcelo Medina
+2025-11-17 14:14:33,201 - WARNING - ⚠️ Nenhuma base encontrada para Odária Fereira
+2025-11-17 14:14:33,201 - WARNING - ⚠️ Nenhuma base encontrada para Rodrigo Castro
+2025-11-17 14:14:33,201 - WARNING - ⚠️ Nenhuma base encontrada para Orlean Nascimento
+2025-11-17 14:14:33,201 - WARNING - ⚠️ Nenhuma base encontrada para Jose Marlon
+2025-11-17 14:14:33,202 - WARNING - ⚠️ Nenhuma base encontrada para Emerson Silva
+2025-11-17 14:14:33,202 - WARNING - ⚠️ Nenhuma base encontrada para Marcos Caique
+2025-11-17 14:14:33,202 - INFO - 🏁 Processamento concluído (v2.5)
+2025-11-17 14:20:18,923 - INFO - 🚀 Iniciando processamento SLA (v2.6)...
+2025-11-17 14:20:22,981 - INFO - 📥 Registros carregados: 163914
+2025-11-17 14:20:22,982 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-11-17 14:20:22,996 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251117.xlsx
+2025-11-17 14:20:23,131 - WARNING - ⚠️ Nenhuma base encontrada para João Melo
+2025-11-17 14:20:23,131 - WARNING - ⚠️ Nenhuma base encontrada para Johas Vieira
+2025-11-17 14:20:23,132 - WARNING - ⚠️ Nenhuma base encontrada para Anderson Matheus
+2025-11-17 14:20:23,132 - WARNING - ⚠️ Nenhuma base encontrada para Marcelo Medina
+2025-11-17 14:20:23,132 - WARNING - ⚠️ Nenhuma base encontrada para Odária Fereira
+2025-11-17 14:20:23,132 - WARNING - ⚠️ Nenhuma base encontrada para Rodrigo Castro
+2025-11-17 14:20:23,133 - WARNING - ⚠️ Nenhuma base encontrada para Orlean Nascimento
+2025-11-17 14:20:23,133 - WARNING - ⚠️ Nenhuma base encontrada para Jose Marlon
+2025-11-17 14:20:23,133 - WARNING - ⚠️ Nenhuma base encontrada para Emerson Silva
+2025-11-17 14:20:23,133 - WARNING - ⚠️ Nenhuma base encontrada para Marcos Caique
+2025-11-17 14:20:23,133 - INFO - 🏁 Processamento concluído (v2.6)
+2025-11-17 14:24:01,788 - INFO - 🚀 Iniciando processamento SLA (v2.7)...
+2025-11-17 14:24:05,766 - INFO - 📥 Registros carregados: 163914
+2025-11-17 14:24:05,768 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-11-17 14:24:05,772 - INFO - 📊 Registros de ontem (2025-11-16): 0
+2025-11-17 14:24:05,779 - INFO - 🧩 Registros sem coordenador após join: 0
+2025-11-17 14:24:05,779 - WARNING - ⚠️ Nenhum registro para ontem após filtros.
+2025-11-17 14:24:05,785 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251117.xlsx
+2025-11-17 14:24:05,929 - WARNING - ⚠️ Nenhuma base encontrada para João Melo
+2025-11-17 14:24:05,929 - WARNING - ⚠️ Nenhuma base encontrada para Johas Vieira
+2025-11-17 14:24:05,930 - WARNING - ⚠️ Nenhuma base encontrada para Anderson Matheus
+2025-11-17 14:24:05,930 - WARNING - ⚠️ Nenhuma base encontrada para Marcelo Medina
+2025-11-17 14:24:05,930 - WARNING - ⚠️ Nenhuma base encontrada para Odária Fereira
+2025-11-17 14:24:05,930 - WARNING - ⚠️ Nenhuma base encontrada para Rodrigo Castro
+2025-11-17 14:24:05,931 - WARNING - ⚠️ Nenhuma base encontrada para Orlean Nascimento
+2025-11-17 14:24:05,931 - WARNING - ⚠️ Nenhuma base encontrada para Jose Marlon
+2025-11-17 14:24:05,931 - WARNING - ⚠️ Nenhuma base encontrada para Emerson Silva
+2025-11-17 14:24:05,931 - WARNING - ⚠️ Nenhuma base encontrada para Marcos Caique
+2025-11-17 14:24:05,931 - INFO - 🏁 Processamento concluído (v2.7)
+2025-11-17 15:15:50,610 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-11-17 15:15:50,610 - INFO - 📅 Data usada para cálculo SLA: 2025-11-14
+2025-11-17 15:15:54,276 - INFO - 📥 Registros carregados: 163914
+2025-11-17 15:15:54,279 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-11-17 15:15:54,283 - INFO - 📊 Registros para 2025-11-14: 163914
+2025-11-17 15:15:54,490 - INFO - 🧩 Registros sem coordenador após join: 296
+2025-11-17 15:15:54,503 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251117.xlsx
+2025-11-17 15:16:00,378 - INFO - 📨 Card enviado para João Melo
+2025-11-17 15:16:01,922 - INFO - 📨 Card enviado para Johas Vieira
+2025-11-17 15:16:03,326 - INFO - 📨 Card enviado para Anderson Matheus
+2025-11-17 15:16:04,972 - INFO - 📨 Card enviado para Marcelo Medina
+2025-11-17 15:16:06,461 - INFO - 📨 Card enviado para Odária Fereira
+2025-11-17 15:16:07,955 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-11-17 15:16:09,474 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-11-17 15:16:10,994 - INFO - 📨 Card enviado para Jose Marlon
+2025-11-17 15:16:12,402 - INFO - 📨 Card enviado para Emerson Silva
+2025-11-17 15:16:13,898 - INFO - 📨 Card enviado para Marcos Caique
+2025-11-17 15:16:13,899 - INFO - 🏁 Processamento concluído (v2.8)
