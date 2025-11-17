@@ -410,13 +410,14 @@ def analisar_retidos():
     # RETIDOS
     df_ret = ler_planilhas(DIR_RETIDOS, "Retidos")
     if df_ret.is_empty():
-        print("❌ Nenhum dado em Retidos.");
+        print("❌ Nenhum dado em Retidos.")
         return pl.DataFrame()
 
-    # 🔹 Remover Clusters 1–2 dias e 3–9 dias
-    col_cluster = safe_pick(df_ret, "Cluster Retidos 分类", ["cluster", "分类", "retidos"])
+    # 🔹 Remover Retidos até 6 dias — versão AUTOMÁTICA
+    col_cluster = safe_pick(df_ret, "Dias Retidos 滞留日", ["dias", "滞留", "retidos"])
     if col_cluster and col_cluster in df_ret.columns:
         total_antes = df_ret.height
+
         df_ret = df_ret.with_columns(
             pl.col(col_cluster)
             .cast(pl.Utf8)
@@ -424,15 +425,29 @@ def analisar_retidos():
             .str.to_lowercase()
             .alias(col_cluster)
         )
-        df_ret = df_ret.filter(
-            ~(
-                    pl.col(col_cluster).str.contains("1 到 2") |
-                    pl.col(col_cluster).str.contains("3 到 9")
-            )
+
+        # Função Python que extrai O MAIOR número da faixa
+        def extrair_maior_dia(texto: str) -> int:
+            import re
+            if not texto:
+                return 999  # segurança: mantém
+            nums = re.findall(r"\d+", texto)
+            if not nums:
+                return 999
+            return max(int(n) for n in nums)
+
+        # Cria coluna auxiliar com o maior dia da faixa
+        df_ret = df_ret.with_columns(
+            pl.col(col_cluster)
+            .map_elements(extrair_maior_dia, return_dtype=pl.Int64)
+            .alias("dias_max")
         )
+
+        # Remove todos que são <= 6 dias
+        df_ret = df_ret.filter(pl.col("dias_max") > 6).drop("dias_max")
+
         removidos_cluster = total_antes - df_ret.height
-        print(
-            f"\033[95m🧹 Cluster Retidos (1–9 dias) → Removidos: {removidos_cluster} | Mantidos: {df_ret.height}\033[0m")
+        print(f"\033[95m🧹 Removidos (0–6 dias): {removidos_cluster} | Mantidos: {df_ret.height}\033[0m")
 
     # Selecionar colunas relevantes
     col_pedido_ret = safe_pick(df_ret, "Número do Pedido JMS 运单号", ["pedido", "运单", "jms"])

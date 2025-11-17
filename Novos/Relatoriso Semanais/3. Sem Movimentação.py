@@ -1,16 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-📦 Sem Movimentação — Relatório Terminal v3.3
--------------------------------------------------------------
-- Consolida planilhas de '3. Sem Movimentação'
-- Filtra Regional = GP e mapeia aging (6/7/10/14/30)
-- Cruza com Bases_Info.xlsx
-- Exibe resumo colorido no terminal (Rich se disponível)
-- Mostra as bases mais problemáticas no texto
-- Gera arquivos Excel (Resumo / Top_10 / Bases_Completas / Alterações)
-- Cria log diário com resultados e mensagens
-- Usa Polars se instalado; senão, Pandas
-"""
 
 import os
 import re
