@@ -934,3 +934,39 @@ ValueError: This sheet is too large! Your sheet size is: 2476990, 36 Max sheet s
 2025-11-17 15:16:12,402 - INFO - 📨 Card enviado para Emerson Silva
 2025-11-17 15:16:13,898 - INFO - 📨 Card enviado para Marcos Caique
 2025-11-17 15:16:13,899 - INFO - 🏁 Processamento concluído (v2.8)
+2025-11-18 08:29:10,676 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-11-18 08:29:10,676 - INFO - 📅 Data usada para cálculo SLA: 2025-11-17
+2025-11-18 08:29:14,443 - INFO - 📥 Registros carregados: 176083
+2025-11-18 08:29:14,444 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-11-18 08:29:14,447 - INFO - 📊 Registros para 2025-11-17: 176083
+2025-11-18 08:29:14,671 - INFO - 🧩 Registros sem coordenador após join: 759
+2025-11-18 08:29:14,684 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251117.xlsx
+2025-11-18 08:29:18,944 - INFO - 📨 Card enviado para João Melo
+2025-11-18 08:29:20,423 - INFO - 📨 Card enviado para Johas Vieira
+2025-11-18 08:29:21,975 - INFO - 📨 Card enviado para Anderson Matheus
+2025-11-18 08:29:24,118 - INFO - 📨 Card enviado para Marcelo Medina
+2025-11-18 08:29:25,608 - INFO - 📨 Card enviado para Odária Fereira
+2025-11-18 08:29:27,227 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-11-18 08:29:28,720 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-11-18 08:29:30,211 - INFO - 📨 Card enviado para Jose Marlon
+2025-11-18 08:29:31,723 - INFO - 📨 Card enviado para Emerson Silva
+2025-11-18 08:29:33,190 - INFO - 📨 Card enviado para Marcos Caique
+2025-11-18 08:29:33,191 - INFO - 🏁 Processamento concluído (v2.8)
+2025-11-19 08:06:29,391 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-11-19 08:06:29,392 - INFO - 📅 Data usada para cálculo SLA: 2025-11-18
+2025-11-19 08:06:32,497 - INFO - 📥 Registros carregados: 146011
+2025-11-19 08:06:32,499 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-11-19 08:06:32,502 - INFO - 📊 Registros para 2025-11-18: 146011
+2025-11-19 08:06:32,698 - INFO - 🧩 Registros sem coordenador após join: 1500
+2025-11-19 08:06:32,709 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251118.xlsx
+2025-11-19 08:06:35,269 - INFO - 📨 Card enviado para João Melo
+2025-11-19 08:06:37,043 - INFO - 📨 Card enviado para Johas Vieira
+2025-11-19 08:06:38,675 - INFO - 📨 Card enviado para Anderson Matheus
+2025-11-19 08:06:40,351 - INFO - 📨 Card enviado para Marcelo Medina
+2025-11-19 08:06:42,031 - INFO - 📨 Card enviado para Odária Fereira
+2025-11-19 08:06:43,749 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-11-19 08:06:45,352 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-11-19 08:06:47,238 - INFO - 📨 Card enviado para Jose Marlon
+2025-11-19 08:06:49,020 - INFO - 📨 Card enviado para Emerson Silva
+2025-11-19 08:06:50,722 - INFO - 📨 Card enviado para Marcos Caique
+2025-11-19 08:06:50,724 - INFO - 🏁 Processamento concluído (v2.8)
