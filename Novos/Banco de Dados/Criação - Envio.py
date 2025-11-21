@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
 import os
 import unicodedata
+import traceback
+from typing import List, Optional
+
 import polars as pl
 import psycopg2
-from psycopg2.extras import execute_batch
+from psycopg2.extras import execute_values
+import logging
 
 # ======================================================
 # CONFIG BANCO
@@ -15,174 +19,272 @@ DB = {
     "password": "Jt2025"
 }
 
+# ======================================================
+# CONFIG ETL
+# ======================================================
+PASTA_RAIZ = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\QUALIDADE_ FILIAL GO - BASE DE DADOS"
+MODO_CARGA = "upsert"
+
+# BATCH
+BATCH_SIZE = 10000
+
+# POLARS — usa todos núcleos
+os.environ["POLARS_MAX_THREADS"] = "0"
 
 # ======================================================
-# FUNÇÃO: normalizar nomes
+# LOGGING
 # ======================================================
-def limpar_nome(nome):
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger("etl_excel_pg")
+def limpar_nome(nome: str) -> str:
     if not nome or not isinstance(nome, str):
         return "col_unk"
 
-    nome = nome.strip().lower()
+    nome = unicodedata.normalize("NFKD", nome)
+    nome = "".join(c for c in nome if not unicodedata.combining(c))
+    nome = nome.lower()
 
-    nome = "".join(
-        c for c in unicodedata.normalize("NFKD", nome)
-        if not unicodedata.combining(c)
-    )
-
-    for r in [" ", "-", "/", ".", "%", "(", ")", ","]:
+    for r in [" ", "-", "/", ".", "%", "(", ")", ",", ";", ":", "#", "@", "!", "?"]:
         nome = nome.replace(r, "_")
 
     while "__" in nome:
         nome = nome.replace("__", "_")
 
+    nome = nome.strip("_")
+    if not nome:
+        nome = "col_unk"
+
     if nome[0].isdigit():
         nome = "col_" + nome
-
-    if nome == "":
-        nome = "col_unk"
 
     return nome
 
 
-# ======================================================
-# CONEXÃO POSTGRES
-# ======================================================
 def conectar():
     return psycopg2.connect(**DB)
+def pl_dtype_to_pg(d):
+    if d.is_integer():
+        return "BIGINT"
+    if d.is_float():
+        return "DOUBLE PRECISION"
+    if d == pl.Boolean:
+        return "BOOLEAN"
+    if d == pl.Date:
+        return "DATE"
+    if d.is_temporal():
+        return "TIMESTAMP"
+    return "TEXT"
+def ler_excels_lazy(pasta: str) -> Optional[pl.LazyFrame]:
+    arquivos = [f for f in os.listdir(pasta) if f.lower().endswith((".xlsx", ".xls"))]
+    if not arquivos:
+        return None
 
+    lfs = []
+    col_names_global = set()
 
-# ======================================================
-# 1️⃣ CRIAR TODAS AS TABELAS
-# ======================================================
-def criar_tabelas(pasta_raiz):
-
-    print("\n📌 Criando tabelas...\n")
-
-    for root, dirs, files in os.walk(pasta_raiz):
-
-        arquivos = [f for f in files if f.lower().endswith((".xlsx", ".xls"))]
-        if not arquivos:
+    for arq in arquivos:
+        caminho = os.path.join(pasta, arq)
+        try:
+            df = pl.read_excel(caminho, engine="calamine").lazy()
+        except Exception as e:
+            logger.error(f"❌ Erro lendo {caminho}: {e}")
             continue
 
-        nome_pasta = os.path.basename(root)
-        tabela = limpar_nome("col_" + nome_pasta)
+        # renomear colunas
+        cols = df.columns
+        norm = [limpar_nome(c) for c in cols]
 
-        print(f"\n📁 Pasta: {root}")
-        print(f"🛠 Criando tabela: {tabela}")
+        df = df.rename(dict(zip(cols, norm)))
+        col_names_global.update(norm)
 
-        for arq in arquivos:
-            caminho = os.path.join(root, arq)
+        lfs.append(df)
 
-            try:
-                df = pl.read_excel(caminho, engine="calamine")
-            except Exception as e:
-                print(f"❌ Erro ao ler Excel: {e}")
-                continue
+    if not lfs:
+        return None
 
-            colunas_orig = df.columns
-            colunas_norm = [limpar_nome(c) for c in colunas_orig]
+    col_names_global = sorted(col_names_global)
 
-            tipos_pg = []
-            for c in colunas_norm:
-                tipos_pg.append(f'"{c}" TEXT')
+    lfs_alinhados = []
+    for lf in lfs:
+        cols_lf = lf.columns
+        faltantes = [c for c in col_names_global if c not in cols_lf]
 
-            ddl = f'CREATE TABLE IF NOT EXISTS "{tabela}" (\n    ' + ",\n    ".join(tipos_pg) + "\n);"
+        if faltantes:
+            lf = lf.with_columns([pl.lit(None).alias(c) for c in faltantes])
 
-            try:
-                con = conectar()
-                cur = con.cursor()
+        lf = lf.select(col_names_global)
+        lfs_alinhados.append(lf)
+
+    lf_final = pl.concat(lfs_alinhados, how="vertical_relaxed")
+    return lf_final
+def detectar_pk_por_valores(df: pl.DataFrame) -> List[str]:
+    colunas_pk = []
+
+    for col in df.columns:
+        serie = df[col].drop_nulls()
+
+        if serie.is_empty():
+            continue
+
+        try:
+            s = serie.cast(str)
+            if s.str.starts_with("888").any() or s.str.startswith("999").any():
+                colunas_pk.append(col)
+        except:
+            continue
+
+    if colunas_pk:
+        logger.info(f"🔑 PK detectada automaticamente: {colunas_pk}")
+    else:
+        logger.warning("⚠ Nenhuma PK encontrada via 888/999")
+
+    return colunas_pk
+def criar_ou_ajustar_tabela(tabela: str, df: pl.DataFrame):
+    schema = df.schema
+
+    with conectar() as con:
+        with con.cursor() as cur:
+
+            # existe?
+            cur.execute("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_schema='public' AND table_name=%s
+                );
+            """, (tabela,))
+            existe = cur.fetchone()[0]
+
+            if not existe:
+                cols_def = []
+                for col, dtype in schema.items():
+                    cols_def.append(f'"{col}" {pl_dtype_to_pg(dtype)}')
+
+                ddl = f'CREATE TABLE "{tabela}" (\n    ' + ",\n    ".join(cols_def) + "\n);"
                 cur.execute(ddl)
                 con.commit()
-                cur.close()
-                con.close()
+                logger.info(f"✔ Tabela criada: {tabela}")
+                return
 
-                print(f"✔ Tabela criada: {tabela}")
-                break
+            # ajustar colunas
+            cur.execute("""
+                SELECT column_name 
+                FROM information_schema.columns
+                WHERE table_schema='public' AND table_name=%s;
+            """, (tabela,))
+            existentes = {r[0] for r in cur.fetchall()}
 
-            except Exception as e:
-                print(f"❌ Erro ao criar tabela {tabela}: {e}")
-                continue
+            novas = [c for c in schema if c not in existentes]
 
-    print("\n🏁 Tabelas criadas!\n")
+            for col in novas:
+                cur.execute(
+                    f'ALTER TABLE "{tabela}" ADD COLUMN "{col}" {pl_dtype_to_pg(schema[col])};'
+                )
 
+            if novas:
+                con.commit()
+                logger.info(f"➕ Colunas adicionadas: {novas}")
+def inserir_batch(tabela: str, df: pl.DataFrame):
+    cols = df.columns
+    rows = df.rows()
 
-# ======================================================
-# 2️⃣ CARREGAR DADOS
-# ======================================================
-def carregar_dados(pasta_raiz):
+    if not rows:
+        logger.warning(f"⚠ Nada para inserir em {tabela}")
+        return
 
-    print("\n📌 Iniciando carga de dados...\n")
+    cols_str = ", ".join([f'"{c}"' for c in cols])
+
+    sql = f"""
+        INSERT INTO "{tabela}" ({cols_str})
+        VALUES %s
+        ON CONFLICT DO NOTHING;
+    """
+
+    with conectar() as con:
+        with con.cursor() as cur:
+            for i in range(0, len(rows), BATCH_SIZE):
+                bloco = rows[i:i+BATCH_SIZE]
+                execute_values(cur, sql, bloco)
+            con.commit()
+
+    logger.info(f"✔ Inseridos {len(rows)} registros (append safe)")
+def upsert_batch(tabela: str, df: pl.DataFrame, chaves: List[str]):
+    cols = df.columns
+    rows = df.rows()
+
+    if not rows:
+        return
+
+    cols_str = ", ".join([f'"{c}"' for c in cols])
+    keys_str = ", ".join([f'"{c}"' for c in chaves])
+
+    updates = [c for c in cols if c not in chaves]
+    set_str = ", ".join([f'"{c}"=EXCLUDED."{c}"' for c in updates])
+
+    sql = f"""
+        INSERT INTO "{tabela}" ({cols_str})
+        VALUES %s
+        ON CONFLICT ({keys_str})
+        DO UPDATE SET {set_str};
+    """
+
+    with conectar() as con:
+        with con.cursor() as cur:
+            for i in range(0, len(rows), BATCH_SIZE):
+                bloco = rows[i:i+BATCH_SIZE]
+                execute_values(cur, sql, bloco)
+            con.commit()
+
+    logger.info(f"✔ UPSERT {len(rows)}")
+def processar_pasta(root: str):
+    nome = os.path.basename(root)
+    tabela = limpar_nome("col_" + nome)
+
+    logger.info(f"\n📁 Pasta: {root}")
+    logger.info(f"📌 Tabela: {tabela}")
+
+    lf = ler_excels_lazy(root)
+    if lf is None:
+        logger.info("⏭ Sem Excel válido.")
+        return
+
+    # materializa somente agora
+    df = lf.collect()
+
+    criar_ou_ajustar_tabela(tabela, df)
+
+    if MODO_CARGA == "upsert":
+        chaves = detectar_pk_por_valores(df)
+        if chaves:
+            upsert_batch(tabela, df, chaves)
+        else:
+            inserir_batch(tabela, df)
+
+    elif MODO_CARGA == "append":
+        inserir_batch(tabela, df)
+
+    elif MODO_CARGA == "truncate":
+        with conectar() as con:
+            with con.cursor() as cur:
+                cur.execute(f'TRUNCATE TABLE "{tabela}"')
+                con.commit()
+        inserir_batch(tabela, df)
+def main(pasta_raiz: str):
+    logger.info("\n🚀 Iniciando ETL Ultra Performance\n")
 
     for root, dirs, files in os.walk(pasta_raiz):
-
-        arquivos = [f for f in files if f.lower().endswith((".xlsx", ".xls"))]
-        if not arquivos:
-            continue
-
-        nome_pasta = os.path.basename(root)
-        tabela = limpar_nome("col_" + nome_pasta)
-
-        print(f"\n📁 Pasta: {root}")
-        print(f"🛠 Tabela destino: {tabela}")
-
-        # TRUNCATE
-        try:
-            con = conectar()
-            cur = con.cursor()
-            cur.execute(f'TRUNCATE TABLE "{tabela}";')
-            con.commit()
-            cur.close()
-            con.close()
-            print("🧹 TRUNCATE OK.")
-        except Exception as e:
-            print(f"❌ Erro ao limpar {tabela}: {e}")
-            continue
-
-        for arq in arquivos:
-
-            print(f"📄 Lendo: {arq}")
-            caminho = os.path.join(root, arq)
-
+        if any(f.lower().endswith((".xlsx", ".xls")) for f in files):
             try:
-                df = pl.read_excel(caminho, engine="calamine")
-            except Exception as e:
-                print(f"❌ Erro ao ler arquivo {arq}: {e}")
-                continue
+                processar_pasta(root)
+            except Exception:
+                logger.error(f"❌ Erro em {root}")
+                logger.error(traceback.format_exc())
 
-            # normalizar colunas
-            cols_orig = df.columns
-            cols_norm = [limpar_nome(c) for c in cols_orig]
-            df = df.rename(dict(zip(cols_orig, cols_norm)))
-            df = df.with_columns(pl.col("*").cast(pl.Utf8).fill_null(""))
-
-            registros = [tuple(row) for row in df.iter_rows()]
-
-            cols_str = ", ".join([f'"{c}"' for c in cols_norm])
-            placeholders = ", ".join(["%s"] * len(cols_norm))
-            sql = f'INSERT INTO "{tabela}" ({cols_str}) VALUES ({placeholders})'
-
-            try:
-                con = conectar()
-                cur = con.cursor()
-                execute_batch(cur, sql, registros, page_size=5000)
-                con.commit()
-                cur.close()
-                con.close()
-
-                print(f"✔ {len(registros)} registros inseridos.")
-
-            except Exception as e:
-                print(f"❌ Erro ao inserir: {e}")
-
-    print("\n🏁 Carga finalizada!\n")
+    logger.info("\n🏁 Finalizado.\n")
 
 
-# ======================================================
-# EXECUÇÃO
-# ======================================================
 if __name__ == "__main__":
-    PASTA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\QUALIDADE_ FILIAL GO - BASE DE DADOS"
-
-    criar_tabelas(PASTA)
-    carregar_dados(PASTA)
+    main(PASTA_RAIZ)
