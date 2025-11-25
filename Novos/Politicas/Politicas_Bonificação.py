@@ -30,7 +30,7 @@ DIR_RETIDOS = os.path.join(BASE_ROOT, "06 - Retidos")
 DIR_DEVOLUCAO = os.path.join(BASE_ROOT, "00.3 - Base Devolução")
 DIR_PROBLEMATICOS = os.path.join(BASE_ROOT, "00.2 - Base de Problematicos (Gestão de Anormalidade)")
 DIR_CUSTODIA = os.path.join(BASE_ROOT, "00.4 - Base Custodia")
-DIR_BASE_LISTA = os.path.join(BASE_ROOT, "00.1 - Base Retidos(Lista)")  # (não usado agora)
+DIR_BASE_LISTA = os.path.join(BASE_ROOT, "00.1 - Base Retidos(Lista)")  # (USADO AGORA)
 
 # Coordenadores agora por pasta
 DIR_COORDENADOR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador"
@@ -319,9 +319,6 @@ def pacotes_sem_mov():
     return df, qtd_planilhas
 
 
-# ==========================================================
-# 🔍 VERSÃO CORRIGIDA DA FUNÇÃO PRINCIPAL
-# ==========================================================
 def coleta_expedicao():
     """
     VERSÃO CORRIGIDA: Lida com o novo formato de relatório de retenção.
@@ -701,6 +698,72 @@ def calcular_retidos_reais(df_retidos_motor: pl.DataFrame, df_coleta: pl.DataFra
 
 
 # ==========================================================
+# 📥 Função para ler a Qtd > 10 dias (VERSÃO FINAL E CORRIGIDA)
+# ==========================================================
+
+def ler_qtd_maior_10_dias():
+    """
+    Lê a coluna 'Qtd a entregar há mais de 10 dias' da planilha
+    na pasta '00.1 - Base Retidos(Lista)', usando a lógica do usuário.
+    """
+    print("\n" + "=" * 50)
+    print("🔍 Lendo Qtd. > 10 dias (LÓGICA CORRIGIDA)")
+    print("=" * 50 + "\n")
+
+    if not os.path.exists(DIR_BASE_LISTA):
+        print(f"❌ Pasta '{DIR_BASE_LISTA}' não encontrada.")
+        return pl.DataFrame()
+
+    arquivos = [os.path.join(DIR_BASE_LISTA, f) for f in os.listdir(DIR_BASE_LISTA) if f.endswith((".xlsx", ".xls"))]
+
+    if not arquivos:
+        print(f"⚠️ Nenhum arquivo Excel encontrado em {DIR_BASE_LISTA}.")
+        return pl.DataFrame()
+
+    dfs = []
+    for arq in arquivos:
+        try:
+            df = pl.read_excel(arq)
+            dfs.append(df)
+        except Exception as e:
+            print(f"Erro ao ler {arq}: {e}")
+
+    if not dfs:
+        return pl.DataFrame()
+
+    df_total = pl.concat(dfs, how="diagonal_relaxed")
+
+    # Verifica se as colunas esperadas existem ANTES de renomear
+    # >>>>> PONTO CHAVE DA CORREÇÃO <<<<<
+    if "Nome da base de entrega" not in df_total.columns or "Qtd a entregar há mais de 10 dias" not in df_total.columns:
+        print("❌ Colunas 'Nome da base de entrega' ou 'Qtd a entregar há mais de 10 dias' não encontradas.")
+        print(f"Colunas disponíveis: {df_total.columns}")
+        return pl.DataFrame()
+
+    # Aplica a lógica do usuário
+    df_final = (
+        df_total
+        .rename({
+            "Nome da base de entrega": "Nome da base",  # Padroniza para o nome do script
+            "Qtd a entregar há mais de 10 dias": "Qtd_maior_10_dias"
+        })
+        .filter(
+            pl.col("Nome da base").is_not_null() & (pl.col("Nome da base") != "")
+        )
+        .group_by("Nome da base")
+        .agg(
+            pl.col("Qtd_maior_10_dias").sum().alias("Qtd_maior_10_dias")
+        )
+    )
+
+    # Normaliza o nome da base para compatibilizar com o resto do script
+    df_final = _normalize_base(df_final)
+
+    print(f"✅ Dados de Qtd. > 10 dias carregados e agregados: {df_final.height} bases.")
+    return df_final
+
+
+# ==========================================================
 # 📘 COORDENADORES — pasta nova, só Base + Coordenador
 # ==========================================================
 
@@ -738,7 +801,7 @@ def carregar_coordenadores():
 
 
 # ==========================================================
-# 🧮 Consolidação de Dados
+# 🧮 Consolidação de Dados (VERSÃO ATUALIZADA)
 # ==========================================================
 
 def consolidar():
@@ -751,6 +814,17 @@ def consolidar():
 
     # RETIDOS: motor antigo + % real usando Qtd_maior_10_dias da coleta
     df_retidos_motor = analisar_retidos_motor_antigo()
+
+    # >>> INÍCIO DA MUDANÇA <<<
+    # 1. Lê a quantidade > 10 dias da planilha específica
+    df_qtd_maior_10 = ler_qtd_maior_10_dias()
+
+    # 2. Adiciona essa informação ao DataFrame de coleta
+    # Isso garante que a função calcular_retidos_reais encontre a coluna correta
+    if not df_qtd_maior_10.is_empty():
+        df_coleta = _safe_full_join(df_coleta, df_qtd_maior_10)
+    # >>> FIM DA MUDANÇA <<<
+
     df_retidos = calcular_retidos_reais(df_retidos_motor, df_coleta)
 
     df_ress = ressarcimento_por_pacote(df_coleta)
@@ -759,7 +833,7 @@ def consolidar():
     df_final = _safe_full_join(df_t0, df_retidos)
     df_final = _safe_full_join(df_final, df_ress)
     df_final = _safe_full_join(df_final, df_sem)
-    df_final = _safe_full_join(df_final, df_coleta)
+    df_final = _safe_full_join(df_final, df_coleta)  # Agora df_coleta já tem a coluna Qtd_maior_10_dias
     df_final = _safe_full_join(df_coord, df_final)
 
     # Taxa Sem Mov
@@ -845,7 +919,7 @@ def main():
             ("B6", "Coordenador"),
             ("C6", "SLA (%)"),
             ("D6", "Qtd Retidos"),
-            ("E6", "Qtd >10 dias (Denominador)"),
+            ("E6", "Qtd_maior_10_dias"),  # Nome da coluna corrigido
             ("F6", "% Retidos Real"),
             ("G6", "Ressarcimento p/pct (R$)"),
             ("H6", "Custo total (R$)"),
