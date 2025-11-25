@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-📦 Comparativo Shipping Time Semanal — FINAL v2.4
+📦 Comparativo Shipping Time Semanal — FINAL v2.6.1
 ---------------------------------------------------------------
 - Corrige tipos numéricos automaticamente
-- Usa PDD de Entrega como base
 - Calcula Etapas 6, 7, 8 e Tempo Total
 - Gera comparativo limpo e compatível
-- Mantém apenas UFs especificadas
-- ✨ MOSTRA TOP 5 ofensores (Etapas 6, 7 e 8) no terminal
-- Adiciona linha TOTAL GERAL
-- Cria abas separadas por Data automaticamente
-- Inclui aba(s) 'Base Consolidada' com junção total
-- Divide automaticamente se ultrapassar 1.048.000 linhas
-- ✨ Exibe resumo executivo no terminal (maior piora/melhora)
-- ✨ Exibe resumo diário (por Data) das Etapas 6/7/8 no terminal
+- Filtra UFs
+- MOSTRA:
+    ✔ Maior piora (tratado para None)
+    ✔ Maior melhora (tratado para None)
+    ✔ Comparativo Geral com Δ
+    ✔ TOP 5 das Etapas com Δ
+    ✔ Resumo diário
+- Cria abas separadas por Data
+- Divide automaticamente base consolidada
 """
 
 import polars as pl
@@ -31,9 +31,9 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "Output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 UFS_PERMITIDAS = ["PA", "MT", "GO", "AM", "MS", "RO", "TO", "DF", "RR", "AC", "AP"]
-LIMITE_EXCEL = 1_048_000  # limite de linhas por aba
+LIMITE_EXCEL = 1_048_000
 
-# --- Nomes das Colunas-Chave (para fácil manutenção) ---
+# COLUNAS
 COL_PDD_ENTREGA = "PDD de Entrega"
 COL_ESTADO_ENTREGA = "Estado de Entrega"
 COL_DATA = "Data"
@@ -44,14 +44,14 @@ COL_TEMPO_TOTAL = "Tempo Total (h)"
 
 # =================== FUNÇÕES ===================
 
-def encontrar_duas_ultimas_pastas(base_path):
+def encontrar_duas_ultimas_pastas(path):
     pastas = [
-        os.path.join(base_path, d)
-        for d in os.listdir(base_path)
-        if os.path.isdir(os.path.join(base_path, d)) and "output" not in d.lower()
+        os.path.join(path, p)
+        for p in os.listdir(path)
+        if os.path.isdir(os.path.join(path, p)) and "output" not in p.lower()
     ]
     pastas.sort(key=os.path.getmtime, reverse=True)
-    return pastas[:2] if len(pastas) >= 2 else []
+    return pastas[:2]
 
 
 def ler_todos_excel(pasta):
@@ -59,12 +59,14 @@ def ler_todos_excel(pasta):
         arq for arq in glob.glob(os.path.join(pasta, "*.xls*"))
         if not os.path.basename(arq).startswith("~$")
     ]
+
     if not arquivos:
         print(f"⚠️ Nenhum arquivo Excel encontrado em: {pasta}")
         return None
 
     print(f"\n📂 Lendo planilhas da pasta: {os.path.basename(pasta)}")
     dfs = []
+
     for arq in tqdm(arquivos, desc="📊 Processando arquivos", unit="arquivo"):
         try:
             df = pl.read_excel(arq)
@@ -72,20 +74,19 @@ def ler_todos_excel(pasta):
         except Exception as e:
             print(f"⚠️ Erro ao ler {os.path.basename(arq)}: {e}")
 
-    if not dfs:
-        return None
+    final = pl.concat(dfs, how="vertical")
+    final = final.with_columns([pl.col(c).cast(pl.Utf8, strict=False) for c in final.columns])
 
-    df_final = pl.concat(dfs, how="vertical")
-    df_final = df_final.with_columns([pl.col(c).cast(pl.Utf8, strict=False) for c in df_final.columns])
-    return df_final
+    return final
 
 
 def filtrar_por_uf(df):
     if COL_ESTADO_ENTREGA not in df.columns:
-        print(f"⚠️ Coluna '{COL_ESTADO_ENTREGA}' não encontrada — mantendo todas as linhas.")
+        print(f"⚠️ Coluna '{COL_ESTADO_ENTREGA}' não encontrada.")
         return df
+
     df = df.filter(pl.col(COL_ESTADO_ENTREGA).is_in(UFS_PERMITIDAS))
-    print(f"✅ Linhas mantidas apenas das UFs: {', '.join(UFS_PERMITIDAS)}")
+    print("✅ UFs filtradas:", ", ".join(UFS_PERMITIDAS))
     return df
 
 
@@ -95,13 +96,13 @@ def limpar_coluna_num(df, col):
         .str.replace_all(r"[^\d,.\-]", "")
         .str.replace(",", ".")
         .cast(pl.Float64, strict=False)
-        .fill_null(0)
         .fill_nan(0)
+        .fill_null(0)
     )
 
 
 def calcular_tempo_medio(df):
-    # Garante que as colunas das etapas existem
+
     for col in [COL_ETAPA_6, COL_ETAPA_7, COL_ETAPA_8]:
         if col not in df.columns:
             df = df.with_columns(pl.lit(0).alias(col))
@@ -109,7 +110,7 @@ def calcular_tempo_medio(df):
     df = df.with_columns([
         limpar_coluna_num(df, COL_ETAPA_6).alias(COL_ETAPA_6),
         limpar_coluna_num(df, COL_ETAPA_7).alias(COL_ETAPA_7),
-        limpar_coluna_num(df, COL_ETAPA_8).alias(COL_ETAPA_8)
+        limpar_coluna_num(df, COL_ETAPA_8).alias(COL_ETAPA_8),
     ])
 
     df = df.with_columns([
@@ -127,43 +128,38 @@ def calcular_tempo_medio(df):
         .rename({COL_PDD_ENTREGA: "Base Entrega"})
     )
 
-    total_geral = (
-        agrupado.select([
-            pl.lit("TOTAL GERAL").alias("Base Entrega"),
-            pl.col("Etapa 6 (h)").mean(),
-            pl.col("Etapa 7 (h)").mean(),
-            pl.col("Etapa 8 (h)").mean(),
-            pl.col("Tempo Total (h)").mean()
-        ])
-    )
-    agrupado = pl.concat([agrupado, total_geral], how="vertical")
+    total = agrupado.select([
+        pl.lit("TOTAL GERAL").alias("Base Entrega"),
+        pl.col("Etapa 6 (h)").mean(),
+        pl.col("Etapa 7 (h)").mean(),
+        pl.col("Etapa 8 (h)").mean(),
+        pl.col("Tempo Total (h)").mean()
+    ])
 
-    return agrupado, df
+    return pl.concat([agrupado, total], how="vertical"), df
 
 
-def gerar_comparativo(semana_ant, semana_atual):
-    comp = semana_ant.join(semana_atual, on="Base Entrega", how="outer", suffix="_Atual")
+def gerar_comparativo(ant, atual):
+    comp = ant.join(atual, on="Base Entrega", how="outer", suffix="_Atual")
+
     for etapa in ["Etapa 6", "Etapa 7", "Etapa 8", "Tempo Total"]:
         comp = comp.with_columns([
-            pl.col(f"{etapa} (h)").cast(pl.Float64, strict=False).alias(f"{etapa} (h)"),
-            pl.col(f"{etapa} (h)_Atual").cast(pl.Float64, strict=False).alias(f"{etapa} (h)_Atual")
+            (pl.col(f"{etapa} (h)_Atual") - pl.col(f"{etapa} (h)"))
+            .cast(pl.Float64, strict=False)
+            .alias(f"{etapa} Δ (h)")
         ])
-        comp = comp.with_columns([
-            (pl.col(f"{etapa} (h)_Atual") - pl.col(f"{etapa} (h)")).alias(f"{etapa} Δ (h)")
-        ])
+
     return comp
 
 
 def calcular_media_por_dia(df):
+
     if COL_DATA not in df.columns:
-        print(f"⚠️ Coluna '{COL_DATA}' não encontrada — não foi possível gerar médias diárias.")
         return None
 
-    df = df.with_columns([
-        pl.col(COL_DATA).str.slice(0, 10).alias(COL_DATA)
-    ])
+    df = df.with_columns(pl.col(COL_DATA).str.slice(0, 10).alias(COL_DATA))
 
-    media_dia = (
+    return (
         df.group_by(COL_DATA)
         .agg([
             pl.mean(COL_ETAPA_6).alias("Etapa 6 (h)"),
@@ -173,19 +169,20 @@ def calcular_media_por_dia(df):
         ])
         .sort(COL_DATA)
     )
-    return media_dia
 
 
 def separar_por_data(df):
+
     if COL_DATA not in df.columns:
-        print(f"⚠️ Coluna '{COL_DATA}' não encontrada — não será separado por data.")
         return {}
+
     df = df.with_columns(pl.col(COL_DATA).str.slice(0, 10).alias(COL_DATA))
     datas = df.select(COL_DATA).unique().to_series().to_list()
-    resultado = {}
-    for data in datas:
-        sub = df.filter(pl.col(COL_DATA) == data)
-        sub_agrupado = (
+
+    out = {}
+    for d in datas:
+        sub = df.filter(pl.col(COL_DATA) == d)
+        out[d] = (
             sub.group_by(COL_PDD_ENTREGA)
             .agg([
                 pl.mean(COL_ETAPA_6).alias("Etapa 6 (h)"),
@@ -195,170 +192,192 @@ def separar_por_data(df):
             ])
             .rename({COL_PDD_ENTREGA: "Base Entrega"})
         )
-        resultado[data] = sub_agrupado
-    return resultado
+
+    return out
 
 
 def exportar_base_consolidada(writer, df):
-    """Divide automaticamente a base consolidada em várias abas se ultrapassar o limite"""
-    total_linhas = df.height
-    num_abas = (total_linhas // LIMITE_EXCEL) + 1
+    total = df.height
+    abas = (total // LIMITE_EXCEL) + 1
 
-    print(f"🧾 Base consolidada contém {total_linhas:,} linhas — será dividida em {num_abas} aba(s).")
+    print(f"🧾 Base consolidada: {total:,} linhas → {abas} abas")
 
-    for i in range(num_abas):
-        inicio = i * LIMITE_EXCEL
-        fim = min((i + 1) * LIMITE_EXCEL, total_linhas)
-        aba_nome = f"Base Consolidada {i+1}"
-        df.slice(inicio, fim - inicio).to_pandas().to_excel(writer, sheet_name=aba_nome, index=False)
+    for i in range(abas):
+        ini = i * LIMITE_EXCEL
+        fim = min((i + 1)*LIMITE_EXCEL, total)
+        aba = f"Base Consolidada {i+1}"
+        df.slice(ini, fim - ini).to_pandas().to_excel(writer, aba, index=False)
 
 
-def mostrar_resumo_executivo(comparativo_df, semana_atual_df, media_por_dia_df=None):
-    """
-    Exibe no terminal um resumo com:
-    - maior piora / maior melhora (Tempo Total)
-    - TOP 5 ofensores por Etapa 6 / 7 / 8
-    - médias diárias por Data (Etapas 6/7/8), se media_por_dia_df for informado
-    """
+# =================================================================
+# 🔥 RESUMO EXECUTIVO COM TRATAMENTO DE None (v2.6.1)
+# =================================================================
+
+def mostrar_resumo_executivo(comp_df, sem_at_df, media_dia_df=None):
+
     print("\n" + "="*70)
-    print("📊 --- RESUMO EXECUTIVO DA ANÁLISE ---".center(70))
+    print("📊 --- RESUMO EXECUTIVO ---".center(70))
     print("="*70)
 
-    # Converter para Polars se for Pandas
-    if not isinstance(comparativo_df, pl.DataFrame):
-        comparativo_df = pl.from_pandas(comparativo_df)
-    if not isinstance(semana_atual_df, pl.DataFrame):
-        semana_atual_df = pl.from_pandas(semana_atual_df)
+    if not isinstance(comp_df, pl.DataFrame):
+        comp_df = pl.from_pandas(comp_df)
 
-    # Filtrar "TOTAL GERAL" para encontrar as bases
-    bases_comparativo = comparativo_df.filter(pl.col("Base Entrega") != "TOTAL GERAL")
+    if not isinstance(sem_at_df, pl.DataFrame):
+        sem_at_df = pl.from_pandas(sem_at_df)
 
-    # Base com maior piora
-    piora_df = bases_comparativo.filter(pl.col("Tempo Total Δ (h)").is_not_null()).sort("Tempo Total Δ (h)", descending=True).head(1)
-    if not piora_df.is_empty():
-        base_piora = piora_df['Base Entrega'][0]
-        valor_piora = piora_df['Tempo Total Δ (h)'][0]
-        print(f"🟥 MAIOR PIORA: A base '{base_piora}' aumentou seu tempo total em {valor_piora:.2f}h.")
+    bases = comp_df.filter(pl.col("Base Entrega") != "TOTAL GERAL")
 
-    # Base com maior melhora
-    melhora_df = bases_comparativo.filter(pl.col("Tempo Total Δ (h)").is_not_null()).sort("Tempo Total Δ (h)").head(1)
-    if not melhora_df.is_empty():
-        base_melhora = melhora_df['Base Entrega'][0]
-        valor_melhora = melhora_df['Tempo Total Δ (h)'][0]
-        print(f"🟩 MAIOR MELHORA: A base '{base_melhora}' reduziu seu tempo total em {abs(valor_melhora):.2f}h.")
+    # ------------------------------
+    # MAIOR PIORA (COM TRATAMENTO)
+    # ------------------------------
+    piora = bases.sort("Tempo Total Δ (h)", descending=True).head(1)
 
-    # ============================
-    # TOP 5 OFENSORES POR ETAPA
-    # ============================
+    if not piora.is_empty():
+        delta = piora['Tempo Total Δ (h)'][0]
+        delta = 0 if delta is None else float(delta)
+        print(f"🟥 MAIOR PIORA: {piora['Base Entrega'][0]} (+{delta:.2f}h)")
+
+    # ------------------------------
+    # MAIOR MELHORA (COM TRATAMENTO)
+    # ------------------------------
+    melhora = bases.sort("Tempo Total Δ (h)").head(1)
+
+    if not melhora.is_empty():
+        delta = melhora['Tempo Total Δ (h)'][0]
+        delta = 0 if delta is None else float(delta)
+        print(f"🟩 MAIOR MELHORA: {melhora['Base Entrega'][0]} ({delta:.2f}h)")
+
+    # ------------------------------
+    # COMPARATIVO GERAL
+    # ------------------------------
     print("\n" + "-"*70)
-    print("🚨 TOP 5 OFENSORES POR ETAPA (Semana Atual)".center(70))
+    print("📦 COMPARATIVO GERAL — Semana Atual vs Anterior".center(70))
     print("-"*70)
 
-    semana_atual_bases = semana_atual_df.filter(pl.col("Base Entrega") != "TOTAL GERAL")
+    ant = comp_df.filter(pl.col("Base Entrega") == "TOTAL GERAL")
+    at = sem_at_df.filter(pl.col("Base Entrega") == "TOTAL GERAL")
 
-    def mostrar_top5(col_etapa: str, titulo: str):
-        if col_etapa not in semana_atual_bases.columns:
-            print(f"\n⚠ Coluna '{col_etapa}' não encontrada para {titulo}.")
-            return
-        top5 = semana_atual_bases.sort(col_etapa, descending=True).head(5)
+    if not ant.is_empty() and not at.is_empty():
+
+        def seta(v): return "↑" if v > 0 else "↓"
+
+        e6 = at["Etapa 6 (h)"][0]
+        e7 = at["Etapa 7 (h)"][0]
+        e8 = at["Etapa 8 (h)"][0]
+        tot = at["Tempo Total (h)"][0]
+
+        d6 = e6 - ant["Etapa 6 (h)"][0]
+        d7 = e7 - ant["Etapa 7 (h)"][0]
+        d8 = e8 - ant["Etapa 8 (h)"][0]
+        dt = tot - ant["Tempo Total (h)"][0]
+
+        print(f"Shipping Time: {tot:.2f}h ({seta(dt)}{abs(dt):.2f}h)")
+        print(f"Etapa 6:       {e6:.2f}h ({seta(d6)}{abs(d6):.2f}h)")
+        print(f"Etapa 7:       {e7:.2f}h ({seta(d7)}{abs(d7):.2f}h)")
+        print(f"Etapa 8:       {e8:.2f}h ({seta(d8)}{abs(d8):.2f}h)")
+
+    # ------------------------------
+    # TOP 5 COM VARIAÇÃO Δ
+    # ------------------------------
+    print("\n" + "-"*70)
+    print("🚨 TOP 5 OFENSORES (com Δ)".center(70))
+    print("-"*70)
+
+    def top5(col, titulo):
         print(f"\n{titulo}:")
-        if top5.is_empty():
-            print("  - Nenhuma base encontrada para análise.")
-            return
-        for row in top5.iter_rows(named=True):
-            print(f"  - {row['Base Entrega']}: {row[col_etapa]:.2f}h")
+        at = sem_at_df.filter(pl.col("Base Entrega") != "TOTAL GERAL")
 
-    mostrar_top5("Etapa 6 (h)", "🔹 TOP 5 - ETAPA 6 (SC Destino -> Base Entrega)")
-    mostrar_top5("Etapa 7 (h)", "🔹 TOP 5 - ETAPA 7 (Processamento na Base)")
-    mostrar_top5("Etapa 8 (h)", "🔹 TOP 5 - ETAPA 8 (Saída para Entrega)")
+        top = at.sort(col, descending=True).head(5)
 
-    # ============================
-    # RESUMO DIÁRIO (POR DATA)
-    # ============================
-    if media_por_dia_df is not None:
+        for row in top.iter_rows(named=True):
+            base = row["Base Entrega"]
+            atual = row[col]
+
+            comp_row = comp_df.filter(pl.col("Base Entrega") == base)
+
+            if comp_row.is_empty():
+                print(f"  - {base}: {atual:.2f}h (Δ N/A)")
+                continue
+
+            nome_delta = f"{col.replace(' (h)', '')} Δ (h)"
+            delta = comp_row[nome_delta][0]
+
+            if delta is None or delta != delta:  # None ou NaN
+                print(f"  - {base}: {atual:.2f}h (Δ N/A)")
+            else:
+                seta = "↑" if delta > 0 else "↓"
+                print(f"  - {base}: {atual:.2f}h ({seta}{abs(delta):.2f}h)")
+
+    top5("Etapa 6 (h)", "🔹 TOP 5 - ETAPA 6 (SC Destino -> Base Entrega)")
+    top5("Etapa 7 (h)", "🔹 TOP 5 - ETAPA 7 (Processamento na Base)")
+    top5("Etapa 8 (h)", "🔹 TOP 5 - ETAPA 8 (Saída para Entrega)")
+
+    # ------------------------------
+    # RESUMO DIÁRIO
+    # ------------------------------
+    if media_dia_df is not None:
         print("\n" + "-"*70)
-        print("📆 MÉDIAS DIÁRIAS POR ETAPA (Semana Atual)".center(70))
+        print("📆 MÉDIAS DIÁRIAS — Semana Atual".center(70))
         print("-"*70)
 
-        if not isinstance(media_por_dia_df, pl.DataFrame):
-            media_por_dia_df = pl.from_pandas(media_por_dia_df)
-
-        # Garante ordenação por Data
-        media_por_dia_df = media_por_dia_df.sort(COL_DATA)
-
-        for row in media_por_dia_df.iter_rows(named=True):
-            data = row[COL_DATA]
-            e6 = row.get("Etapa 6 (h)", 0.0)
-            e7 = row.get("Etapa 7 (h)", 0.0)
-            e8 = row.get("Etapa 8 (h)", 0.0)
-            tot = row.get("Tempo Total (h)", 0.0)
-
-            print(f"\n📅 {data}")
-            print(f"  - Etapa 6 (média): {e6:.2f}h")
-            print(f"  - Etapa 7 (média): {e7:.2f}h")
-            print(f"  - Etapa 8 (média): {e8:.2f}h")
-            print(f"  - Tempo Total (média): {tot:.2f}h")
+        for row in media_dia_df.iter_rows(named=True):
+            print(f"\n📅 {row['Data']}")
+            print(f"  - Etapa 6: {row['Etapa 6 (h)']:.2f}h")
+            print(f"  - Etapa 7: {row['Etapa 7 (h)']:.2f}h")
+            print(f"  - Etapa 8: {row['Etapa 8 (h)']:.2f}h")
+            print(f"  - Tempo Total: {row['Tempo Total (h)']:.2f}h")
 
     print("="*70)
 
 
-# =================== EXECUÇÃO ===================
+# =================== MAIN ===================
 
 def main():
-    print("\n🚀 Iniciando análise comparativa semanal...")
+    print("\n🚀 Iniciando análise...")
 
     pastas = encontrar_duas_ultimas_pastas(BASE_DIR)
     if len(pastas) < 2:
-        print("❌ Menos de duas pastas encontradas.")
+        print("❌ Não há duas semanas para comparar.")
         return
 
-    semana_atual_path, semana_anterior_path = pastas[0], pastas[1]
-    print(f"📁 Semana Atual: {os.path.basename(semana_atual_path)}")
-    print(f"📁 Semana Anterior: {os.path.basename(semana_anterior_path)}")
+    sem_atual_pasta, sem_ant_pasta = pastas[0], pastas[1]
 
-    df_atual = ler_todos_excel(semana_atual_path)
-    df_ant = ler_todos_excel(semana_anterior_path)
+    df_atual = ler_todos_excel(sem_atual_pasta)
+    df_ant = ler_todos_excel(sem_ant_pasta)
+
     if df_atual is None or df_ant is None:
-        print("❌ Não foi possível ler uma das semanas.")
+        print("❌ Falha ao ler semanas.")
         return
 
     df_atual = filtrar_por_uf(df_atual)
     df_ant = filtrar_por_uf(df_ant)
 
-    print("\n⏳ Calculando médias por base...")
-    semana_atual, df_atual_limpo = calcular_tempo_medio(df_atual)
-    semana_anterior, _ = calcular_tempo_medio(df_ant)
+    sem_at, df_atual_limpo = calcular_tempo_medio(df_atual)
+    sem_ant, _ = calcular_tempo_medio(df_ant)
 
-    print("📈 Gerando comparativo...")
-    comparativo = gerar_comparativo(semana_anterior, semana_atual)
+    comp = gerar_comparativo(sem_ant, sem_at)
 
-    media_por_dia = calcular_media_por_dia(df_atual_limpo)
+    media_dia = calcular_media_por_dia(df_atual_limpo)
     por_data = separar_por_data(df_atual_limpo)
 
-    output_excel = os.path.join(OUTPUT_DIR, "Comparativo_ShippingTime_PorData.xlsx")
-    with pd.ExcelWriter(output_excel, engine="xlsxwriter") as writer:
-        # 🔹 Abas principais
-        comparativo.to_pandas().to_excel(writer, sheet_name="Comparativo Semanal", index=False)
-        if media_por_dia is not None:
-            media_por_dia.to_pandas().to_excel(writer, sheet_name="Média por Dia (Atual)", index=False)
+    output = os.path.join(OUTPUT_DIR, "Comparativo_ShippingTime_PorData.xlsx")
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
 
-        # 🔹 Abas separadas por Data
-        for data, df_data in por_data.items():
-            safe_name = str(data).replace("/", "-")
-            df_data.to_pandas().to_excel(writer, sheet_name=safe_name[:31], index=False)
+        comp.to_pandas().to_excel(writer, "Comparativo Semanal", index=False)
 
-        # 🔹 Abas com base consolidada (divididas)
+        if media_dia is not None:
+            media_dia.to_pandas().to_excel(writer, "Média por Dia", index=False)
+
+        for d, df_dia in por_data.items():
+            aba = d.replace("/", "-")[:31]
+            df_dia.to_pandas().to_excel(writer, aba, index=False)
+
         exportar_base_consolidada(writer, df_atual_limpo)
 
-    print(f"\n✅ Comparativo salvo em:\n{output_excel}\n")
-    print("📑 Abas criadas:")
-    print("- Comparativo Semanal")
-    print("- Média por Dia (Atual)")
-    print("- Uma aba por Data detectada")
-    print("- Base Consolidada (dividida automaticamente se necessário)")
+    print(f"\n📁 Arquivo salvo em:\n{output}\n")
 
-    # ✨ RESUMO EXECUTIVO + TOP 5 + RESUMO DIÁRIO
-    mostrar_resumo_executivo(comparativo, semana_atual, media_por_dia)
+    mostrar_resumo_executivo(comp, sem_at, media_dia)
+
 
 if __name__ == "__main__":
     main()

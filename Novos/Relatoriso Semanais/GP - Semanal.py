@@ -62,7 +62,7 @@ def encontrar_arquivos_por_prefixo(pasta, prefixo):
         else:
             arquivos = [os.path.join(pasta, f) for f in todos if prefixo.lower() in f.lower()]
             if arquivos:
-                logging.info(f"✅ {len(arquivos)} arquivo(s) encontrado(s) contendo '{prefixo}' no nome")
+                logging.info(f"✅ {len(arquivos)} arquivo(s) encontrado(s) contendo '{prefixo}'")
             else:
                 logging.warning(f"⚠️ Nenhum arquivo encontrado contendo '{prefixo}'")
     except Exception as e:
@@ -71,7 +71,6 @@ def encontrar_arquivos_por_prefixo(pasta, prefixo):
 
 
 def ler_excel_polars(caminho):
-    """Leitura rápida com Polars, com fallback seguro."""
     nome = os.path.basename(caminho)
     try:
         df = pl.read_excel(caminho)
@@ -82,8 +81,10 @@ def ler_excel_polars(caminho):
         return None
 
 
+# ===========================================================
+# 📌 Função de Coordenadores – CORRIGIDA
+# ===========================================================
 def adicionar_coordenador(df):
-    """Adiciona coordenador e UF a partir da base de referência."""
     caminho_ref = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
     if not os.path.exists(caminho_ref):
         logging.error("❌ Base de coordenadores não encontrada.")
@@ -91,75 +92,101 @@ def adicionar_coordenador(df):
 
     try:
         ref = pl.read_excel(caminho_ref)
-        col_base_ref = "Nome da base"
-        col_uf_ref = "UF"
-        col_coord_ref = next((c for c in ref.columns if "coordenador" in c.lower()), None)
 
-        if not all(c in ref.columns for c in [col_base_ref, col_uf_ref]) or not col_coord_ref:
-            logging.error("❌ Colunas necessárias ausentes na base de referência.")
+        # Normaliza base de referência
+        ref = ref.with_columns([
+            pl.col("Nome da base").cast(pl.Utf8).str.strip().str.to_uppercase().alias("base_ref"),
+            pl.col("UF").cast(pl.Utf8).alias("UF"),
+            pl.col("Coordenador").cast(pl.Utf8).alias("Coordenador")
+        ])
+
+        if "Base de entrega" not in df.columns:
+            logging.warning("⚠️ 'Base de entrega' não encontrada no arquivo atual.")
             return df
 
-        ref = ref.with_columns([
-            pl.col(col_base_ref).cast(pl.Utf8).str.strip_chars().str.to_uppercase()
-        ])
-
+        # Normaliza coluna de base do arquivo principal
         df = df.with_columns([
-            pl.col(COLUNAS["base"]).cast(pl.Utf8).str.strip_chars().str.to_uppercase()
+            pl.col("Base de entrega").cast(pl.Utf8).str.strip().str.to_uppercase().alias("Base de entrega")
         ])
 
+        # Join seguro
         df = df.join(
-            ref.select([
-                pl.col(col_base_ref).alias("base_ref"),
-                pl.col(col_uf_ref),
-                pl.col(col_coord_ref)
-            ]),
-            left_on=COLUNAS["base"],
+            ref.select(["base_ref", "UF", "Coordenador"]),
+            left_on="Base de entrega",
             right_on="base_ref",
             how="left"
         )
 
-        df = df.with_columns([
-            pl.col(col_uf_ref).fill_null("UF não encontrado").alias("UF"),
-            pl.col(col_coord_ref).fill_null("Coordenador não encontrado").alias(COLUNAS["coordenador"])
-        ])
+        df = df.drop("base_ref")
+        return df
 
-        return df.drop("base_ref")
     except Exception as e:
         logging.error(f"❌ Erro ao adicionar coordenador: {e}")
         return df
 
 
+# ===========================================================
+# 📦 Processamento dos arquivos – CORRIGIDO
+# ===========================================================
 def processar_arquivos(lista_arquivos):
     dfs = []
+    colunas_totais = set()
+
     for caminho in tqdm(lista_arquivos, desc="📦 Lendo planilhas", colour="green"):
         df = ler_excel_polars(caminho)
         if df is None:
             continue
 
-        # Normaliza colunas
+        # Normaliza nomes das colunas
         df = df.rename({c: c.strip() for c in df.columns})
 
-        # Conversões de data
+        # Converte tudo para texto (impede erro de dtype)
         df = df.with_columns([
-            pl.col(COLUNAS["tempo_entrega"]).str.strptime(pl.Datetime, strict=False).alias("tempo_entrega_dt"),
-            pl.col(COLUNAS["horario_entrega"]).str.strptime(pl.Datetime, strict=False).alias("horario_entrega_dt")
+            pl.col(c).cast(pl.Utf8, strict=False).alias(c)
+            for c in df.columns
         ])
 
-        # Entrega válida no domingo
-        df = df.with_columns([
-            (
-                (pl.col("tempo_entrega_dt").dt.weekday() == 6)
-                & (pl.col("horario_entrega_dt").is_not_null())
-                & (pl.col(COLUNAS["assinatura"]).cast(pl.Utf8).str.strip_chars() == "Recebimento com assinatura normal")
-            ).alias("Entrega válida no domingo")
-        ])
+        # Atualiza o conjunto total de colunas
+        colunas_totais.update(df.columns)
+
+        # Conversões de data
+        if COLUNAS["tempo_entrega"] in df.columns:
+            df = df.with_columns(
+                pl.col(COLUNAS["tempo_entrega"]).str.strptime(pl.Datetime, strict=False).alias("tempo_entrega_dt")
+            )
+
+        if COLUNAS["horario_entrega"] in df.columns:
+            df = df.with_columns(
+                pl.col(COLUNAS["horario_entrega"]).str.strptime(pl.Datetime, strict=False).alias("horario_entrega_dt")
+            )
+
+        # Domingos válidos
+        if {"tempo_entrega_dt", "horario_entrega_dt", COLUNAS["assinatura"]}.issubset(df.columns):
+            df = df.with_columns([
+                (
+                    (pl.col("tempo_entrega_dt").dt.weekday() == 6)
+                    & (pl.col("horario_entrega_dt").is_not_null())
+                    & (pl.col(COLUNAS["assinatura"]).str.strip_chars() == "Recebimento com assinatura normal")
+                ).alias("Entrega válida no domingo")
+            ])
 
         df = adicionar_coordenador(df)
         dfs.append(df)
 
     if not dfs:
         return None
-    return pl.concat(dfs, how="vertical")
+
+    # Padroniza colunas em todos os arquivos
+    dfs_padronizados = []
+    for df in dfs:
+        faltantes = colunas_totais - set(df.columns)
+        for col in faltantes:
+            df = df.with_columns(pl.lit(None).alias(col))
+
+        dfs_padronizados.append(df.select(sorted(colunas_totais)))
+
+    # Finalmente concatena SEM ERROS
+    return pl.concat(dfs_padronizados, how="vertical")
 
 
 # ===========================================================
@@ -169,7 +196,7 @@ def gerar_relatorio(df, caminho_saida):
     try:
         total_pedidos = df.height
         total_motoristas = df.select(pl.col(COLUNAS["motorista"]).n_unique()).item()
-        total_domingo = df.filter(pl.col("Entrega válida no domingo")).height
+        total_domingo = df.filter(pl.col("Entrega válida no domingo")).height if "Entrega válida no domingo" in df.columns else 0
         total_bases = df.select(pl.col(COLUNAS["base"]).n_unique()).item()
 
         logging.info(f"""
@@ -186,7 +213,7 @@ def gerar_relatorio(df, caminho_saida):
                 pl.count(COLUNAS["pedido"]).alias("Total de Pedidos Recebidos"),
                 pl.col(COLUNAS["motorista"]).n_unique().alias("Motoristas Únicos"),
                 pl.col(COLUNAS["base"]).n_unique().alias("Bases Distintas"),
-                pl.col("Entrega válida no domingo").sum().alias("Entregas válidas no domingo")
+                pl.col("Entrega válida no domingo").sum().alias("Entregas válidas no domingo") if "Entrega válida no domingo" in df.columns else pl.lit(0)
             ])
             .sort("UF")
         )
@@ -252,4 +279,3 @@ if __name__ == "__main__":
     fim = time.time()
     minutos, segundos = divmod(fim - inicio, 60)
     logging.info(f"⏱️ Tempo total de execução: {int(minutos)}m {int(segundos)}s")
-

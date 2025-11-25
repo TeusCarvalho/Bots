@@ -988,3 +988,21 @@ ValueError: This sheet is too large! Your sheet size is: 2476990, 36 Max sheet s
 2025-11-21 08:14:01,783 - INFO - 📨 Card enviado para Emerson Silva
 2025-11-21 08:14:03,403 - INFO - 📨 Card enviado para Marcos Caique
 2025-11-21 08:14:03,405 - INFO - 🏁 Processamento concluído (v2.8)
+2025-11-24 13:25:38,415 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-11-24 13:25:38,416 - INFO - 📅 Data usada para cálculo SLA: 2025-11-21
+2025-11-24 13:25:42,272 - INFO - 📥 Registros carregados: 165646
+2025-11-24 13:25:42,274 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-11-24 13:25:42,277 - INFO - 📊 Registros para 2025-11-21: 165646
+2025-11-24 13:25:42,512 - INFO - 🧩 Registros sem coordenador após join: 4386
+2025-11-24 13:25:42,526 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251121.xlsx
+2025-11-24 13:25:45,700 - INFO - 📨 Card enviado para João Melo
+2025-11-24 13:25:47,362 - INFO - 📨 Card enviado para Johas Vieira
+2025-11-24 13:25:48,872 - INFO - 📨 Card enviado para Anderson Matheus
+2025-11-24 13:25:50,312 - INFO - 📨 Card enviado para Marcelo Medina
+2025-11-24 13:25:51,879 - INFO - 📨 Card enviado para Odária Fereira
+2025-11-24 13:25:53,417 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-11-24 13:25:54,951 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-11-24 13:25:56,563 - INFO - 📨 Card enviado para Jose Marlon
+2025-11-24 13:25:58,166 - INFO - 📨 Card enviado para Emerson Silva
+2025-11-24 13:25:59,703 - INFO - 📨 Card enviado para Marcos Caique
+2025-11-24 13:25:59,704 - INFO - 🏁 Processamento concluído (v2.8)

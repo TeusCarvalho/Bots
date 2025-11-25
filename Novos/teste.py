@@ -1,26 +1,11 @@
-import psycopg2
-import pandas as pd
+import polars as pl
+import os
 
-DB = {
-    "host": "localhost",
-    "database": "analytics",
-    "user": "postgres",
-    "password": "Jt2025"
-}
+pasta = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Politicas de Bonificação\00.1 - Base Retidos(Lista)"
 
-def ver_tabela(tabela):
-    conn = psycopg2.connect(**DB)
-
-    df = pd.read_sql(f'SELECT * FROM "{tabela}" LIMIT 200', conn)
-
-    conn.close()
-
-    print("\n🔎 COLUNAS:")
-    print(df.columns.tolist())
-
-    print("\n📄 PRIMEIRAS LINHAS:")
-    print(df.head(20))  # mostra 20 linhas
-
-    return df
-
-ver_tabela("col_1_retidos")
+for f in os.listdir(pasta):
+    if f.lower().endswith((".xls", ".xlsx")):
+        print("\nArquivo:", f)
+        df = pl.read_excel(os.path.join(pasta, f))
+        print(df.columns)
+        break   # mostra só o primeiro arquivo

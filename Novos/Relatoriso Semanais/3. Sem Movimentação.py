@@ -65,7 +65,6 @@ def log(msg: str):
 BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Semanal"
 SEM_MOV_DIR = os.path.join(BASE_DIR, "3. Sem Movimentação")
 
-# Caminho correto enviado por você
 BASES_INFO_PATH = (
     r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
 )
@@ -73,6 +72,7 @@ BASES_INFO_PATH = (
 TOP_N_GERAL = 10
 SAVE_EXCEL = True
 REGIONAL_ALVO = "GP"
+
 # ======================================================
 # 🔧 Funções Auxiliares
 # ======================================================
@@ -104,7 +104,6 @@ def _extract_sc_from_base(base: str) -> str:
     - PA MRB-PA → PA MRB
     - PA DEVOLUÇÃO-GO → PA DEVOLUÇÃO
     """
-
     if not base:
         return "N/D"
 
@@ -130,39 +129,51 @@ def _extract_sc_from_base(base: str) -> str:
         return f"{uf} {cidade}"
 
     return b
+
+
 # ======================================================
-# 🧾 RELATÓRIO FINAL — DINÂMICO (top1, top2, top5 reais)
+# 🧾 RELATÓRIO FINAL — DINÂMICO + DETALHE PROBLEMÁTICOS (terminal)
 # ======================================================
-def gerar_relatorio_terminal_e_excel(df_final, output_excel_path):
+def gerar_relatorio_terminal_e_excel(
+    df_final: pd.DataFrame,
+    df_raw: pd.DataFrame,
+    col_base: str,
+    col_problema: str,
+    output_excel_path: str
+):
+    """
+    df_final = agregado por base (com colunas 6/7/10/14/30/Total/SC)
+    df_raw   = base filtrada (regional + aging), na granularidade pacote
+    """
 
     # Ordenar do pior para o melhor
     df_sorted = df_final.sort_values("Total", ascending=False).reset_index(drop=True)
 
-    # Top 2 reais (não fixo)
-    base1 = df_sorted.loc[0, "SC"]
-    base2 = df_sorted.loc[1, "SC"]
+    # Top 2 reais
+    base1 = df_sorted.loc[0, "SC"] if len(df_sorted) > 0 else "N/D"
+    base2 = df_sorted.loc[1, "SC"] if len(df_sorted) > 1 else "N/D"
 
-    qtd_total = int(df_sorted["Total"].sum())
+    # totais reais na base bruta
+    qtd_total = int(len(df_raw))
 
-    # % problemáticos
-    col_prob = "Nomedepacoteproblemático问题件名称"
-    if col_prob in df_sorted.columns:
-        qtd_bipe = int(df_sorted[col_prob].notna().sum())
+    # % problemáticos (bipe)
+    qtd_bipe = 0
+    perc_bipe = 0
+    if col_problema in df_raw.columns:
+        qtd_bipe = int(df_raw[col_problema].notna().sum())
         perc_bipe = round((qtd_bipe / qtd_total) * 100, 2) if qtd_total else 0
-    else:
-        perc_bipe = 0
 
     perc_expedido = 24  # definido pela operação J&T
 
-    # ========= TERMINAL =========
+    # ========= TERMINAL (texto executivo) =========
     texto = f"""
 Ao todo, mais de [bold]{qtd_total:,}[/bold] pacotes ficaram sem movimentação acima de 6 dias.
 Entre os principais ofensores da semana, [bold]{base1}[/bold] e [bold]{base2}[/bold]
 aparecem com as maiores quantidades de pedidos.
 
-A operação mais crítica foi o [bold]bipe de pacote problemático[/bold],
-responsável por [bold]{perc_bipe}%[/bold] dos pedidos sem movimentação — 
-sendo [bold]{perc_expedido}%[/bold] referentes a encomendas expedidas que não chegaram.
+A operação, em que mais pacotes foram contabilizados foi o [bold]bipe de pacote problemático[/bold],
+sendo responsável por [bold]{perc_bipe}%[/bold] dos pedidos sem movimentação — 
+sendo [bold]{perc_expedido}%[/bold] somente de encomendas expedidas mas não chegaram.
 """
 
     if HAS_RICH:
@@ -178,7 +189,6 @@ sendo [bold]{perc_expedido}%[/bold] referentes a encomendas expedidas que não c
         table = Table(title="Top 5 — Piores Bases", title_style="bold", box=box.SIMPLE_HEAVY)
         for c in cols_order:
             table.add_column(c, justify="right", style="cyan" if c == "SC" else "")
-
         for _, r in top5.iterrows():
             table.add_row(
                 r["SC"],
@@ -188,12 +198,57 @@ sendo [bold]{perc_expedido}%[/bold] referentes a encomendas expedidas que não c
     else:
         print(top5[cols_order].to_string(index=False))
 
+    # ========= DETALHAMENTO PROBLEMÁTICOS POR BASE (TOP 5) =========
+    if col_problema in df_raw.columns:
+        df_prob = df_raw[df_raw[col_problema].notna()].copy()
+        if not df_prob.empty:
+            # garante SC na base bruta
+            if "SC" not in df_prob.columns:
+                df_prob["SC"] = df_prob[col_base].apply(_extract_sc_from_base)
+
+            bases_top5 = top5["SC"].tolist()
+
+            console.rule("[bold]🧩 Detalhamento dos problemáticos (Top 5 Bases)")
+
+            for sc in bases_top5:
+                df_sc = df_prob[df_prob["SC"] == sc]
+                if df_sc.empty:
+                    console.print(f"[yellow]• {sc}: sem problemáticos nessa semana.")
+                    continue
+
+                motivos = (
+                    df_sc[col_problema]
+                    .astype(str)
+                    .value_counts()
+                    .sort_values(ascending=False)
+                )
+
+                if HAS_RICH:
+                    t = Table(title=f"{sc} — Motivos Problemáticos", box=box.SIMPLE)
+                    t.add_column("Motivo", justify="left")
+                    t.add_column("Qtd", justify="right")
+
+                    for motivo, qtd in motivos.items():
+                        t.add_row(str(motivo), str(int(qtd)))
+
+                    console.print(t)
+                else:
+                    print(f"\n{sc} — Motivos Problemáticos")
+                    for motivo, qtd in motivos.items():
+                        print(f"- {motivo}: {int(qtd)}")
+        else:
+            console.print("[yellow]Nenhum pacote problemático encontrado para detalhamento.")
+    else:
+        console.print("[yellow]Coluna de problemáticos não encontrada, pulando detalhamento.")
+
     # ========= GERAR EXCEL COMPLETO =========
     try:
         df_sorted.to_excel(output_excel_path, index=False)
         console.print(f"[green]📁 Planilha única salva em: {output_excel_path}")
     except Exception as e:
         console.print(f"[red]❌ Erro ao salvar Excel: {e}")
+
+
 # ======================================================
 # 🚀 MAIN PRINCIPAL
 # ======================================================
@@ -245,16 +300,16 @@ def main():
     df = pd.concat(dfs, ignore_index=True)
     console.print(f"[green]Consolidação: {len(df):,} linhas.")
 
-    # Base Atualizada
+    # Base Atualizada (mantida como estava)
     try:
         df_info = _clean_cols(pd.read_excel(BASES_INFO_PATH, dtype=str))
     except:
         console.print("[red]ERRO: Base_Atualizada.xlsx não encontrada.")
         return
 
+    # Filtro regional
     df[col_regional] = df[col_regional].astype(str).str.strip()
     df = df[df[col_regional].str.upper() == REGIONAL_ALVO]
-
     console.print(f"[cyan]Após filtro Regional {REGIONAL_ALVO}: {len(df):,}")
 
     # Aging
@@ -268,6 +323,9 @@ def main():
 
     df["AgingLabel"] = df[col_aging].map(aging_map)
     df = df[df["AgingLabel"].notna()]
+
+    # garante SC na base bruta para detalhamento
+    df["SC"] = df[col_base].apply(_extract_sc_from_base)
 
     # POLARS
     if HAS_PL:
@@ -309,7 +367,14 @@ def main():
     # ===========================
     output_excel = os.path.join(BASE_DIR, "SemMov_Final_Unico.xlsx")
 
-    gerar_relatorio_terminal_e_excel(df_final, output_excel)
+    gerar_relatorio_terminal_e_excel(
+        df_final=df_final,
+        df_raw=df,
+        col_base=col_base,
+        col_problema=col_problema,
+        output_excel_path=output_excel
+    )
+
 
 # ======================================================
 # 🟢 RODAR
