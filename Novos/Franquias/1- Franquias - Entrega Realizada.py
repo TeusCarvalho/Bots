@@ -45,6 +45,8 @@ LINK_PASTA = (
     "matheus_carvalho_jtexpressdf_onmicrosoft_com/"
     "EvIP3oIiLJRAqcB1SZ_1nmYBXLIYSJkIns5Pf_Xz2OqY_w?e=OEXsJN"
 )
+
+# 🔎 NORMALIZADO PARA UPPERCASE NO FILTRO
 BASES_VALIDAS = [
     "F AGL-GO", "F ALV-AM", "F ALX-AM", "F AMB-MS", "F ANP-GO", "F APG - GO",
     "F ARQ - RO", "F BAO-PA", "F BSB - DF", "F BSB-DF", "F BSL-AC", "F CDN-AM",
@@ -58,12 +60,22 @@ BASES_VALIDAS = [
     "F TUR-PA", "F VHL-RO", "F VLP-GO", "F XIG-PA", "F TRM-AM", "F STM-PA",
     "F JPN 02-RO", "F CAC-RO"
 ]
+
+
+# ----------------------------------------------------------
+# 🟢 COR DO PERCENTUAL PARA O CARD
+# ----------------------------------------------------------
 def cor_percentual(pct: float) -> str:
     if pct < 0.95:
         return "🔴"
     elif pct < 0.97:
         return "🟡"
     return "🟢"
+
+
+# ----------------------------------------------------------
+# 📦 MOVER ARQUIVOS ANTIGOS
+# ----------------------------------------------------------
 def arquivar_relatorios_antigos(pasta_origem, pasta_destino, prefixo):
     os.makedirs(pasta_destino, exist_ok=True)
     for arquivo in os.listdir(pasta_origem):
@@ -76,6 +88,11 @@ def arquivar_relatorios_antigos(pasta_origem, pasta_destino, prefixo):
                 logging.info(f"📦 Arquivo movido: {arquivo}")
             except Exception as e:
                 logging.error(f"Erro ao mover {arquivo}: {e}")
+
+
+# ----------------------------------------------------------
+# ⚡ LEITURA RÁPIDA
+# ----------------------------------------------------------
 def ler_planilha_rapido(caminho):
     try:
         if caminho.endswith(".csv"):
@@ -85,6 +102,9 @@ def ler_planilha_rapido(caminho):
         return pl.DataFrame()
 
 
+# ----------------------------------------------------------
+# 📊 CONSOLIDAR TODAS AS PLANILHAS
+# ----------------------------------------------------------
 def consolidar_planilhas(pasta):
     arquivos = [
         os.path.join(pasta, f)
@@ -99,9 +119,16 @@ def consolidar_planilhas(pasta):
 
     dfs = [df for df in dfs if not df.is_empty()]
     return pl.concat(dfs, how="vertical_relaxed")
+
+
+# ----------------------------------------------------------
+# 📈 CALCULAR SLA POR BASE
+# ----------------------------------------------------------
 def calcular_sla(df: pl.DataFrame) -> pd.DataFrame:
+
+    # Normalizar colunas para uppercase
     colunas = [c.upper() for c in df.columns]
-    possiveis = ["ENTREGUE NO PRAZO?", "ENTREGUE NO PRAZO？"]
+    possiveis = ["ENTREGUE NO PRAZO?", "ENTREGUE NO PRAZO？"]  # chinês variante
 
     col_prazo = None
     for nome in possiveis:
@@ -112,6 +139,7 @@ def calcular_sla(df: pl.DataFrame) -> pd.DataFrame:
     if not col_prazo:
         raise KeyError(f"Coluna ENTREGUE NO PRAZO não encontrada.\nColunas: {df.columns}")
 
+    # Criar coluna binária
     df = df.with_columns(
         pl.when(pl.col(col_prazo).cast(pl.Utf8).str.to_uppercase() == "Y")
         .then(1)
@@ -119,6 +147,7 @@ def calcular_sla(df: pl.DataFrame) -> pd.DataFrame:
         .alias("_ENTREGUE_PRAZO")
     )
 
+    # Agrupar por base
     resumo = (
         df.group_by("BASE DE ENTREGA")
         .agg([
@@ -132,13 +161,22 @@ def calcular_sla(df: pl.DataFrame) -> pd.DataFrame:
 
     resumo_pd = resumo.to_pandas()
     resumo_pd.rename(columns={"BASE DE ENTREGA": "Base De Entrega"}, inplace=True)
-
     return resumo_pd
+
+
+# ----------------------------------------------------------
+# 📤 ENVIAR CARD PARA FEISHU
+# ----------------------------------------------------------
 def enviar_card_feishu(resumo_df: pd.DataFrame):
     ontem = (datetime.now() - timedelta(days=1)).strftime("%d/%m/%Y")
     total_bases = resumo_df["Base De Entrega"].nunique()
-    media_geral = resumo_df["% SLA Cumprido"].mean()
 
+    # 🔧 MÉDIA GERAL PONDERADA — CORRIGIDA
+    total_geral = resumo_df["Total"].sum()
+    total_prazo_geral = resumo_df["Entregues no Prazo"].sum()
+    media_geral = (total_prazo_geral / total_geral) if total_geral > 0 else 0
+
+    # Piores e melhores
     piores = resumo_df.sort_values("% SLA Cumprido").head(7)
     melhores = resumo_df.sort_values("% SLA Cumprido", ascending=False).head(3)
 
@@ -173,8 +211,10 @@ def enviar_card_feishu(resumo_df: pd.DataFrame):
                 {"tag": "div", "text": {"tag": "lark_md", "content": conteudo}},
                 {"tag": "hr"},
                 {"tag": "action", "actions": [
-                    {"tag": "button", "text": {"tag": "plain_text", "content": "📂 Abrir Pasta"},
-                     "url": LINK_PASTA, "type": "default"}
+                    {"tag": "button",
+                     "text": {"tag": "plain_text", "content": "📂 Abrir Pasta"},
+                     "url": LINK_PASTA,
+                     "type": "default"}
                 ]}
             ]
         }
@@ -185,6 +225,11 @@ def enviar_card_feishu(resumo_df: pd.DataFrame):
         logging.error(f"Erro ao enviar card: {r.text}")
     else:
         logging.info("📨 Card enviado com sucesso!")
+
+
+# ----------------------------------------------------------
+# 💾 SALVAR EXCEL FINAL
+# ----------------------------------------------------------
 def salvar_excel(df_dados, df_resumo):
     df_pd = df_dados.to_pandas()
 
@@ -193,14 +238,30 @@ def salvar_excel(df_dados, df_resumo):
         df_pd.to_excel(w, index=False, sheet_name="Dados Completos")
 
     logging.info(f"💾 Relatório salvo em: {ARQUIVO_SAIDA}")
+
+
+# ----------------------------------------------------------
+# 🚀 MAIN
+# ----------------------------------------------------------
 if __name__ == "__main__":
-    logging.info("🚀 Iniciando processamento SLA Franquias v2.6...")
+    logging.info("🚀 Iniciando processamento SLA Franquias v2.7...")
 
     try:
         df = consolidar_planilhas(PASTA_ENTRADA)
+
+        # Normalizar nomes das colunas
         df = df.rename({c: c.strip().upper() for c in df.columns})
 
-        # Filtrar por bases válidas
+        # Normalizar valores da coluna BASE DE ENTREGA
+        df = df.with_columns(
+            pl.col("BASE DE ENTREGA")
+            .cast(pl.Utf8)
+            .str.strip_chars()
+            .str.to_uppercase()
+            .alias("BASE DE ENTREGA")
+        )
+
+        # Filtrar bases válidas
         df = df.filter(pl.col("BASE DE ENTREGA").is_in([b.upper() for b in BASES_VALIDAS]))
 
         # Calcular SLA
@@ -209,13 +270,13 @@ if __name__ == "__main__":
         # Arquivar relatórios antigos
         arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, "Resumo_Consolidado_")
 
-        # Salvar Excel
+        # Salvar Excel final
         salvar_excel(df, resumo_pd)
 
-        # Enviar card
+        # Enviar card Feishu
         enviar_card_feishu(resumo_pd)
 
-        logging.info("🏁 Processo finalizado com sucesso (v2.6 Franquias).")
+        logging.info("🏁 Processo finalizado com sucesso (v2.7 Franquias).")
 
     except Exception as e:
         logging.critical(f"❌ Erro fatal: {e}", exc_info=True)

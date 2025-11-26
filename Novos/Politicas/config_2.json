@@ -1,0 +1,48 @@
+{
+  "caminhos": {
+    "pasta_retidos": "C:\\Users\\J&T-099\\OneDrive - Speed Rabbit Express Ltda (1)\\Área de Trabalho\\Testes\\Retidos - Diario\\06 - Retidos",
+
+    "pasta_devolucao": "C:\\Users\\J&T-099\\OneDrive - Speed Rabbit Express Ltda (1)\\Área de Trabalho\\Testes\\Retidos - Diario\\00.3 - Base Devolução",
+
+    "pasta_problematicos": "C:\\Users\\J&T-099\\OneDrive - Speed Rabbit Express Ltda (1)\\Área de Trabalho\\Testes\\Retidos - Diario\\00.2 - Base de Problematicos (Gestão de Anormalidade)",
+
+    "pasta_custodia": "C:\\Users\\J&T-099\\OneDrive - Speed Rabbit Express Ltda (1)\\Área de Trabalho\\Testes\\Retidos - Diario\\00.4 - Base Custodia",
+
+    "pasta_base_lista": "C:\\Users\\J&T-099\\OneDrive - Speed Rabbit Express Ltda (1)\\Área de Trabalho\\Testes\\Retidos - Diario\\00.1 - Base Retidos(Lista)",
+
+    "pasta_saida": "C:\\Users\\J&T-099\\OneDrive - Speed Rabbit Express Ltda (1)\\Área de Trabalho\\Testes\\Retidos - Diario\\Resultados",
+
+    "caminho_coordenador": "C:\\Users\\J&T-099\\OneDrive - Speed Rabbit Express Ltda (1)\\Área de Trabalho\\Testes\\Coordenador\\Base_Atualizada.xlsx"
+  },
+
+  "colunas": {
+    "col_pedido_ret": "Número do Pedido JMS 运单号",
+    "col_data_atualizacao_ret": "Data da Atualização 更新日期",
+    "col_regional_ret": "Regional 区域",
+
+    "col_pedido_dev": "Número de pedido JMS",
+    "col_data_solicitacao_dev": "Tempo de solicitação",
+
+    "col_pedido_cust": "Número de pedido JMS",
+    "col_data_registro_cust": "data de registro"
+  },
+
+  "parametros": {
+    "regionais_desejadas": ["GP", "PA", "GO"],
+    "prazo_custodia_dias": 9,
+
+    "nome_arquivo_final": "resultado_final_analise_retidos",
+    "excel_row_limit": 1048000,
+    "gerar_relatorios_intermediarios": true
+  },
+
+  "feishu": {
+    "default_webhook": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
+
+    "webhooks_especificos": {
+      "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/aaaa...",
+      "Anderson Matheus": "https://open.feishu.cn/open-apis/bot/v2/hook/bbbb...",
+      "Marcelo Medina": "https://open.feishu.cn/open-apis/bot/v2/hook/cccc..."
+    }
+  }
+}
