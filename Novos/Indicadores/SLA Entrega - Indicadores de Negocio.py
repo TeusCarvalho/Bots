@@ -174,7 +174,7 @@ def enviar_card_feishu(resumo_df: pd.DataFrame):
             "config": {"wide_screen_mode": True},
             "header": {
                 "template": "blue",
-                "title": {"tag": "plain_text", "content": "📊 SLA Franquias (Ontem)"}
+                "title": {"tag": "plain_text", "content": "📊 SLA Bases (Ontem)"}
             },
             "elements": [
                 {"tag": "div", "text": {"tag": "lark_md", "content": conteudo}},

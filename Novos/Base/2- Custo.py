@@ -4,6 +4,7 @@ import pandas as pd
 import requests
 from datetime import datetime
 import warnings
+
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 # ======================================================
@@ -11,9 +12,18 @@ warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 # ======================================================
 BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Custo - Coordenador"
 COORDENADOR_PATH = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
-OUTPUT_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Custos - Coordenadores"
 
-LINK_PASTA = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/EvIP3oIiLJRAqcB1SZ_1nmYBXLIYSJkIns5Pf_Xz2OqY_w?e=OEXsJN"
+# Pasta final (arquivo atual)
+OUTPUT_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Custos - Coordenadores"
+# Pasta Arquivo Morto (arquivos antigos)
+ARQUIVO_MORTO = os.path.join(OUTPUT_DIR, "Arquivo Morto")
+
+# Link que vai no botão do card
+LINK_PASTA = (
+    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/"
+    "matheus_carvalho_jtexpressdf_onmicrosoft_com/"
+    "IgAcZvPQH2w4Sq4XjYZiL5g1AfacXr80tUhQHJzX8QGR92I?e=Yc0rtm"
+)
 
 DATA_ATUAL = datetime.now().strftime("%Y%m%d_%H%M%S")
 DATA_HUMANA = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -32,41 +42,74 @@ COORDENADOR_WEBHOOKS = {
     "Orlean Nascimento": "https://open.feishu.cn/open-apis/bot/v2/hook/9ce83b77-04ad-4558-ab83-39929b30f092",
     "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/d624dcc1-73c7-4d36-8f63-5c43d0e5259b",
     "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/eb777d25-f454-4db7-9364-edf95ee37063",
-    "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/99557a7f-ca4e-4ede-b9e5-ccd7ad85b96a"
+    "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/99557a7f-ca4e-4ede-b9e5-ccd7ad85b96a",
 }
 
 # ======================================================
 # 🔧 FUNÇÕES AUXILIARES
 # ======================================================
-def encontrar_arquivo_entrada(pasta):
-    arquivos = [f for f in os.listdir(pasta) if f.lower().endswith((".xls", ".xlsx")) and not f.startswith("~$")]
+def encontrar_arquivo_entrada(pasta: str) -> str:
+    arquivos = [
+        f for f in os.listdir(pasta)
+        if f.lower().endswith((".xls", ".xlsx")) and not f.startswith("~$")
+    ]
     if not arquivos:
         raise FileNotFoundError("❌ Nenhum arquivo Excel encontrado na pasta de entrada.")
     arquivos.sort(key=lambda f: os.path.getmtime(os.path.join(pasta, f)), reverse=True)
     return os.path.join(pasta, arquivos[0])
 
-def carregar_excel(path):
+
+def carregar_excel(path: str) -> pd.DataFrame:
     return pd.read_excel(path, dtype=str, engine="openpyxl")
 
-def to_float_safe(series):
-    return pd.to_numeric(series.astype(str).str.replace(",", ".").str.extract(r"(\d+\.?\d*)")[0], errors="coerce").fillna(0)
+
+def to_float_safe(series: pd.Series) -> pd.Series:
+    return (
+        pd.to_numeric(
+            series.astype(str)
+            .str.replace(",", ".", regex=False)
+            .str.extract(r"(\d+\.?\d*)")[0],
+            errors="coerce",
+        )
+        .fillna(0)
+    )
+
 
 # ======================================================
 # 🎨 CARD FEISHU IGUAL AO DA IMAGEM
 # ======================================================
-def enviar_card_feishu_card(webhook, nome_coord, total_pedidos, custo_total, bases, top5):
-    custo_fmt = f"R$ {custo_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+def enviar_card_feishu_card(
+    webhook: str,
+    nome_coord: str,
+    total_pedidos: int,
+    custo_total: float,
+    bases,
+    top5,
+) -> None:
+    custo_fmt = (
+        f"R$ {custo_total:,.2f}"
+        .replace(",", "X")
+        .replace(".", ",")
+        .replace("X", ".")
+    )
 
     elementos_top5 = []
     for base, custo in top5:
-        custo_b_fmt = f"R$ {custo:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        elementos_top5.append({
-            "tag": "div",
-            "text": {
-                "tag": "lark_md",
-                "content": f"🪙 **{base} — {custo_b_fmt}**"
+        custo_b_fmt = (
+            f"R$ {custo:,.2f}"
+            .replace(",", "X")
+            .replace(".", ",")
+            .replace("X", ".")
+        )
+        elementos_top5.append(
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": f"🪙 **{base} — {custo_b_fmt}**",
+                },
             }
-        })
+        )
 
     card = {
         "msg_type": "interactive",
@@ -75,8 +118,8 @@ def enviar_card_feishu_card(webhook, nome_coord, total_pedidos, custo_total, bas
                 "template": "green",
                 "title": {
                     "tag": "plain_text",
-                    "content": f"💰 Custos - {nome_coord}"
-                }
+                    "content": f"💰 Custos - {nome_coord}",
+                },
             },
             "elements": [
                 {
@@ -89,16 +132,16 @@ def enviar_card_feishu_card(webhook, nome_coord, total_pedidos, custo_total, bas
                             f"📦 **Total de pedidos:** {total_pedidos}\n"
                             f"💰 **Custo total:** {custo_fmt}\n"
                             f"🏢 **Bases Avaliadas:** {len(bases)}\n"
-                        )
-                    }
+                        ),
+                    },
                 },
                 {"tag": "hr"},
                 {
                     "tag": "div",
                     "text": {
                         "tag": "lark_md",
-                        "content": "🔻 **5 Maiores Custos:**"
-                    }
+                        "content": "🔻 **5 Maiores Custos:**",
+                    },
                 },
                 *elementos_top5,
                 {"tag": "hr"},
@@ -109,15 +152,15 @@ def enviar_card_feishu_card(webhook, nome_coord, total_pedidos, custo_total, bas
                             "tag": "button",
                             "text": {
                                 "tag": "plain_text",
-                                "content": "📁 Abrir Pasta no OneDrive"
+                                "content": "📁 Abrir Pasta no OneDrive",
                             },
                             "url": LINK_PASTA,
-                            "type": "primary"
+                            "type": "primary",
                         }
-                    ]
-                }
-            ]
-        }
+                    ],
+                },
+            ],
+        },
     }
 
     requests.post(webhook, json=card)
@@ -130,51 +173,95 @@ if __name__ == "__main__":
     print("🚀 Iniciando consolidação de custos por coordenador...\n")
 
     try:
+        # ----------------------------------------------
+        # 1) Arquivo de entrada
+        # ----------------------------------------------
         FILE_PATH = encontrar_arquivo_entrada(BASE_DIR)
         print(f"📂 Arquivo selecionado: {os.path.basename(FILE_PATH)}")
 
         df = carregar_excel(FILE_PATH)
         print(f"📄 Planilha carregada ({len(df):,} linhas)".replace(",", "."))
 
-        # 🔥 Remover remessas com sufixo "-001"
+        # ----------------------------------------------
+        # 2) Remover remessas com sufixo "-XX"
+        # ----------------------------------------------
         if "Remessa" in df.columns:
             antes = len(df)
             df["Remessa"] = df["Remessa"].astype(str).str.strip()
             df = df[~df["Remessa"].str.contains("-", na=False)]
             print(f"🧹 Removidas {antes - len(df)} remessas com sufixo '-XX'.")
 
-        # 🔎 Filtrar GP / GO / PA
-        df["Regional responsável"] = df["Regional responsável"].astype(str).str.upper().str.strip()
+        # ----------------------------------------------
+        # 3) Filtrar somente GP / GO / PA
+        # ----------------------------------------------
+        df["Regional responsável"] = (
+            df["Regional responsável"].astype(str).str.upper().str.strip()
+        )
         df = df[df["Regional responsável"].isin(["GP", "GO", "PA"])]
 
-        # 🔧 Vincular coordenadores
+        # ----------------------------------------------
+        # 4) Vincular coordenadores
+        # ----------------------------------------------
         df_coord = pd.read_excel(COORDENADOR_PATH)
         col_coord = "Coordenadores" if "Coordenadores" in df_coord.columns else "Coordenador"
         df_coord.rename(columns={col_coord: "Coordenadores"}, inplace=True)
 
-        df["Base responsável"] = df["Base responsável"].astype(str).str.upper().str.strip()
-        df_coord["Nome da base"] = df_coord["Nome da base"].astype(str).str.upper().str.strip()
+        df["Base responsável"] = (
+            df["Base responsável"].astype(str).str.upper().str.strip()
+        )
+        df_coord["Nome da base"] = (
+            df_coord["Nome da base"].astype(str).str.upper().str.strip()
+        )
 
-        df = pd.merge(
-            df, df_coord[["Nome da base", "Coordenadores"]],
-            left_on="Base responsável", right_on="Nome da base", how="left"
-        ).drop(columns=["Nome da base"], errors="ignore")
+        df = (
+            pd.merge(
+                df,
+                df_coord[["Nome da base", "Coordenadores"]],
+                left_on="Base responsável",
+                right_on="Nome da base",
+                how="left",
+            )
+            .drop(columns=["Nome da base"], errors="ignore")
+        )
 
         print("👥 Coordenadores vinculados.")
 
-        # 💰 Converter valor
-        df["Custo_R$"] = to_float_safe(df["Valor a pagar (yuan)"]) if "Valor a pagar (yuan)" in df.columns else 0
+        # ----------------------------------------------
+        # 5) Converter valor (yuan → float)
+        # ----------------------------------------------
+        if "Valor a pagar (yuan)" in df.columns:
+            df["Custo_R$"] = to_float_safe(df["Valor a pagar (yuan)"])
+        else:
+            df["Custo_R$"] = 0
 
-        # 💾 Salvar Excel
+        # ----------------------------------------------
+        # 6) Garantir pastas & mover arquivos antigos
+        # ----------------------------------------------
         os.makedirs(OUTPUT_DIR, exist_ok=True)
+        os.makedirs(ARQUIVO_MORTO, exist_ok=True)
+
+        for arquivo in os.listdir(OUTPUT_DIR):
+            if (
+                arquivo.lower().endswith(".xlsx")
+                and arquivo.startswith("Custos_Consolidado_")
+            ):
+                caminho_antigo = os.path.join(OUTPUT_DIR, arquivo)
+                caminho_morto = os.path.join(ARQUIVO_MORTO, arquivo)
+                os.replace(caminho_antigo, caminho_morto)
+
+        print("📦 Arquivos antigos movidos para Arquivo Morto.")
+
+        # ----------------------------------------------
+        # 7) Salvar Excel com base processada
+        # ----------------------------------------------
         with pd.ExcelWriter(ARQUIVO_SAIDA, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, sheet_name="Base_Processada")
 
         print(f"💾 Arquivo salvo em:\n{ARQUIVO_SAIDA}\n")
 
-        # ======================================================
-        # 📤 Enviar cards no Feishu
-        # ======================================================
+        # ----------------------------------------------
+        # 8) Enviar cards por coordenador no Feishu
+        # ----------------------------------------------
         print("📤 Enviando cards Feishu...\n")
 
         coordenadores = sorted(df["Coordenadores"].dropna().unique())
@@ -203,7 +290,7 @@ if __name__ == "__main__":
                 total_pedidos=total_pedidos,
                 custo_total=custo_total,
                 bases=bases,
-                top5=top5
+                top5=top5,
             )
 
             print(f"✔ Enviado para {coord} ({total_pedidos} pedidos).")

@@ -1053,3 +1053,75 @@ KeyError: "Coluna 'DATA PREVISTA DE ENTREGA' não encontrada."
 2025-11-26 08:27:34,224 - INFO - 📨 Card enviado para Emerson Silva
 2025-11-26 08:27:35,685 - INFO - 📨 Card enviado para Marcos Caique
 2025-11-26 08:27:35,687 - INFO - 🏁 Processamento concluído (v2.8)
+2025-11-27 08:34:28,300 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-11-27 08:34:28,300 - INFO - 📅 Data usada para cálculo SLA: 2025-11-26
+2025-11-27 08:34:32,045 - INFO - 📥 Registros carregados: 163041
+2025-11-27 08:34:32,048 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-11-27 08:34:32,054 - INFO - 📊 Registros para 2025-11-26: 163041
+2025-11-27 08:34:32,285 - INFO - 🧩 Registros sem coordenador após join: 595
+2025-11-27 08:34:32,307 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251126.xlsx
+2025-11-27 08:34:35,786 - INFO - 📨 Card enviado para João Melo
+2025-11-27 08:34:37,500 - INFO - 📨 Card enviado para Johas Vieira
+2025-11-27 08:34:39,250 - INFO - 📨 Card enviado para Anderson Matheus
+2025-11-27 08:34:41,080 - INFO - 📨 Card enviado para Marcelo Medina
+2025-11-27 08:34:42,885 - INFO - 📨 Card enviado para Odária Fereira
+2025-11-27 08:34:44,614 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-11-27 08:34:46,328 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-11-27 08:34:47,903 - INFO - 📨 Card enviado para Jose Marlon
+2025-11-27 08:34:49,482 - INFO - 📨 Card enviado para Emerson Silva
+2025-11-27 08:34:51,034 - INFO - 📨 Card enviado para Marcos Caique
+2025-11-27 08:34:51,035 - INFO - 🏁 Processamento concluído (v2.8)
+2025-11-28 08:17:30,550 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-11-28 08:17:30,550 - INFO - 📅 Data usada para cálculo SLA: 2025-11-27
+2025-11-28 08:17:34,427 - INFO - 📥 Registros carregados: 176426
+2025-11-28 08:17:34,431 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-11-28 08:17:34,439 - INFO - 📊 Registros para 2025-11-27: 176426
+2025-11-28 08:17:34,681 - INFO - 🧩 Registros sem coordenador após join: 1875
+2025-11-28 08:17:34,715 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251127.xlsx
+2025-11-28 08:17:36,491 - INFO - 📨 Card enviado para João Melo
+2025-11-28 08:17:38,007 - INFO - 📨 Card enviado para Johas Vieira
+2025-11-28 08:17:39,526 - INFO - 📨 Card enviado para Anderson Matheus
+2025-11-28 08:17:41,699 - INFO - 📨 Card enviado para Marcelo Medina
+2025-11-28 08:17:43,246 - INFO - 📨 Card enviado para Odária Fereira
+2025-11-28 08:17:44,741 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-11-28 08:17:46,411 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-11-28 08:17:48,137 - INFO - 📨 Card enviado para Jose Marlon
+2025-11-28 08:17:49,812 - INFO - 📨 Card enviado para Emerson Silva
+2025-11-28 08:17:51,460 - INFO - 📨 Card enviado para Marcos Caique
+2025-11-28 08:17:51,461 - INFO - 🏁 Processamento concluído (v2.8)
+2025-12-01 08:18:48,616 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-12-01 08:18:48,616 - INFO - 📅 Data usada para cálculo SLA: 2025-11-28
+2025-12-01 08:18:52,608 - INFO - 📥 Registros carregados: 173454
+2025-12-01 08:18:52,610 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-01 08:18:52,613 - INFO - 📊 Registros para 2025-11-28: 173454
+2025-12-01 08:18:52,958 - INFO - 🧩 Registros sem coordenador após join: 1133
+2025-12-01 08:18:52,974 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251128.xlsx
+2025-12-01 08:18:54,995 - INFO - 📨 Card enviado para João Melo
+2025-12-01 08:18:56,636 - INFO - 📨 Card enviado para Johas Vieira
+2025-12-01 08:18:58,465 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-01 08:19:00,263 - INFO - 📨 Card enviado para Marcelo Medina
+2025-12-01 08:19:02,084 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-01 08:19:03,967 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-01 08:19:05,983 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-01 08:19:07,814 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-01 08:19:09,525 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-01 08:19:11,341 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-01 08:19:11,342 - INFO - 🏁 Processamento concluído (v2.8)
+2025-12-02 08:43:16,947 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-12-02 08:43:16,948 - INFO - 📅 Data usada para cálculo SLA: 2025-12-01
+2025-12-02 08:43:21,565 - INFO - 📥 Registros carregados: 208372
+2025-12-02 08:43:21,567 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-02 08:43:21,569 - INFO - 📊 Registros para 2025-12-01: 208372
+2025-12-02 08:43:21,836 - INFO - 🧩 Registros sem coordenador após join: 0
+2025-12-02 08:43:21,847 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251201.xlsx
+2025-12-02 08:43:23,566 - INFO - 📨 Card enviado para João Melo
+2025-12-02 08:43:25,162 - INFO - 📨 Card enviado para Johas Vieira
+2025-12-02 08:43:26,972 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-02 08:43:28,529 - INFO - 📨 Card enviado para Marcelo Medina
+2025-12-02 08:43:30,375 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-02 08:43:32,165 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-02 08:43:33,926 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-02 08:43:35,682 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-02 08:43:37,392 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-02 08:43:38,956 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-02 08:43:38,957 - INFO - 🏁 Processamento concluído (v2.8)
