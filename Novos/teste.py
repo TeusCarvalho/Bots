@@ -1,73 +1,108 @@
-# Passo 1: Instale as bibliotecas (se ainda não tiver)
-# pip install pandas openpyxl tqdm
+# -*- coding: utf-8 -*-
+# pip install pandas polars tqdm xlsxwriter openpyxl
 
-import warnings
-
-warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
-
-import pandas as pd
 import os
+import pandas as pd
+import polars as pl
 from tqdm import tqdm
 
-# --- INÍCIO: ÁREA DE CONFIGURAÇÃO ---
-# 1. Caminho da pasta onde estão suas planilhas e onde o arquivo será salvo.
-caminho_da_pasta = r'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Nova pasta\Entrega Realizada'
+# ==========================================================
+# CONFIG
+# ==========================================================
 
-# 2. Status que você quer filtrar.
-status_desejado = 'recebimento com assinatura normal'
+PASTA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Nova pasta\Entregues"
+ARQUIVO_SAIDA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Nova pasta\resumo_motoristas.xlsx"
 
-# 3. Nome do arquivo de saída. Ele será salvo DENTRO da pasta acima.
-nome_arquivo_saida = 'resumo_entregas_por_motorista.xlsx'
-# --- FIM: ÁREA DE CONFIGURAÇÃO ---
+COL_MOTORISTA = "Responsável pela entrega"
+COL_PEDIDO = "Número de pedido JMS"
+COL_STATUS = "Marca de assinatura"
 
+STATUS_FILTRO = "Recebimento com assinatura normal".lower().strip()
 
-# Verifica se a pasta existe
-if not os.path.isdir(caminho_da_pasta):
-    print(f"Erro: A pasta '{caminho_da_pasta}' não foi encontrada.")
-else:
-    lista_de_dataframes_filtrados = []
+dfs = []
 
-    # Prepara a lista de arquivos para a barra de progresso
-    arquivos_para_processar = [f for f in os.listdir(caminho_da_pasta) if f.endswith(('.xlsx', '.xls'))]
+# ==========================================================
+# LEITURA SEGURA DE TODAS AS ABAS COM PANDAS
+# ==========================================================
 
-    # Inicia a barra de progresso
-    for nome_do_arquivo in tqdm(arquivos_para_processar, desc="Processando arquivos"):
-        caminho_completo = os.path.join(caminho_da_pasta, nome_do_arquivo)
-        try:
-            # <<< MUDANÇA AQUI >>>
-            # Lemos APENAS as colunas que são absolutamente necessárias.
-            df = pd.read_excel(caminho_completo, usecols=['Responsável pela entrega', 'Marca de assinatura'])
+print("\n🔍 Lendo planilhas...\n")
 
-            # Limpar e filtrar a coluna de status
-            df['Marca de assinatura'] = df['Marca de assinatura'].str.strip().str.lower()
-            df_filtrado = df[df['Marca de assinatura'] == status_desejado]
+arquivos = [f for f in os.listdir(PASTA) if f.endswith((".xlsx", ".xls"))]
 
-            if not df_filtrado.empty:
-                lista_de_dataframes_filtrados.append(df_filtrado)
-        except Exception as e:
-            # Erros são exibidos sem quebrar a barra de progresso
-            tqdm.write(f"   -> Erro ao ler o arquivo '{nome_do_arquivo}': {e}")
+for arquivo in tqdm(arquivos):
+    caminho = os.path.join(PASTA, arquivo)
 
-    if not lista_de_dataframes_filtrados:
-        print("\nNenhum dado encontrado com o filtro especificado.")
-    else:
-        print("\nConsolidando dados e criando resumo...")
-        dataframe_consolidado = pd.concat(lista_de_dataframes_filtrados, ignore_index=True)
+    try:
+        excel = pd.ExcelFile(caminho)
 
-        # <<< MUDANÇA AQUI >>>
-        # Agrupamos por motorista e contamos as linhas.
-        # Como não lemos mais a coluna 'Número de pedido JMS', usamos qualquer outra coluna para a contagem.
-        # Usar a própria coluna de agrupamento ('Responsável pela entrega') é uma boa prática.
-        resumo_por_motorista = dataframe_consolidado.groupby('Responsável pela entrega').agg(
-            Quantidade_de_Pedidos=('Responsável pela entrega', 'size')
-        ).reset_index()
+        for aba in excel.sheet_names:
+            try:
+                dfp = pd.read_excel(caminho, sheet_name=aba)
 
-        # Define o caminho completo de saída
-        caminho_saida = os.path.join(caminho_da_pasta, nome_arquivo_saida)
+                # Apenas adiciona se tiver linhas
+                if dfp.shape[0] > 0:
+                    dfs.append(dfp)
 
-        # Salva o resultado na pasta de origem
-        resumo_por_motorista.to_excel(caminho_saida, index=False)
+            except:
+                pass  # ignora aba ruim
 
-        print(f"\nProcesso concluído!")
-        print(
-            f"O arquivo de resumo '{nome_arquivo_saida}' foi criado em '{caminho_da_pasta}' para {len(resumo_por_motorista)} motoristas.")
+    except Exception as e:
+        print(f"⚠️ Erro lendo {arquivo}: {e}")
+
+# ==========================================================
+# CONSOLIDAÇÃO
+# ==========================================================
+
+if not dfs:
+    print("❌ Nenhuma linha encontrada nos arquivos.")
+    quit()
+
+df_total_pd = pd.concat(dfs, ignore_index=True)
+
+# Converte para Polars para acelerar
+df = pl.from_pandas(df_total_pd)
+
+# ==========================================================
+# LIMPEZA E FILTRO
+# ==========================================================
+
+# Garantir que a coluna existe
+for col in [COL_MOTORISTA, COL_PEDIDO, COL_STATUS]:
+    if col not in df.columns:
+        print(f"❌ A coluna '{col}' NÃO existe nos arquivos.")
+        quit()
+
+# Normaliza status
+df = df.with_columns(
+    pl.col(COL_STATUS).cast(str).str.to_lowercase().str.strip()
+)
+
+# Filtra entregas com assinatura normal
+df_filtrado = df.filter(
+    pl.col(COL_STATUS) == STATUS_FILTRO
+)
+
+if df_filtrado.height() == 0:
+    print("❌ Nenhum registro encontrado com o status 'Recebimento com assinatura normal'.")
+    quit()
+
+# ==========================================================
+# AGRUPAMENTO / RESUMO FINAL
+# ==========================================================
+
+resumo = (
+    df_filtrado
+    .group_by(COL_MOTORISTA)
+    .agg(QuantidadePedidos=pl.count(COL_PEDIDO))
+    .sort("QuantidadePedidos", descending=True)
+)
+
+# ==========================================================
+# SALVAR EXCEL FINAL
+# ==========================================================
+
+with pd.ExcelWriter(ARQUIVO_SAIDA, engine="xlsxwriter") as writer:
+    resumo.to_pandas().to_excel(writer, sheet_name="Resumo", index=False)
+
+print("\n✅ Arquivo gerado com sucesso!")
+print("📁 Local:", ARQUIVO_SAIDA)

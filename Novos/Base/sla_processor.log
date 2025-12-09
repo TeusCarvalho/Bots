@@ -1143,3 +1143,39 @@ KeyError: "Coluna 'DATA PREVISTA DE ENTREGA' não encontrada."
 2025-12-03 08:27:08,116 - INFO - 📨 Card enviado para Emerson Silva
 2025-12-03 08:27:09,662 - INFO - 📨 Card enviado para Marcos Caique
 2025-12-03 08:27:09,664 - INFO - 🏁 Processamento concluído (v2.8)
+2025-12-08 09:18:49,913 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-12-08 09:18:49,913 - INFO - 📅 Data usada para cálculo SLA: 2025-12-05
+2025-12-08 09:18:54,914 - INFO - 📥 Registros carregados: 197304
+2025-12-08 09:18:54,916 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-08 09:18:54,919 - INFO - 📊 Registros para 2025-12-05: 197304
+2025-12-08 09:18:55,290 - INFO - 🧩 Registros sem coordenador após join: 0
+2025-12-08 09:18:55,305 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251203.xlsx
+2025-12-08 09:18:57,512 - INFO - 📨 Card enviado para João Melo
+2025-12-08 09:18:59,242 - INFO - 📨 Card enviado para Johas Vieira
+2025-12-08 09:19:00,818 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-08 09:19:02,455 - INFO - 📨 Card enviado para Marcelo Medina
+2025-12-08 09:19:04,196 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-08 09:19:05,996 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-08 09:19:07,673 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-08 09:19:09,286 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-08 09:19:10,849 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-08 09:19:12,429 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-08 09:19:12,431 - INFO - 🏁 Processamento concluído (v2.8)
+2025-12-09 08:34:58,531 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-12-09 08:34:58,532 - INFO - 📅 Data usada para cálculo SLA: 2025-12-08
+2025-12-09 08:35:04,488 - INFO - 📥 Registros carregados: 200260
+2025-12-09 08:35:04,493 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-09 08:35:04,502 - INFO - 📊 Registros para 2025-12-08: 200260
+2025-12-09 08:35:04,862 - INFO - 🧩 Registros sem coordenador após join: 0
+2025-12-09 08:35:04,894 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251208.xlsx
+2025-12-09 08:35:07,588 - INFO - 📨 Card enviado para João Melo
+2025-12-09 08:35:09,280 - INFO - 📨 Card enviado para Johas Vieira
+2025-12-09 08:35:11,040 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-09 08:35:12,666 - INFO - 📨 Card enviado para Marcelo Medina
+2025-12-09 08:35:14,363 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-09 08:35:16,096 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-09 08:35:17,830 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-09 08:35:19,635 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-09 08:35:21,194 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-09 08:35:22,910 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-09 08:35:22,911 - INFO - 🏁 Processamento concluído (v2.8)
