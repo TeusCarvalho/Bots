@@ -108,7 +108,6 @@ def _files_signature(files: List[Path]) -> Tuple[Tuple[str, float], ...]:
         except OSError:
             sig.append((str(f), 0.0))
     return tuple(sig)
-
 # ==========================================================
 # LEITURA (CACHE)
 # ==========================================================
@@ -269,7 +268,7 @@ def build_kpis(df: pd.DataFrame):
         c9.metric("Não entregues (Qtd)", f"{total_nao_entregues:,}".replace(",", "."))
 
 # ==========================================================
-# SLA POR BASE (O QUE VOCÊ PEDIU)
+# SLA POR BASE
 # ==========================================================
 def sla_por_base(df: pd.DataFrame) -> pd.DataFrame:
     if COL_BASE_ENTREGA not in df.columns:
@@ -289,9 +288,7 @@ def sla_por_base(df: pd.DataFrame) -> pd.DataFrame:
         axis=1
     )
 
-    # formata base vazia
     g[COL_BASE_ENTREGA] = g[COL_BASE_ENTREGA].fillna("SEM BASE")
-
     return g
 
 # ==========================================================
@@ -323,7 +320,6 @@ def ranking_por_base(df: pd.DataFrame) -> pd.DataFrame:
     g = df.groupby(COL_BASE_ENTREGA, dropna=False).agg(agg_dict).reset_index()
     g[COL_BASE_ENTREGA] = g[COL_BASE_ENTREGA].fillna("SEM BASE")
 
-    # taxas calculadas
     g["Taxa 1ª tentativa (calc.)"] = g.apply(
         lambda r: _rate(r.get(COL_QTD_1_TENT, 0), r.get(COL_QTD_A_ENTREGAR, 0)), axis=1
     )
@@ -348,25 +344,106 @@ def ranking_por_base(df: pd.DataFrame) -> pd.DataFrame:
     return g
 
 # ==========================================================
-# GRÁFICOS
+# ✅ NOVA TENDÊNCIA (COM DIAS 0 + NÚMEROS)
 # ==========================================================
-def render_charts_time(df: pd.DataFrame):
-    if COL_DATA not in df.columns or COL_QTD_A_ENTREGAR not in df.columns:
-        st.info("Sem dados suficientes para gráfico por data.")
+def tendencia_qtd_fill(df: pd.DataFrame, metric_col: str) -> pd.DataFrame:
+    if COL_DATA not in df.columns or metric_col not in df.columns:
+        return pd.DataFrame()
+
+    temp = df[[COL_DATA, metric_col]].copy()
+    temp[COL_DATA] = pd.to_datetime(temp[COL_DATA], errors="coerce")
+    temp = temp.dropna(subset=[COL_DATA])
+
+    if temp.empty:
+        return pd.DataFrame()
+
+    temp["dia"] = temp[COL_DATA].dt.normalize()
+
+    g = (
+        temp.groupby("dia")[metric_col]
+        .sum()
+        .reset_index()
+        .sort_values("dia")
+    )
+
+    min_d = g["dia"].min()
+    max_d = g["dia"].max()
+
+    full = pd.DataFrame({"dia": pd.date_range(min_d, max_d, freq="D")})
+    g = full.merge(g, on="dia", how="left")
+    g[metric_col] = pd.to_numeric(g[metric_col], errors="coerce").fillna(0).astype(int)
+
+    return g
+
+def render_trend_bar(df: pd.DataFrame):
+    metric_candidates = [
+        COL_QTD_A_ENTREGAR,
+        COL_QTD_PRAZO,
+        COL_QTD_ATRASO,
+        COL_QTD_1_TENT,
+        "Assinadas até 15h (Qtd)",
+    ]
+    metric_candidates = [c for c in metric_candidates if c in df.columns]
+
+    if not metric_candidates:
+        st.info("Sem colunas numéricas suficientes para tendência.")
         return
 
-    daily = df.groupby(COL_DATA)[[COL_QTD_A_ENTREGAR]].sum().reset_index()
-    fig = px.line(daily, x=COL_DATA, y=COL_QTD_A_ENTREGAR, markers=True, title="Qtd a entregar por data")
+    metric = st.selectbox("Métrica da tendência", metric_candidates, index=0)
+
+    trend = tendencia_qtd_fill(df, metric)
+    if trend.empty:
+        st.info("Sem dados suficientes para tendência.")
+        return
+
+    fig = px.bar(
+        trend,
+        x="dia",
+        y=metric,
+        text=metric,
+        title=f"Tendência diária — {metric} (com dias sem ocorrência)"
+    )
+    fig.update_traces(textposition="outside", cliponaxis=False)
     st.plotly_chart(fig, use_container_width=True)
 
+# ==========================================================
+# ✅ DISTRIBUIÇÃO TOP 10 (SEM PIZZA)
+# ==========================================================
+def render_distribution_top10(df: pd.DataFrame):
+    dims_avail = [c for c in DIMENSIONS_DEFAULT if c in df.columns]
+    if not dims_avail or COL_QTD_A_ENTREGAR not in df.columns:
+        st.caption("Sem dimensões/volume suficientes para distribuição.")
+        return
 
+    dim = st.selectbox("Dimensão da distribuição", dims_avail, index=0)
+
+    dist = (
+        df.groupby(dim)[COL_QTD_A_ENTREGAR]
+        .sum()
+        .reset_index(name="Qtd a entregar")
+        .sort_values("Qtd a entregar", ascending=False)
+        .head(10)
+    )
+
+    fig = px.bar(
+        dist,
+        x=dim,
+        y="Qtd a entregar",
+        text="Qtd a entregar",
+        title=f"Top 10 — {dim} (por Qtd a entregar)"
+    )
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    st.plotly_chart(fig, use_container_width=True)
+
+# ==========================================================
+# DOWNLOAD
+# ==========================================================
 def to_excel_bytes(data: pd.DataFrame) -> bytes:
     from io import BytesIO
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         data.to_excel(writer, index=False, sheet_name="filtrado")
     return output.getvalue()
-
 
 # ==========================================================
 # SELETOR DE PASTA (Windows local)
@@ -384,7 +461,6 @@ def try_pick_folder_windows() -> str:
         return folder or ""
     except Exception:
         return ""
-
 # ==========================================================
 # APP
 # ==========================================================
@@ -488,8 +564,12 @@ with tab1:
     build_kpis(df_f)
 
     st.divider()
-    st.subheader("Tendência")
-    render_charts_time(df_f)
+    st.subheader("Tendência (com dias sem ocorrência)")
+    render_trend_bar(df_f)
+
+    st.divider()
+    st.subheader("Distribuição operacional (Top 10)")
+    render_distribution_top10(df_f)
 
 with tab2:
     st.subheader("SLA por Base de entrega")
@@ -505,18 +585,15 @@ with tab2:
             index=0
         )
 
-        ascending = False
-        sla_df = sla_df.sort_values(sort_by, ascending=ascending)
+        sla_df = sla_df.sort_values(sort_by, ascending=False)
 
         top_n = st.slider("Top N bases", 5, 100, 20, step=5)
         view = sla_df.head(top_n).copy()
 
-        # mostra SLA formatado
         view["SLA (%)"] = view["SLA (%)"].apply(_format_pct)
 
         st.dataframe(view, use_container_width=True)
 
-        # gráfico SLA (sem formatação string)
         fig = px.bar(
             sla_df.head(top_n),
             x=COL_BASE_ENTREGA,
@@ -530,7 +607,6 @@ with tab2:
 
         rank = ranking_por_base(df_f)
         if not rank.empty:
-            # exibe um recorte útil
             keep = [c for c in [
                 COL_BASE_ENTREGA,
                 COL_QTD_A_ENTREGAR,
@@ -544,7 +620,6 @@ with tab2:
             rank = rank[keep].copy()
             rank = rank.sort_values(COL_QTD_A_ENTREGAR, ascending=False)
 
-            # formata percentuais para visualização
             for c in ["SLA (%)", "Taxa 1ª tentativa (calc.)", "Taxa atraso (calc.)", "Taxa não entregues (calc.)"]:
                 if c in rank.columns:
                     rank[c] = rank[c].apply(_format_pct)
@@ -584,7 +659,7 @@ with tab3:
 
 with st.expander("ℹ️ Observações"):
     st.write(
-        "- O SLA por base é calculado de forma ponderada pelo volume: "
-        "soma(no prazo) / soma(a entregar).\n"
-        "- Se você quiser, posso adicionar também SLA por Coordenador e por Regional."
+        "- A tendência agora preenche dias sem ocorrência com 0 e exibe os números em todas as barras.\n"
+        "- A distribuição operacional Top 10 evita gráficos de pizza e usa soma da 'Qtd a entregar'.\n"
+        "- O SLA por base é ponderado pelo volume: soma(no prazo) / soma(a entregar)."
     )

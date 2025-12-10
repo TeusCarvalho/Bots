@@ -1,14 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-📦 Sem Movimentação - Franquias (Comparativo Diário)
-------------------------------------------------------------
-- Compara o relatório atual com o do dia anterior (D-1)
-- Calcula variação total e por base
-- Mostra Top 5 piores e Top 5 melhores reduções
-- Move relatórios antigos para "Arquivo Morto"
-- Envia card ao Feishu com resumo e link do relatório
-"""
-
 import polars as pl
 import os
 import logging
@@ -18,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
 # =====================================================================
-# 🧩 CONFIGURAÇÕES GERAIS
+# CONFIGURAÇÕES GERAIS
 # =====================================================================
 
 BASE_PATH = r'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Sem Movimentação'
@@ -62,7 +51,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 
 # =====================================================================
-# ⚙️ FUNÇÕES DE NEGÓCIO — POLARS
+# FUNÇÕES DE NEGÓCIO — POLARS
 # =====================================================================
 
 def aplicar_regras_transito(df: pl.DataFrame) -> pl.DataFrame:
@@ -105,7 +94,7 @@ def aplicar_regras_status(df: pl.DataFrame) -> pl.DataFrame:
 
 
 # =====================================================================
-# 🧮 APOIO E COMPARAÇÃO
+# APOIO E COMPARAÇÃO
 # =====================================================================
 
 def carregar_relatorio_anterior(pasta: str) -> Optional[pl.DataFrame]:
@@ -176,7 +165,7 @@ def comparar_relatorios(df_atual: pl.DataFrame, df_anterior: Optional[pl.DataFra
 
 
 # =====================================================================
-# 📦 MOVER ARQUIVOS PARA ARQUIVO MORTO
+# MOVER ARQUIVOS PARA ARQUIVO MORTO
 # =====================================================================
 
 def mover_para_arquivo_morto():
@@ -197,10 +186,26 @@ def mover_para_arquivo_morto():
 
 
 # =====================================================================
-# 💬 CARD FEISHU
+# CARD FEISHU
 # =====================================================================
 
+def _formatar_piores(piores: List[tuple]) -> str:
+    if not piores:
+        return "- Sem dados para exibir."
+    return "\n".join([f"- {b}: {q}" for b, q in piores])
+
+
+def _formatar_melhores(melhores: List[tuple]) -> str:
+    if not melhores:
+        return "- Nenhuma redução identificada."
+    # Mantém o número com sinal e adiciona o sufixo "(Redução)"
+    return "\n".join([f"- {b}: {q} (Redução)" for b, q in melhores])
+
+
 def montar_card_franquias(data, qtd_total, variacao, piores, melhores, link):
+    texto_piores = _formatar_piores(piores)
+    texto_melhores = _formatar_melhores(melhores)
+
     return {
         "msg_type": "interactive",
         "card": {
@@ -213,10 +218,10 @@ def montar_card_franquias(data, qtd_total, variacao, piores, melhores, link):
                     f"**Variação:** {variacao}\n"}},
                 {"tag": "hr"},
                 {"tag": "div", "text": {"tag": "lark_md", "content": "**🔴 5 Piores Franquias (Mais Pacotes)**"}},
-                {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join([f"- {b}: {q}" for b, q in piores])}},
+                {"tag": "div", "text": {"tag": "lark_md", "content": texto_piores}},
                 {"tag": "hr"},
                 {"tag": "div", "text": {"tag": "lark_md", "content": "**🟢 5 Maiores Reduções (Melhoria)**"}},
-                {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join([f"- {b}: {q}" for b, q in melhores])}},
+                {"tag": "div", "text": {"tag": "lark_md", "content": texto_melhores}},
                 {"tag": "hr"},
                 {"tag": "action", "actions": [
                     {"tag": "button", "text": {"tag": "plain_text", "content": "📂 Abrir Relatório"},
@@ -236,7 +241,7 @@ def enviar_card(payload: Dict[str, Any], webhook: str):
 
 
 # =====================================================================
-# 🚀 MAIN
+# MAIN
 # =====================================================================
 
 def main():
@@ -264,19 +269,19 @@ def main():
     df_final = aplicar_regras_status(df_main)
     df_final = aplicar_regras_transito(df_final)
 
-    # 🔹 Carrega o relatório anterior antes de mover os arquivos
+    # Carrega o relatório anterior antes de mover os arquivos
     df_ant = carregar_relatorio_anterior(PATH_OUTPUT_REPORTS)
 
-    # 🗂️ Move arquivos antigos para o Arquivo Morto
+    # Move arquivos antigos para o Arquivo Morto
     mover_para_arquivo_morto()
 
-    # 🔸 Salva o relatório novo
+    # Salva o relatório novo
     data_hoje = datetime.now().strftime("%Y-%m-%d")
     output_path = os.path.join(PATH_OUTPUT_REPORTS, f"Relatório_SemMovimentação_Completo_{data_hoje}.xlsx")
     df_final.write_excel(output_path)
     logging.info(f"✅ Relatório salvo: {output_path}")
 
-    # 🧮 Comparativo
+    # Comparativo (somente 5+ dias)
     df_card = df_final.filter(pl.col(COL_DIAS_PARADO) >= 5)
     qtd_total, variacao_total, piores, melhores = comparar_relatorios(df_card, df_ant)
 

@@ -1,81 +1,161 @@
 # -*- coding: utf-8 -*-
 import os
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
+from datetime import date
 
 # ==========================================================
 # CONFIG
 # ==========================================================
 st.set_page_config(
-    page_title="Painel de Arbitragem",
+    page_title="Painel — Pedidos sem Movimentação",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================================
-# COLUNAS ESPERADAS (se existirem)
+# MAPEAMENTO OPCIONAL (CN -> PT) — se aparecerem colunas conhecidas
+# (não quebra nada se não existir)
 # ==========================================================
-COL_NUMERO = "Número de declaração"
-COL_REMESSA = "Remessa"
-COL_PRODUTO = "Tipo de produto"
+CHINESE_COL_MAP: Dict[str, str] = {
+    "运单号": "Remessa",
+    "订单号": "Número do pedido",
+    "目的网点": "Base de entrega",
+    "网点": "Base",
+    "最后轨迹时间": "Horário da última operação",
+    "最后操作时间": "Horário da última operação",
+    "断更天数": "Dias sem movimentação",
+    "异常类型": "Tipo de anomalia",
+}
 
-COL_ANOM_PRIM = "Tipo de anomalia primária"
-COL_ANOM_SEC = "Tipo de anomalia secundária"
-
-COL_STATUS_ARB = "Status de arbitragem"
-COL_TIPO_DECISAO = "Tipo de decisão"
-
-COL_BASE_REM = "Base remetente"
-COL_BASE_RESP = "Base responsável"
-COL_BASE_FIN = "Base de liquidação financeira"
-
-COL_REG_REM = "Regional Remetente"
-COL_REG_DECL = "Regional de declaração"
-COL_REG_RESP = "Regional responsável"
-
-COL_DECLARANTE = "Declarante"
-
-# ✅ Coordenador
-COL_COORDENADOR = "Coordenador"
-
-# ✅ VALORES
-COL_VALOR_NOVO = "Valor a pagar (yuan)"          # coluna atual
-COL_VALOR_RS = "Valor a pagar (R$)"             # coluna de exibição (sem conversão)
-COL_VALOR_ANTIGO = "Valor da arbitragem (yuan)" # fallback
-
-COL_PESO = "Peso cobrável"
-
-# ✅ DATAS PRINCIPAIS
-COL_DATA_FECHAMENTO = "Data de fechamento"
-COL_DATA_DECLARACAO = "Data de declaração"
-
-# Datas comuns nesse tipo de export
-DATE_COL_CANDIDATES = [
-    COL_DATA_FECHAMENTO,
-    COL_DATA_DECLARACAO,
-    "Data de recebimento da arbitragem",
-    "Data de distribuição da arbitragem",
-    "Data de decisão de arbitragem",
-    "Data de contestação",
-    "Data de distribuição da contestação",
-    "Data de decisão da contestação",
-    "Tempo de processamento de retorno",
-    "Hora de envio",
-    "Horário de coleta",
-    "Horário de Previsão de Entrega SLA Cadeia",
-    "Horário da entrega",
+# ==========================================================
+# CANDIDATOS DE COLUNAS (auto-detecção)
+# ==========================================================
+ID_CANDIDATES = [
+    "Número de pedido JMS",
+    "Número do pedido",
+    "Número de pedido",
+    "Pedido",
+    "Order",
+    "Remessa",
+    "Waybill",
+    "运单号",
+    "订单号",
 ]
 
+BASE_CANDIDATES = [
+    "Base de entrega",
+    "Base responsável",
+    "Base remetente",
+    "Base",
+    "Nome da base",
+    "站点",
+    "网点",
+    "目的网点",
+]
+
+COORD_CANDIDATES = [
+    "Coordenador",
+    "Supervisor",
+]
+
+UNIDADE_CANDIDATES = [
+    "Unidade responsável",
+    "Unidade",
+    "Responsável",
+]
+
+TIPO_OP_CANDIDATES = [
+    "Tipo da última operação",
+    "Tipo de operação",
+    "Última operação",
+    "Operação",
+]
+
+ULTIMA_DATA_CANDIDATES = [
+    "Horário da última operação",
+    "Data da última operação",
+    "Última atualização",
+    "Data da última movimentação",
+    "Horário da última movimentação",
+    "Data",
+    "最后轨迹时间",
+    "最后操作时间",
+]
+
+DIAS_SEM_MOV_CANDIDATES = [
+    "Dias sem movimentação",
+    "Dias parados",
+    "Dias sem Movimentação",
+    "断更天数",
+]
 
 # ==========================================================
 # HELPERS
 # ==========================================================
 def _clean_columns(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [str(c).strip() for c in df.columns]
+    return df
+
+
+def _safe_rename_chinese(df: pd.DataFrame) -> pd.DataFrame:
+    rename_map = {c: CHINESE_COL_MAP[c] for c in df.columns if c in CHINESE_COL_MAP}
+    if rename_map:
+        df = df.rename(columns=rename_map)
+    return df
+
+
+def _norm(s: str) -> str:
+    s = str(s).lower().strip()
+    # normalização simples sem depender de libs externas
+    for ch in ["_", "-", "  "]:
+        s = s.replace(ch, " ")
+    return s
+
+
+def _find_col(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
+    if df is None or df.empty:
+        return None
+
+    cols = list(df.columns)
+    norm_map = {_norm(c): c for c in cols}
+
+    # 1) match direto normalizado
+    for cand in candidates:
+        nc = _norm(cand)
+        if nc in norm_map:
+            return norm_map[nc]
+
+    # 2) contains
+    for col in cols:
+        ncol = _norm(col)
+        for cand in candidates:
+            if _norm(cand) in ncol:
+                return col
+
+    return None
+
+
+def _coerce_datetime_col(df: pd.DataFrame, col: Optional[str]) -> pd.DataFrame:
+    if col and col in df.columns:
+        s = df[col].astype(str).str.strip()
+        # tenta padrão comum
+        parsed = pd.to_datetime(s, format="%Y-%m-%d %H:%M:%S", errors="coerce")
+        mask = parsed.isna()
+        if mask.any():
+            parsed.loc[mask] = pd.to_datetime(s.loc[mask], errors="coerce")
+        df[col] = parsed
+    return df
+
+
+def _coerce_numeric_col(df: pd.DataFrame, col: Optional[str]) -> pd.DataFrame:
+    if col and col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
 
@@ -99,68 +179,6 @@ def _files_signature(files: List[Path]) -> Tuple[Tuple[str, float], ...]:
     return tuple(sig)
 
 
-def _coerce_numeric(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
-    for c in cols:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
-    return df
-
-
-def _coerce_datetime(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
-    """
-    Robustíssimo para datas como:
-    2025-11-29 15:07:57
-    """
-    for c in cols:
-        if c in df.columns:
-            s = df[c].astype(str).str.strip()
-
-            parsed = pd.to_datetime(
-                s, format="%Y-%m-%d %H:%M:%S", errors="coerce"
-            )
-            mask = parsed.isna()
-            if mask.any():
-                parsed.loc[mask] = pd.to_datetime(s.loc[mask], errors="coerce")
-
-            df[c] = parsed
-    return df
-
-
-def _resolve_valor_column(df: pd.DataFrame) -> Optional[str]:
-    if COL_VALOR_NOVO in df.columns:
-        return COL_VALOR_NOVO
-    if COL_VALOR_ANTIGO in df.columns:
-        return COL_VALOR_ANTIGO
-    return None
-
-
-def _ensure_valor_internal(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Cria:
-      - __valor_base -> usado nos cálculos
-      - Valor a pagar (R$) -> exibição SEM conversão
-    """
-    col_origem = _resolve_valor_column(df)
-
-    if col_origem:
-        df[col_origem] = pd.to_numeric(df[col_origem], errors="coerce").fillna(0)
-        df["__valor_base"] = df[col_origem]
-        df[COL_VALOR_RS] = df[col_origem]
-    else:
-        df["__valor_base"] = 0
-        df[COL_VALOR_RS] = 0
-
-    return df
-
-
-def _get_primary_date_col(df: pd.DataFrame) -> Optional[str]:
-    if COL_DATA_FECHAMENTO in df.columns:
-        return COL_DATA_FECHAMENTO
-    if COL_DATA_DECLARACAO in df.columns:
-        return COL_DATA_DECLARACAO
-    return None
-
-
 def _safe_min_max_dates(series: pd.Series):
     if series is None or series.empty:
         return None, None
@@ -169,21 +187,14 @@ def _safe_min_max_dates(series: pd.Series):
     if s.empty:
         return None, None
 
-    min_ts, max_ts = s.min(), s.max()
-    if pd.isna(min_ts) or pd.isna(max_ts):
+    mn, mx = s.min(), s.max()
+    if pd.isna(mn) or pd.isna(mx):
         return None, None
 
-    if min_ts > max_ts:
-        min_ts, max_ts = max_ts, min_ts
+    if mn > mx:
+        mn, mx = mx, mn
 
-    return min_ts, max_ts
-
-
-def _format_brl_number(value: float) -> str:
-    try:
-        return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    except Exception:
-        return "0,00"
+    return mn, mx
 
 
 def try_pick_folder_windows() -> str:
@@ -205,18 +216,17 @@ def try_pick_folder_windows() -> str:
 @st.cache_data(show_spinner=False)
 def load_excel_file(path: str) -> pd.DataFrame:
     df = pd.read_excel(path, sheet_name=0)
+
+    df = _clean_columns(df)
+    df = _safe_rename_chinese(df)
     df = _clean_columns(df)
 
-    df = _coerce_datetime(df, DATE_COL_CANDIDATES)
+    # auto-detect cols
+    last_dt_col = _find_col(df, ULTIMA_DATA_CANDIDATES)
+    days_col = _find_col(df, DIAS_SEM_MOV_CANDIDATES)
 
-    # ✅ sem atraso aqui também
-    df = _coerce_numeric(df, [
-        COL_PESO,
-        COL_VALOR_NOVO,
-        COL_VALOR_ANTIGO,
-    ])
-
-    df = _ensure_valor_internal(df)
+    df = _coerce_datetime_col(df, last_dt_col)
+    df = _coerce_numeric_col(df, days_col)
 
     df["__arquivo_origem"] = Path(path).name
     return df
@@ -254,16 +264,14 @@ def load_from_uploads_cached(
         try:
             df = pd.read_excel(BytesIO(b), sheet_name=0)
             df = _clean_columns(df)
+            df = _safe_rename_chinese(df)
+            df = _clean_columns(df)
 
-            df = _coerce_datetime(df, DATE_COL_CANDIDATES)
+            last_dt_col = _find_col(df, ULTIMA_DATA_CANDIDATES)
+            days_col = _find_col(df, DIAS_SEM_MOV_CANDIDATES)
 
-            df = _coerce_numeric(df, [
-                COL_PESO,
-                COL_VALOR_NOVO,
-                COL_VALOR_ANTIGO,
-            ])
-
-            df = _ensure_valor_internal(df)
+            df = _coerce_datetime_col(df, last_dt_col)
+            df = _coerce_numeric_col(df, days_col)
 
             df["__arquivo_origem"] = name
             dfs.append(df)
@@ -277,114 +285,249 @@ def load_from_uploads_cached(
 
 
 # ==========================================================
-# FILTROS (SEM "Dias de atraso")
+# ENRIQUECIMENTO (calcula dias se necessário)
+# ==========================================================
+def enrich_sem_mov(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    id_col = _find_col(df, ID_CANDIDATES)
+    base_col = _find_col(df, BASE_CANDIDATES)
+    coord_col = _find_col(df, COORD_CANDIDATES)
+    unidade_col = _find_col(df, UNIDADE_CANDIDATES)
+    tipo_col = _find_col(df, TIPO_OP_CANDIDATES)
+    last_dt_col = _find_col(df, ULTIMA_DATA_CANDIDATES)
+    days_col = _find_col(df, DIAS_SEM_MOV_CANDIDATES)
+
+    df["__id_col"] = id_col or ""
+    df["__base_col"] = base_col or ""
+    df["__coord_col"] = coord_col or ""
+    df["__unidade_col"] = unidade_col or ""
+    df["__tipo_col"] = tipo_col or ""
+    df["__last_dt_col"] = last_dt_col or ""
+    df["__days_col"] = days_col or ""
+
+    # colunas operacionais padronizadas (para usar no app)
+    if id_col and id_col in df.columns:
+        df["Pedido/Remessa"] = df[id_col].astype(str)
+
+    if base_col and base_col in df.columns:
+        df["Base (auto)"] = df[base_col].fillna("SEM BASE").astype(str)
+
+    if coord_col and coord_col in df.columns:
+        df["Coordenador (auto)"] = df[coord_col].fillna("SEM COORD").astype(str)
+
+    if unidade_col and unidade_col in df.columns:
+        df["Unidade (auto)"] = df[unidade_col].fillna("SEM UNIDADE").astype(str)
+
+    if tipo_col and tipo_col in df.columns:
+        df["Tipo operação (auto)"] = df[tipo_col].fillna("SEM TIPO").astype(str)
+
+    # define data de última movimentação
+    if last_dt_col and last_dt_col in df.columns:
+        df["Última movimentação (auto)"] = pd.to_datetime(df[last_dt_col], errors="coerce")
+
+    # dias sem movimentação
+    if days_col and days_col in df.columns:
+        df["Dias sem mov (auto)"] = pd.to_numeric(df[days_col], errors="coerce")
+    else:
+        df["Dias sem mov (auto)"] = np.nan
+
+    # se não tem dias explícitos, tenta calcular pelo last_dt
+    if "Última movimentação (auto)" in df.columns:
+        missing = df["Dias sem mov (auto)"].isna()
+        if missing.any():
+            today = pd.to_datetime(date.today())
+            delta = (today - df.loc[missing, "Última movimentação (auto)"]).dt.days
+            df.loc[missing, "Dias sem mov (auto)"] = delta
+
+    df["Dias sem mov (auto)"] = pd.to_numeric(df["Dias sem mov (auto)"], errors="coerce").fillna(0).astype(int)
+
+    return df
+
+
+# ==========================================================
+# FILTROS
 # ==========================================================
 def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
     st.sidebar.subheader("Filtros")
 
-    # Data principal
-    date_col = _get_primary_date_col(df)
-    if date_col:
-        min_ts, max_ts = _safe_min_max_dates(df[date_col])
+    # filtro por data de última movimentação
+    if "Última movimentação (auto)" in df.columns:
+        min_ts, max_ts = _safe_min_max_dates(df["Última movimentação (auto)"])
         if min_ts is not None and max_ts is not None:
             date_range = st.sidebar.date_input(
-                f"Período ({date_col})",
+                "Período (Última movimentação)",
                 value=(min_ts.date(), max_ts.date()),
                 min_value=min_ts.date(),
                 max_value=max_ts.date()
             )
             if isinstance(date_range, tuple) and len(date_range) == 2:
                 d1, d2 = date_range
-                col_dt = pd.to_datetime(df[date_col].astype(str).str.strip(), errors="coerce")
+                col_dt = pd.to_datetime(df["Última movimentação (auto)"], errors="coerce")
                 df = df[col_dt.between(pd.to_datetime(d1), pd.to_datetime(d2))]
 
-    # Categóricos
-    cat_cols = [
-        COL_COORDENADOR,
-        COL_REG_REM, COL_REG_DECL, COL_REG_RESP,
-        COL_BASE_REM, COL_BASE_RESP, COL_BASE_FIN,
-        COL_PRODUTO,
-        COL_ANOM_PRIM, COL_ANOM_SEC,
-        COL_DECLARANTE,
-        "Origem da Solicitação",
-        "Origem do Pedido",
-        "Fonte",
-        COL_STATUS_ARB,
-        COL_TIPO_DECISAO,
-    ]
-
-    for col in cat_cols:
+    # filtros categóricos padronizados
+    for label, col in [
+        ("Base", "Base (auto)"),
+        ("Coordenador", "Coordenador (auto)"),
+        ("Unidade", "Unidade (auto)"),
+        ("Tipo de operação", "Tipo operação (auto)"),
+    ]:
         if col in df.columns:
             opts = sorted([x for x in df[col].dropna().unique().tolist() if str(x).strip() != ""])
             if opts:
-                sel = st.sidebar.multiselect(col, opts, default=[])
+                sel = st.sidebar.multiselect(label, opts, default=[])
                 if sel:
                     df = df[df[col].isin(sel)]
 
-    return df
+    # faixa de dias sem mov (slider seguro)
+    if "Dias sem mov (auto)" in df.columns:
+        max_d = int(df["Dias sem mov (auto)"].max()) if len(df) else 0
+        max_d = max(0, max_d)
 
+        if max_d > 0:
+            faixa = st.sidebar.slider(
+                "Dias sem movimentação",
+                min_value=0,
+                max_value=max_d,
+                value=(0, max_d)
+            )
+            df = df[df["Dias sem mov (auto)"].between(faixa[0], faixa[1])]
+        else:
+            st.sidebar.caption("Dias sem movimentação: sem variação para filtrar.")
 
-# ==========================================================
-# KPIs (SEM "Atraso médio")
+    return df# ==========================================================
+# KPIs
 # ==========================================================
 def render_kpis(df: pd.DataFrame):
-    total = len(df)
+    total_linhas = len(df)
 
-    valor_total = df["__valor_base"].sum() if "__valor_base" in df.columns else 0
-    valor_medio = df["__valor_base"].mean() if "__valor_base" in df.columns else 0
+    # tenta usar Pedido/Remessa como contagem única se existir
+    if "Pedido/Remessa" in df.columns:
+        total_pedidos = df["Pedido/Remessa"].nunique()
+    else:
+        total_pedidos = total_linhas
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Declarações", f"{total:,}".replace(",", "."))
-    c2.metric("Valor total (R$)", f"R$ {_format_brl_number(valor_total)}")
-    c3.metric("Valor médio (R$)", f"R$ {_format_brl_number(valor_medio)}")
+    dias = df["Dias sem mov (auto)"] if "Dias sem mov (auto)" in df.columns else pd.Series([0])
+
+    gt_10 = int((dias > 10).sum())
+    gt_20 = int((dias > 20).sum())
+    gt_30 = int((dias > 30).sum())
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Pedidos/Remessas", f"{total_pedidos:,}".replace(",", "."))
+    c2.metric("> 10 dias sem mov", f"{gt_10:,}".replace(",", "."))
+    c3.metric("> 20 dias sem mov", f"{gt_20:,}".replace(",", "."))
+    c4.metric("> 30 dias sem mov", f"{gt_30:,}".replace(",", "."))
 
 
 # ==========================================================
-# RANKINGS (SEM "atraso_medio")
+# RANKING
 # ==========================================================
 def ranking_simple(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     if group_col not in df.columns:
         return pd.DataFrame()
 
-    agg = {"__count": (group_col, "size")}
+    g = (
+        df.groupby(group_col)
+        .agg(
+            qtd=("Pedido/Remessa", "nunique") if "Pedido/Remessa" in df.columns else ("Dias sem mov (auto)", "size"),
+            dias_medio=("Dias sem mov (auto)", "mean"),
+            dias_max=("Dias sem mov (auto)", "max"),
+        )
+        .reset_index()
+        .rename(columns={group_col: "Grupo"})
+        .sort_values("qtd", ascending=False)
+    )
 
-    if "__valor_base" in df.columns:
-        agg["valor_total"] = ("__valor_base", "sum")
-        agg["valor_medio"] = ("__valor_base", "mean")
-
-    g = df.groupby(group_col).agg(**agg).reset_index()
-    g = g.rename(columns={group_col: "Grupo"})
-    g = g.sort_values("__count", ascending=False)
-
+    g["dias_medio"] = g["dias_medio"].round(2)
     return g
 
 
 # ==========================================================
 # TENDÊNCIA COM DIAS SEM OCORRÊNCIA
 # ==========================================================
-def tendencia_por_data_fill(df: pd.DataFrame) -> pd.DataFrame:
-    date_col = _get_primary_date_col(df)
-    if not date_col:
+def tendencia_fill(df: pd.DataFrame) -> pd.DataFrame:
+    if "Última movimentação (auto)" not in df.columns:
         return pd.DataFrame()
 
-    temp = df.copy()
-    temp[date_col] = pd.to_datetime(temp[date_col].astype(str).str.strip(), errors="coerce")
-    temp = temp.dropna(subset=[date_col])
+    temp = df.dropna(subset=["Última movimentação (auto)"]).copy()
+    if temp.empty:
+        return pd.DataFrame()
+
+    temp["dia"] = pd.to_datetime(temp["Última movimentação (auto)"], errors="coerce").dt.normalize()
+    temp = temp.dropna(subset=["dia"])
 
     if temp.empty:
         return pd.DataFrame()
 
-    temp["dia"] = temp[date_col].dt.normalize()
-    g = temp.groupby("dia").size().reset_index(name="declarações").sort_values("dia")
+    # contagem por dia (preferindo unique pedidos)
+    if "Pedido/Remessa" in temp.columns:
+        g = temp.groupby("dia")["Pedido/Remessa"].nunique().reset_index(name="qtd")
+    else:
+        g = temp.groupby("dia").size().reset_index(name="qtd")
+
+    g = g.sort_values("dia")
 
     min_d = g["dia"].min()
     max_d = g["dia"].max()
     full = pd.DataFrame({"dia": pd.date_range(min_d, max_d, freq="D")})
 
     g = full.merge(g, on="dia", how="left")
-    g["declarações"] = g["declarações"].fillna(0).astype(int)
+    g["qtd"] = g["qtd"].fillna(0).astype(int)
 
     return g
+
+
+def render_trend_bar(df: pd.DataFrame):
+    trend = tendencia_fill(df)
+    if trend.empty:
+        st.info("Sem dados de última movimentação para tendência.")
+        return
+
+    fig = px.bar(
+        trend,
+        x="dia",
+        y="qtd",
+        text="qtd",
+        title="Tendência — Última movimentação (com dias sem ocorrência)"
+    )
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# ==========================================================
+# TOP 10 DISTRIBUIÇÃO (SEM PIZZA)
+# ==========================================================
+def render_distribution_top10(df: pd.DataFrame):
+    dims = [c for c in ["Base (auto)", "Coordenador (auto)", "Unidade (auto)", "Tipo operação (auto)"] if c in df.columns]
+    if not dims:
+        st.caption("Sem dimensões padronizadas para distribuição.")
+        return
+
+    dim = st.selectbox("Dimensão", dims, index=0)
+
+    if "Pedido/Remessa" in df.columns:
+        dist = (
+            df.groupby(dim)["Pedido/Remessa"].nunique()
+            .reset_index(name="qtd")
+            .sort_values("qtd", ascending=False)
+            .head(10)
+        )
+    else:
+        dist = (
+            df.groupby(dim).size()
+            .reset_index(name="qtd")
+            .sort_values("qtd", ascending=False)
+            .head(10)
+        )
+
+    fig = px.bar(dist, x=dim, y="qtd", text="qtd", title=f"Top 10 — {dim}")
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    st.plotly_chart(fig, use_container_width=True)
+
+
 # ==========================================================
 # DOWNLOAD
 # ==========================================================
@@ -397,10 +540,10 @@ def to_excel_bytes(data: pd.DataFrame) -> bytes:
 
 
 # ==========================================================
-# UI
+# APP
 # ==========================================================
-st.title("⚖️ Painel de Declarações de Arbitragem")
-st.caption("Coordenador + valores exibidos em R$ (sem conversão) + data principal por fechamento.")
+st.title("🚚 Painel — Pedidos sem Movimentação")
+st.caption("Leitura por pasta ou upload • auto-detecção de colunas • KPIs, ranking e tendência.")
 
 # ---------------------------
 # Fonte de dados
@@ -414,6 +557,9 @@ mode = st.sidebar.radio(
 
 df = pd.DataFrame()
 
+# ---------------------------
+# MODO PASTA
+# ---------------------------
 if mode == "Pasta local (Windows)":
     if "folder_path" not in st.session_state:
         st.session_state.folder_path = ""
@@ -456,6 +602,9 @@ if mode == "Pasta local (Windows)":
     with st.spinner("Lendo arquivos da pasta..."):
         df = load_from_folder_cached(folder, sig)
 
+# ---------------------------
+# MODO UPLOAD
+# ---------------------------
 else:
     uploads = st.file_uploader(
         "Selecione um ou mais Excel (.xlsx/.xls)",
@@ -482,144 +631,74 @@ if df.empty:
     st.stop()
 
 # ---------------------------
-# ✅ CONTROLES DO RANKING NA BARRA LATERAL
+# Enriquecimento + filtros
+# ---------------------------
+df = enrich_sem_mov(df)
+
+# ---------------------------
+# CONTROLES DE RANKING NO SIDEBAR
 # ---------------------------
 st.sidebar.divider()
 st.sidebar.subheader("Rankings")
 
-ranking_options = [
-    COL_COORDENADOR,
-    COL_BASE_RESP,
-    COL_BASE_REM,
-    COL_BASE_FIN,
-    COL_REG_RESP,
-    COL_REG_REM,
-    COL_ANOM_PRIM,
-    COL_ANOM_SEC,
-    COL_PRODUTO,
-    COL_DECLARANTE,
-]
+ranking_dims = [c for c in ["Base (auto)", "Coordenador (auto)", "Unidade (auto)", "Tipo operação (auto)"] if c in df.columns]
+if not ranking_dims:
+    ranking_dims = ["__arquivo_origem"]
 
-ranking_group = st.sidebar.selectbox(
-    "Agrupar por",
-    ranking_options,
-    index=0
-)
+ranking_group = st.sidebar.selectbox("Agrupar por", ranking_dims, index=0)
+ranking_top_n = st.sidebar.slider("Top N", 5, 50, 15, step=5)
 
-ranking_top_n = st.sidebar.slider(
-    "Top N",
-    5, 50, 15, step=5
-)
-
-# ---------------------------
-# Filtros gerais
-# ---------------------------
+# aplica filtros depois de definir dimensões
 df_f = apply_filters(df)
 
 # ---------------------------
-# Tabs
+# TABS
 # ---------------------------
 tab1, tab2, tab3 = st.tabs(["Visão Geral", "Rankings", "Detalhe"])
 
-# ==========================================================
-# VISÃO GERAL
-# ==========================================================
 with tab1:
     st.subheader("KPIs")
     render_kpis(df_f)
 
     st.divider()
-    st.subheader("Tendência de declarações (por data principal)")
-
-    trend = tendencia_por_data_fill(df_f)
-    if trend.empty:
-        st.info("Sem data válida para tendência (fechamento/declaração).")
-    else:
-        fig = px.bar(
-            trend,
-            x="dia",
-            y="declarações",
-            text="declarações",
-            title="Declarações por dia (com dias sem ocorrência)"
-        )
-        fig.update_traces(textposition="outside", cliponaxis=False)
-        st.plotly_chart(fig, use_container_width=True)
+    st.subheader("Tendência (por última movimentação)")
+    render_trend_bar(df_f)
 
     st.divider()
     st.subheader("Distribuição operacional (Top 10)")
+    render_distribution_top10(df_f)
 
-    dims_avail = [c for c in ranking_options if c in df_f.columns]
-    if dims_avail:
-        dim = st.selectbox("Escolha a dimensão", dims_avail, index=0)
-
-        dist = (
-            df_f.groupby(dim)
-            .size()
-            .reset_index(name="qtd")
-            .sort_values("qtd", ascending=False)
-            .head(10)
-        )
-
-        fig2 = px.bar(dist, x=dim, y="qtd", text="qtd", title=f"Top 10 — {dim}")
-        fig2.update_traces(textposition="outside", cliponaxis=False)
-        st.plotly_chart(fig2, use_container_width=True)
-    else:
-        st.caption("Sem dimensão disponível para distribuição.")
-
-# ==========================================================
-# RANKINGS
-# ==========================================================
 with tab2:
-    st.subheader("Rankings operacionais")
-
+    st.subheader("Ranking (com filtros laterais)")
     rank = ranking_simple(df_f, ranking_group)
 
     if rank.empty:
-        st.info("Não foi possível gerar ranking para este agrupamento.")
+        st.info("Sem dados suficientes para ranking nessa dimensão.")
     else:
-        show = rank.head(ranking_top_n).copy()
-        for c in ["valor_total", "valor_medio"]:
-            if c in show.columns:
-                show[c] = show[c].round(2)
+        view = rank.head(ranking_top_n).copy()
+        st.dataframe(view, use_container_width=True)
 
-        st.dataframe(show, use_container_width=True)
-
-        fig = px.bar(show, x="Grupo", y="__count",
-                     title=f"Top {ranking_top_n} por volume — {ranking_group}")
+        fig = px.bar(view, x="Grupo", y="qtd", text="qtd",
+                     title=f"Top {ranking_top_n} — {ranking_group}")
+        fig.update_traces(textposition="outside", cliponaxis=False)
         st.plotly_chart(fig, use_container_width=True)
 
-# ==========================================================
-# DETALHE
-# ==========================================================
 with tab3:
     st.subheader("Dados filtrados")
 
     all_cols = df_f.columns.tolist()
-
     default_cols = [c for c in [
-        COL_COORDENADOR,
-        COL_NUMERO, COL_REMESSA, COL_PRODUTO,
-        COL_ANOM_PRIM, COL_ANOM_SEC,
-        COL_BASE_REM, COL_REG_REM,
-        COL_BASE_RESP, COL_REG_RESP,
-        COL_BASE_FIN,
-        COL_DATA_FECHAMENTO,
-        COL_DATA_DECLARACAO,
-        COL_VALOR_RS,
-        COL_VALOR_NOVO,
-        COL_VALOR_ANTIGO,
-        "__valor_base",
-        COL_PESO,
-        "Origem da Solicitação",
-        "Origem do Pedido",
-        "Fonte",
-        COL_STATUS_ARB,
-        COL_TIPO_DECISAO,
-        "__arquivo_origem"
+        "Pedido/Remessa",
+        "Base (auto)",
+        "Coordenador (auto)",
+        "Unidade (auto)",
+        "Tipo operação (auto)",
+        "Última movimentação (auto)",
+        "Dias sem mov (auto)",
+        "__arquivo_origem",
     ] if c in all_cols]
 
     cols_sel = st.multiselect("Colunas para exibição", options=all_cols, default=default_cols)
-
     st.dataframe(df_f[cols_sel] if cols_sel else df_f, use_container_width=True)
 
     st.divider()
@@ -628,13 +707,15 @@ with tab3:
     st.download_button(
         label="⬇️ Baixar Excel filtrado",
         data=to_excel_bytes(df_f),
-        file_name="arbitragem_filtrada.xlsx",
+        file_name="pedidos_sem_mov_filtrado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 with st.expander("ℹ️ Notas rápidas"):
     st.write(
-        "- Removido **Atraso médio (dias)** de KPIs, filtros, rankings e colunas padrão.\n"
-        "- Tendência agora **preenche dias sem ocorrência com 0**.\n"
-        "- Ranking segue controlado na **barra lateral**."
+        "- O painel tenta identificar automaticamente colunas do relatório.\n"
+        "- Se existir uma coluna de dias sem movimentação, ele usa.\n"
+        "- Se não existir, calcula com base na última movimentação.\n"
+        "- Tendência em barras preenche dias sem ocorrência com 0 e mostra os números."
     )
+
