@@ -101,9 +101,7 @@ COORDENADOR_WEBHOOKS = {
 }
 
 LINK_RELATORIO = (
-    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/"
-    "matheus_carvalho_jtexpressdf_onmicrosoft_com/"
-    "EtbZs3AZ0_BHtx7KGJOAVGcBvxaAJM-8vINYH7PJG43W-w?e=Su1J2P"
+    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/IgC6tTpIgFRPQo0UnmEcJ-yrAXFzhGv-zmG-ea0nro6zlm4?e=wtpi2f"
 )
 
 BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Custo - Coordenador"
