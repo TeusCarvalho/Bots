@@ -1,721 +1,559 @@
 # -*- coding: utf-8 -*-
-import os
-from pathlib import Path
-from typing import List, Tuple, Optional, Dict
+"""
+Resumo de entregas por motorista (Entregador)
++ Detalhe de remessas apenas de motoristas selecionados
 
-import streamlit as st
+Baseado no layout real.
+
+Colunas esperadas (com variações toleradas):
+- Remessa
+- Entregador
+- Entregue no prazo？  (ou ?)
+
+Regra de prazo:
+- Y = no prazo
+- N e vazio = fora do prazo
+  (implementado como: tudo que não for Y)
+
+Saídas:
+1) resumo_entregas_por_motorista.xlsx
+2) remessas_motoristas_alvo.xlsx  (somente se lista tiver itens)
+"""
+
+import os
+import re
+from pathlib import Path
+from typing import List, Dict
+
+import polars as pl
 import pandas as pd
-import numpy as np
-import plotly.express as px
-from datetime import date
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
 
 # ==========================================================
 # CONFIG
 # ==========================================================
-st.set_page_config(
-    page_title="Painel — Pedidos sem Movimentação",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+PASTA_ENTRADA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Nova pasta\Entrega Realizada"
+
+ARQUIVO_SAIDA_RESUMO = os.path.join(PASTA_ENTRADA, "resumo_entregas_por_motorista.xlsx")
+ARQUIVO_SAIDA_ALVO = os.path.join(PASTA_ENTRADA, "remessas_motoristas_alvo.xlsx")
+
+# Nomes canônicos internos
+COL_REMESSA = "Remessa"
+COL_MOTORISTA = "Entregador"
+COL_PRAZO = "Entregue no prazo"
 
 # ==========================================================
-# MAPEAMENTO OPCIONAL (CN -> PT) — se aparecerem colunas conhecidas
-# (não quebra nada se não existir)
+# LISTA DE MOTORISTAS ALVO (SUA LISTA)
 # ==========================================================
-CHINESE_COL_MAP: Dict[str, str] = {
-    "运单号": "Remessa",
-    "订单号": "Número do pedido",
-    "目的网点": "Base de entrega",
-    "网点": "Base",
-    "最后轨迹时间": "Horário da última operação",
-    "最后操作时间": "Horário da última operação",
-    "断更天数": "Dias sem movimentação",
-    "异常类型": "Tipo de anomalia",
-}
+MOTORISTAS_ALVO_RAW = [
+    "TAC CARRO SNP EURIPEDES ANTONIO GOMES",
+    "F PVH - JOAO KLEBER MARQUES NASCIMENTO",
+    "TAC MOTO CST - DANIEL DO NASCIMENTO ROCHA",
+    "F PVL - RAMON DA MOTA LIMA",
+    "TAC CARRO TGA FABIO DE SOUZA DIAS",
+    "F PVL 02  -ROGÉRIO SILVA DA ROCHA",
+    "TAC CARRO AUG - CARLOS EDUARDO ALMEIDA DOS SANTOS",
+    "TAC MOTO ANA - GERLEN JACKELINE DA SILVA ALMEIDA",
+    "F PDR - EMERSON VITOR DA SILVA REZENDE",
+    "F TLA - JEIFSON SOUZA NEVES",
+    "Jefferson Fernando Verão Jara",
+    "F SAM - AGNES CARDOSO CIRQUEIRA",
+    "F SAM - THIAGO CARDOSO CIQUEIRA",
+    "TAC MOTO NMB - JACKSON SILVA BRITO",
+    "TAC CARRO - JEAN FIGUEIREDO RANGEL",
+    "TAC BICICLETA FMCP - HEVERTON JUNIOR DE SOUZA",
+    "TAC CARRO SDA - EDVALDO DOS SANTOS",
+    "TAC CARRO FDOM - CLAUDINETO FREITAS MESQUITA",
+    "F ALV - BEATRIZ GOMES RODRIGUES",
+    "TAC MOTO BRV ANAJAS - ANDERSON ROSA RODRIGUES",
+    "TAC MOTO BRC - JOSUE GONCALVES PANTOJA",
+    "F CGR 02 -  GEOVANA MARTINE ROCHA",
+    "TAC CARRO - SERGIO DE OLIVEIRA PAIVA",
+    "TAC CARRO ANA PAULA MIRANDA",
+    "TAC MOTO CKS - ALLYSON MENDES DE ALMEIDA",
+    "F JPN 02 - JULIERMES SIQUEIRA DE ABREU",
+    "F DOU - KARYNE MIRANDA GUEDES",
+    "TAC CARRO DNP - NILVA GONÇALVES SANTOS",
+    "F POS - SIRLEI ALVES DOS SANTOS",
+    "F GYN 03 - DUIANK PATRICIA PEREIRA OLIVEIRA",
+    "F CAC - SIDNEY AUGUSTO DE CASTRO",
+    "TAC CARRO ARI MYCAELLA LORENA DA COSTA NUNES",
+    "F CGR - ELTON SILVA DOURADO",
+    "TAC BICICLETA PNA - TATYANE VELENE F PIMENTEL",
+    "TAC MOTO - MARCIO RODRIGO",
+    "TAC CARRO AUX - WANDERSON GERALD",
+    "F GYN - GUILHERME THOMAZ DE ASSIS",
+    "F SFX - GEOVANI CABRAL BARBOSA",
+    "F POS - MICHEL KENNEDY NERES DE SOUZA",
+    "TAC CARRO BEL001- MANOELA DE JESUS SANTOS AMARAL",
+    "F PVH - MARIA JOELMA DE OLIVEIRA DA SILVA",
+    "TAC MOTO NRE - POLIANA DA SILVA",
+    "TAC MOTO ANA - CASSIO DA SILVA COSTA",
+    "F CNC - CLEIDE NEVES RODRIGUES",
+    "F CEI - RAFAEL RIBEIRO VASCONCELOS",
+    "TAC CARRO CGB ELAINE ALENCAR SILVA CALISTO",
+    "TAC BICICLETA ANAF - MANOEL PAIXAO NOGUEIRA SA",
+    "TAC CARRO TAUA - ALEX DA SILVA MONTEIRO",
+    "F BSB - NAOR GOMES DA SILVA FARIAS",
+    "F RBR - ROSVALDO RODRIGUES DA SILVA",
+    "F SEN - VERA LUCIA QUERINO DA SILVA",
+    "F TGA -  REGERIO FELIX DA SILVA",
+    "F SEN - MARIO VINICIUS SILVA DA CRUZ",
+    "TAC CARRO CKS - ROBERTO FERREIRA DOS SANTOS",
+    "TAC MOTO PDT - FERNANDO MATHEUS MOURA ALVES",
+    "F GYN 02 - WELLINGTON EDMUNDO DE OLIVEIRA",
+    "F PVL - LUCIENE E R CARNEIRO",
+    "TAC CARRO CNA - AUGUSTO CESAR MAMEDE OEIRAS",
+    "TAC CARRO VCP - BENEDITO BRUNO MIRANDA PEREIRA",
+    "F TGA - KELLYANE GONÇALVES",
+    "F AGL - THIAGO AROUCHA DE OLIVEIRA",
+    "TAC BICICLETA PMW3 - CARLOS DANIEL CHAGAS MAMEDEIO",
+    "TAC CARRO - ADRIENE MOREIRA BARBOSA",
+    "TAC MOTO ICR - LETICIA MENDES SACRAMENTO",
+    "MEI CARRO GNT - MATHEUS GLOSS SILVA",
+    "F CAC - BRUNA FERNANDES PAZARRO",
+    "F GYN 03 - JOAO FERNANDES RODRIGUES PEREIRA",
+    "F ELD - WYCLEFF CUNHA DE OLIVEIRA",
+    "F VHL - RODRIGO DOS SANTOS VIEIRA",
+    "F SJA - KISLEI DANILO TAVARES DE SOUSA",
+    "TAC CARRO - ALESSANDRO BATISTA PIRES",
+    "F PVH - CAIO HENRIQUE SANTOS DO NASCIMENTO",
+    "F TLA - EDGAR SIDNEY DA SILVA BARROS",
+    "MEI CARRO- EPITACIO CANDIDO RODRIGUES NETO",
+    "TAC MOTO SDA - FRANK JUNIO RIBEIRO BATISTA",
+    "TAC MOTO FTUR - GILVAN LIRA DA SILVA",
+    "F APG - VANJHONATA DE SOUZA OLIVEIRA",
+    "TAC MOTO BRG - JORDANA BIANCA DAMACENO SOUSA",
+    "TAC MOTO MJU - IVANILDO DO NASCIMENTO RODRIGUES",
+    "TAC BIKE MAO F - RAIMUNDO NONATO RAMOS DOS SANTOS",
+    "F GYN 03 - JOAO PAULO FERREIRA DE SOUSA",
+    "TAC MOTO BRENO DANRLEY CARNEIRO DA SILVA",
+    "TAC CARRO STM - DAIAN BRANCHES FIGUEIREDO",
+    "TAC CARRO - JORGE BATISTA DE SOUZA",
+    "F TGT - ERIKA APARECIDA DE OLIVEIRA SILVA LOBO",
+    "F PGM - NAILSON OLIVEIRA DA SILVA",
+    "F PVH - VINICIUS MARTINS DE OLIVEIRA",
+    "TAC CARRO-ANDERSON RIVANI BASTISTA DOS SANTOS",
+    "F DOU - ROSANA DA CONCEICAO DA SILVA",
+    "F EMA - MARIA JOSE DA ROCHA",
+    "F VHL - JOSE WILLIAN GONCALVES DE SOUZA",
+    "F PVH - AFONSO LACERDA GOMES",
+    "F CAC - OSCAR ROMERIO GOMES",
+    "TAC MOTO ELSON DA ROCHA FROTA",
+    "F GYN - FRANCIELLE CORDEIRO DOS SANTOS DIAS",
+    "F PDT - SIMIAO PINTO DA COSTA",
+    "Erivania da Silva",
+    "Daianne Fernandes Silva",
+    "F GYN 02 - MIKAEL DOUGLAS SILVA BASTOS",
+    "MEI CARRO - LUCAS NASCIMENTO LIMA",
+    "F  STM - SAMARA DOS SANTOS LIMA",
+    "F PVL - ALEX MACEDO DA SILVA",
+    "F RBR - IAGO DA SILVA FERNANDES LEON",
+    "TAC CARRO BVB - MISCILENE PEREIRA SILVA",
+    "TAC CARRO - RODRIGO LUIZ VICENTE",
+    "F GYN 2 - MARCO AURELIO DE SOUSA TRINDADE",
+    "F AMB - NILDA CLARA DA SILVA PIVETA",
+    "F RVD - SANDY EMANEULLE SILVA LIMA",
+    "TAC CARRO CKS - ANTONIA MARIA SABINA DA SILVA",
+    "TAC MOTO - ANTÔNIO LUCAS LOPES DE SOUZA",
+    "F GYN - SEGINALDO ANTONIO DA SILVA",
+    "TAC CARRO CGB GEFFERSON CARLOS DE ALMEIDA",
+    "TAC MOTO BVD - ESAEL FERNANDO LIMA FERREIRA",
+    "F MRL - CARLOS CAJUEIRO GOMES",
+    "F VHL - JULIANE DE MORAES BACH DA SILVA",
+    "TAC MOTO BRC - YURI BALIEIRO OLIVEIRA",
+    "TAC CARRO NVT JULIO CESAR",
+    "F CGR 02 -  ROBERT DANIEL FREIRE CORDOBA",
+    "F GYN - CARLOS HELIABY NEVES VIEIRA",
+    "F MCP 02 - GUIOVANE ARAÚJO ALVES",
+    "TAC CARRO CST - JORGE NILSON SIQUEIRA GASPAR",
+    "F CGR - YASMIN SANDIM DE OLIVEIRA",
+    "TAC CARRO SDA - SANDRA RAIMUNDA FEITOSA FARIAS",
+    "F JPN 02 - DOUGLAS SIQUEIRA FIRMINO",
+    "TAC MOTO FTLA - JOAO GABRIEL DE ARAUJO GOMES",
+    "F DOM - JORDESSON SILVA MARQUES",
+    "MEI CARRO - PAULO MURILO SANTOS DA SILVA",
+    "TAC BICICLETA ANAF - IVAN GONDIN DE PAIVA",
+    "TAC CARRO - RUBIA CORTES OTERO",
+    "F PVH 02 - JULIANA CORREIA",
+    "F TRD - MARISETE MARTINS ROSA",
+    "MEI CARRO - MACKELLE DE OLIVEIRA MUMBACH",
+    "TAC CARRO AUX - MARCOS ANTONIO ROCHA BARCELOS",
+    "F MCP - AURELIANO COELHO SFAIR PIRES",
+    "F PVH - PATRICIA SUANE DE ANDRADE DOS SANTOS",
+    "TAC CARRO BVB - NATALIA RAMALHO FERREIRA",
+    "TAC MOTO NRE -  GABRIEL DE MATOS",
+    "TAC MOTO BVD - CLAUDIO DO SOCORRO SANTOS PAIVA",
+    "F ARQ - ELIZA LOPES DALLA COSTA",
+    "TAC CARRO SRS JOSÉ FRANCISCO DA SILVA VERAS",
+    "F TGT - Bruno Miranda Carvalho",
+    "TAC CARRO - JEFERSON EDUARDO DA SILVA MUNIZ",
+    "TAC MOTO BRC - EVALDO SOUZA DE SENA",
+    "F MAC - JAQUELINE GUEDES RAMOS",
+    "F PVH 02 - RODRIGO ATILIO MONTEIRO",
+    "TAC CARRO CDT - JUNIOR BATISTA DA SILVA",
+    "F STM - RIVELINO FERREIRA DOS SANTOS",
+    "MEI CARRO VGR RONAIR JOSE DE PAULA",
+    "TAC CARRO MAO - MARIA TANIA SILVA DA COSTA",
+    "F FMA - FLAVIO VIEIRA RODRIGUES",
+    "TAC MOTO BRC - EDER LUIS MIRANDA PEREIRA",
+    "F PON - KAREN LAURITA PANTA DE FREITAS",
+    "F BSB - ANA LUISA RUFINO MIRA",
+    "TAC MOTO ABT - ISRAEL CARDOSO MEDEIROS",
+    "TAC MOTO ELISSON BARBOSA DE CASTRO",
+    "F CGR - SAMELA ARAUJO DE ARRUDA",
+    "TAC MOTO ABT - MANUEL DE JESUS DA FONSECA ALMEIDA",
+    "F GYN - ILDICLEIA DE LIMA FERREIRA",
+    "F GYN - SIRLEY CASTILHO CABRAL DA CRUZ",
+    "TAC CARRO NVT LETICIA LAMPERT",
+    "TAC CARRO - JADSON LUAN SILVA GOMES",
+    "TAC CARRO PMW 002 - HELIO MIRANDA DOS SANTOS",
+    "F MAC - ADENOR NOGUEIRA DOS SANTOS",
+    "TAC CARRO - JANE MICHELE  ALVES SIQUEIRA",
+    "F VLP - MANOEL RAIMUNDO CHAVES SIMAS",
+    "F TLA - ANTONIO ROGERIO ACACIO DE SOUSA",
+    "F ANP - PRICILA ALVES SANTOS",
+    "TAC MOTO CDT - EURISMAR VALADARES SARAIVA",
+    "TAC CARRO NMB - LILIAN VITORIA REIS VILANOVA",
+    "TAC MOTO - ESTEVAO FERREIRA DOS SANTOS NETO",
+    "F SAM - EDMILSON DIAS DE OLIVEIRA",
+    "F GYN - CRISTIANO PEREIRA ROSA",
+    "F ANA - MAYCON FELIPE MARQUES DE OLIVEIRA",
+    "F MCP - RUAN CARLOS FURTADO CABRAL",
+    "F PVH - LEONAN FERREIRA DOS SANTOS",
+    "TAC MOTO ANA - ADRIANO FERREIRA SALES FILHO",
+    "F ARQ - GILBERTO FERREIRA DE JESUS DOS SANTOS",
+    "TAC CARRO ROO - FABRICIO SANTOS FREITAS",
+    "F PDT - FERNANDO MATHEUS MOURA ALVES",
+    "F BVB - JOSE CARLOS NUNES",
+    "TAC CARRO - JAMES PEREIRA DE SOUZA",
+]
+
+# Matching:
+# - "contains": tolerante
+# - "exact": rigoroso
+MOTORISTAS_MATCH_MODE = "contains"
 
 # ==========================================================
-# CANDIDATOS DE COLUNAS (auto-detecção)
+# PERFORMANCE
 # ==========================================================
-ID_CANDIDATES = [
-    "Número de pedido JMS",
-    "Número do pedido",
-    "Número de pedido",
-    "Pedido",
-    "Order",
-    "Remessa",
-    "Waybill",
-    "运单号",
-    "订单号",
-]
+CPU = os.cpu_count() or 2
+BASE_MAX_WORKERS = min(6, CPU)
+# ==========================================================
+# NORMALIZAÇÃO DE COLUNAS
+# ==========================================================
+def _norm_col_name(c: str) -> str:
+    if not isinstance(c, str):
+        return str(c)
+    return c.strip().replace("？", "?").replace("\u00A0", " ")
 
-BASE_CANDIDATES = [
-    "Base de entrega",
-    "Base responsável",
-    "Base remetente",
-    "Base",
-    "Nome da base",
-    "站点",
-    "网点",
-    "目的网点",
-]
 
-COORD_CANDIDATES = [
-    "Coordenador",
-    "Supervisor",
-]
+def _canonicalize_columns(df_pd: pd.DataFrame) -> pd.DataFrame:
+    col_map: Dict[str, str] = {}
 
-UNIDADE_CANDIDATES = [
-    "Unidade responsável",
-    "Unidade",
-    "Responsável",
-]
+    for col in df_pd.columns:
+        raw = col
+        norm = _norm_col_name(col).lower()
 
-TIPO_OP_CANDIDATES = [
-    "Tipo da última operação",
-    "Tipo de operação",
-    "Última operação",
-    "Operação",
-]
+        if norm == _norm_col_name("Remessa").lower():
+            col_map[raw] = COL_REMESSA
 
-ULTIMA_DATA_CANDIDATES = [
-    "Horário da última operação",
-    "Data da última operação",
-    "Última atualização",
-    "Data da última movimentação",
-    "Horário da última movimentação",
-    "Data",
-    "最后轨迹时间",
-    "最后操作时间",
-]
+        elif norm == _norm_col_name("Entregador").lower():
+            col_map[raw] = COL_MOTORISTA
 
-DIAS_SEM_MOV_CANDIDATES = [
-    "Dias sem movimentação",
-    "Dias parados",
-    "Dias sem Movimentação",
-    "断更天数",
-]
+        elif norm in {
+            _norm_col_name("Entregue no prazo?").lower(),
+            _norm_col_name("Entregue no prazo").lower()
+        }:
+            col_map[raw] = COL_PRAZO
+
+    if col_map:
+        df_pd = df_pd.rename(columns=col_map)
+
+    df_pd.columns = [_norm_col_name(c) for c in df_pd.columns]
+    return df_pd
+
 
 # ==========================================================
-# HELPERS
+# LISTA ALVO (LIMPEZA)
 # ==========================================================
-def _clean_columns(df: pd.DataFrame) -> pd.DataFrame:
-    df.columns = [str(c).strip() for c in df.columns]
-    return df
-
-
-def _safe_rename_chinese(df: pd.DataFrame) -> pd.DataFrame:
-    rename_map = {c: CHINESE_COL_MAP[c] for c in df.columns if c in CHINESE_COL_MAP}
-    if rename_map:
-        df = df.rename(columns=rename_map)
-    return df
-
-
-def _norm(s: str) -> str:
-    s = str(s).lower().strip()
-    # normalização simples sem depender de libs externas
-    for ch in ["_", "-", "  "]:
-        s = s.replace(ch, " ")
+def _clean_name(s: str) -> str:
+    s = "" if s is None else str(s)
+    s = s.strip()
+    # troca múltiplos espaços por um
+    s = re.sub(r"\s+", " ", s)
     return s
 
 
-def _find_col(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
-    if df is None or df.empty:
-        return None
+def build_motoristas_alvo() -> List[str]:
+    cleaned = [_clean_name(x) for x in MOTORISTAS_ALVO_RAW]
+    cleaned = [c for c in cleaned if c]
 
-    cols = list(df.columns)
-    norm_map = {_norm(c): c for c in cols}
-
-    # 1) match direto normalizado
-    for cand in candidates:
-        nc = _norm(cand)
-        if nc in norm_map:
-            return norm_map[nc]
-
-    # 2) contains
-    for col in cols:
-        ncol = _norm(col)
-        for cand in candidates:
-            if _norm(cand) in ncol:
-                return col
-
-    return None
+    # dedup mantendo ordem
+    seen = set()
+    out = []
+    for c in cleaned:
+        up = c.upper()
+        if up not in seen:
+            seen.add(up)
+            out.append(c)
+    return out
 
 
-def _coerce_datetime_col(df: pd.DataFrame, col: Optional[str]) -> pd.DataFrame:
-    if col and col in df.columns:
-        s = df[col].astype(str).str.strip()
-        # tenta padrão comum
-        parsed = pd.to_datetime(s, format="%Y-%m-%d %H:%M:%S", errors="coerce")
-        mask = parsed.isna()
-        if mask.any():
-            parsed.loc[mask] = pd.to_datetime(s.loc[mask], errors="coerce")
-        df[col] = parsed
-    return df
-
-
-def _coerce_numeric_col(df: pd.DataFrame, col: Optional[str]) -> pd.DataFrame:
-    if col and col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-    return df
-
-
-def _list_excel_files(folder: str) -> List[Path]:
-    p = Path(folder)
+# ==========================================================
+# LEITURA
+# ==========================================================
+def listar_excels(pasta: str) -> List[Path]:
+    p = Path(pasta)
     if not p.exists() or not p.is_dir():
         return []
-    files = []
+    files: List[Path] = []
     for ext in ("*.xlsx", "*.xls"):
         files.extend(p.glob(ext))
-    return sorted([f for f in files if not f.name.startswith("~$")])
+    files = [f for f in files if not f.name.startswith("~$")]
+    return sorted(files)
 
 
-def _files_signature(files: List[Path]) -> Tuple[Tuple[str, float], ...]:
-    sig = []
-    for f in files:
-        try:
-            sig.append((str(f), f.stat().st_mtime))
-        except OSError:
-            sig.append((str(f), 0.0))
-    return tuple(sig)
-
-
-def _safe_min_max_dates(series: pd.Series):
-    if series is None or series.empty:
-        return None, None
-
-    s = pd.to_datetime(series.astype(str).str.strip(), errors="coerce").dropna()
-    if s.empty:
-        return None, None
-
-    mn, mx = s.min(), s.max()
-    if pd.isna(mn) or pd.isna(mx):
-        return None, None
-
-    if mn > mx:
-        mn, mx = mx, mn
-
-    return mn, mx
-
-
-def try_pick_folder_windows() -> str:
+def ler_excel_todas_abas(path: str) -> pl.DataFrame:
     try:
-        import tkinter as tk
-        from tkinter import filedialog
-
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
-        folder = filedialog.askdirectory()
-        root.destroy()
-        return folder or ""
+        xls = pd.ExcelFile(path)
     except Exception:
-        return ""
-# ==========================================================
-# LEITURA (CACHE)
-# ==========================================================
-@st.cache_data(show_spinner=False)
-def load_excel_file(path: str) -> pd.DataFrame:
-    df = pd.read_excel(path, sheet_name=0)
-
-    df = _clean_columns(df)
-    df = _safe_rename_chinese(df)
-    df = _clean_columns(df)
-
-    # auto-detect cols
-    last_dt_col = _find_col(df, ULTIMA_DATA_CANDIDATES)
-    days_col = _find_col(df, DIAS_SEM_MOV_CANDIDATES)
-
-    df = _coerce_datetime_col(df, last_dt_col)
-    df = _coerce_numeric_col(df, days_col)
-
-    df["__arquivo_origem"] = Path(path).name
-    return df
-
-
-@st.cache_data(show_spinner=False)
-def load_from_folder_cached(folder: str, signature: Tuple[Tuple[str, float], ...]) -> pd.DataFrame:
-    files = _list_excel_files(folder)
-    if not files:
-        return pd.DataFrame()
+        return pl.DataFrame()
 
     dfs = []
-    for f in files:
+
+    for sheet in xls.sheet_names:
         try:
-            dfs.append(load_excel_file(str(f)))
+            df_pd = pd.read_excel(xls, sheet_name=sheet)
+            if df_pd is None or df_pd.empty:
+                continue
+
+            df_pd = _canonicalize_columns(df_pd)
+
+            if COL_MOTORISTA not in df_pd.columns or COL_REMESSA not in df_pd.columns:
+                continue
+
+            if COL_PRAZO not in df_pd.columns:
+                df_pd[COL_PRAZO] = ""
+
+            # reduz RAM: mantém só o necessário
+            keep = [COL_REMESSA, COL_MOTORISTA, COL_PRAZO]
+            keep = [c for c in keep if c in df_pd.columns]
+            df_pd = df_pd[keep].copy()
+
+            df_pd["__arquivo_origem"] = Path(path).name
+            df_pd["__aba_origem"] = sheet
+
+            dfs.append(df_pd)
+
         except Exception:
             continue
 
     if not dfs:
-        return pd.DataFrame()
+        return pl.DataFrame()
 
-    return pd.concat(dfs, ignore_index=True)
+    df_all = pd.concat(dfs, ignore_index=True)
+    return pl.from_pandas(df_all)
 
 
-@st.cache_data(show_spinner=False)
-def load_from_uploads_cached(
-    file_names: Tuple[str, ...],
-    file_sizes: Tuple[int, ...],
-    files_bytes: Tuple[bytes, ...]
-) -> pd.DataFrame:
-    from io import BytesIO
-
-    dfs = []
-    for name, b in zip(file_names, files_bytes):
-        try:
-            df = pd.read_excel(BytesIO(b), sheet_name=0)
-            df = _clean_columns(df)
-            df = _safe_rename_chinese(df)
-            df = _clean_columns(df)
-
-            last_dt_col = _find_col(df, ULTIMA_DATA_CANDIDATES)
-            days_col = _find_col(df, DIAS_SEM_MOV_CANDIDATES)
-
-            df = _coerce_datetime_col(df, last_dt_col)
-            df = _coerce_numeric_col(df, days_col)
-
-            df["__arquivo_origem"] = name
-            dfs.append(df)
-        except Exception:
-            continue
-
-    if not dfs:
-        return pd.DataFrame()
-
-    return pd.concat(dfs, ignore_index=True)
+def processar_arquivo(path: str) -> pl.DataFrame:
+    return ler_excel_todas_abas(path)
 
 
 # ==========================================================
-# ENRIQUECIMENTO (calcula dias se necessário)
+# PREPARAÇÃO
 # ==========================================================
-def enrich_sem_mov(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty:
+def preparar_df(df: pl.DataFrame) -> pl.DataFrame:
+    if df.is_empty():
         return df
 
-    id_col = _find_col(df, ID_CANDIDATES)
-    base_col = _find_col(df, BASE_CANDIDATES)
-    coord_col = _find_col(df, COORD_CANDIDATES)
-    unidade_col = _find_col(df, UNIDADE_CANDIDATES)
-    tipo_col = _find_col(df, TIPO_OP_CANDIDATES)
-    last_dt_col = _find_col(df, ULTIMA_DATA_CANDIDATES)
-    days_col = _find_col(df, DIAS_SEM_MOV_CANDIDATES)
+    if COL_MOTORISTA not in df.columns or COL_REMESSA not in df.columns:
+        return pl.DataFrame()
 
-    df["__id_col"] = id_col or ""
-    df["__base_col"] = base_col or ""
-    df["__coord_col"] = coord_col or ""
-    df["__unidade_col"] = unidade_col or ""
-    df["__tipo_col"] = tipo_col or ""
-    df["__last_dt_col"] = last_dt_col or ""
-    df["__days_col"] = days_col or ""
+    if COL_PRAZO not in df.columns:
+        df = df.with_columns(pl.lit("").alias(COL_PRAZO))
 
-    # colunas operacionais padronizadas (para usar no app)
-    if id_col and id_col in df.columns:
-        df["Pedido/Remessa"] = df[id_col].astype(str)
+    df = df.with_columns([
+        pl.col(COL_MOTORISTA).cast(pl.Utf8).fill_null("").str.strip_chars().alias(COL_MOTORISTA),
+        pl.col(COL_REMESSA).cast(pl.Utf8).fill_null("").str.strip_chars().alias(COL_REMESSA),
+        pl.col(COL_PRAZO).cast(pl.Utf8).fill_null("").str.strip_chars().str.to_uppercase().alias("__prazo_flag"),
+    ])
 
-    if base_col and base_col in df.columns:
-        df["Base (auto)"] = df[base_col].fillna("SEM BASE").astype(str)
+    # Motorista-chave: antes do "|"
+    df = df.with_columns([
+        pl.col(COL_MOTORISTA)
+          .str.split("|")
+          .list.get(0)
+          .fill_null("")
+          .str.strip_chars()
+          .alias("__motorista_key")
+    ])
 
-    if coord_col and coord_col in df.columns:
-        df["Coordenador (auto)"] = df[coord_col].fillna("SEM COORD").astype(str)
-
-    if unidade_col and unidade_col in df.columns:
-        df["Unidade (auto)"] = df[unidade_col].fillna("SEM UNIDADE").astype(str)
-
-    if tipo_col and tipo_col in df.columns:
-        df["Tipo operação (auto)"] = df[tipo_col].fillna("SEM TIPO").astype(str)
-
-    # define data de última movimentação
-    if last_dt_col and last_dt_col in df.columns:
-        df["Última movimentação (auto)"] = pd.to_datetime(df[last_dt_col], errors="coerce")
-
-    # dias sem movimentação
-    if days_col and days_col in df.columns:
-        df["Dias sem mov (auto)"] = pd.to_numeric(df[days_col], errors="coerce")
-    else:
-        df["Dias sem mov (auto)"] = np.nan
-
-    # se não tem dias explícitos, tenta calcular pelo last_dt
-    if "Última movimentação (auto)" in df.columns:
-        missing = df["Dias sem mov (auto)"].isna()
-        if missing.any():
-            today = pd.to_datetime(date.today())
-            delta = (today - df.loc[missing, "Última movimentação (auto)"]).dt.days
-            df.loc[missing, "Dias sem mov (auto)"] = delta
-
-    df["Dias sem mov (auto)"] = pd.to_numeric(df["Dias sem mov (auto)"], errors="coerce").fillna(0).astype(int)
+    # regra de prazo
+    df = df.with_columns([
+        (pl.col("__prazo_flag") == "Y").alias("__no_prazo"),
+        (pl.col("__prazo_flag") != "Y").alias("__fora_prazo"),
+    ])
 
     return df
 
 
 # ==========================================================
-# FILTROS
+# RESUMO
 # ==========================================================
-def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
-    st.sidebar.subheader("Filtros")
+def gerar_resumo(df: pl.DataFrame) -> pl.DataFrame:
+    if df.is_empty():
+        return df
 
-    # filtro por data de última movimentação
-    if "Última movimentação (auto)" in df.columns:
-        min_ts, max_ts = _safe_min_max_dates(df["Última movimentação (auto)"])
-        if min_ts is not None and max_ts is not None:
-            date_range = st.sidebar.date_input(
-                "Período (Última movimentação)",
-                value=(min_ts.date(), max_ts.date()),
-                min_value=min_ts.date(),
-                max_value=max_ts.date()
-            )
-            if isinstance(date_range, tuple) and len(date_range) == 2:
-                d1, d2 = date_range
-                col_dt = pd.to_datetime(df["Última movimentação (auto)"], errors="coerce")
-                df = df[col_dt.between(pd.to_datetime(d1), pd.to_datetime(d2))]
-
-    # filtros categóricos padronizados
-    for label, col in [
-        ("Base", "Base (auto)"),
-        ("Coordenador", "Coordenador (auto)"),
-        ("Unidade", "Unidade (auto)"),
-        ("Tipo de operação", "Tipo operação (auto)"),
-    ]:
-        if col in df.columns:
-            opts = sorted([x for x in df[col].dropna().unique().tolist() if str(x).strip() != ""])
-            if opts:
-                sel = st.sidebar.multiselect(label, opts, default=[])
-                if sel:
-                    df = df[df[col].isin(sel)]
-
-    # faixa de dias sem mov (slider seguro)
-    if "Dias sem mov (auto)" in df.columns:
-        max_d = int(df["Dias sem mov (auto)"].max()) if len(df) else 0
-        max_d = max(0, max_d)
-
-        if max_d > 0:
-            faixa = st.sidebar.slider(
-                "Dias sem movimentação",
-                min_value=0,
-                max_value=max_d,
-                value=(0, max_d)
-            )
-            df = df[df["Dias sem mov (auto)"].between(faixa[0], faixa[1])]
-        else:
-            st.sidebar.caption("Dias sem movimentação: sem variação para filtrar.")
-
-    return df# ==========================================================
-# KPIs
-# ==========================================================
-def render_kpis(df: pd.DataFrame):
-    total_linhas = len(df)
-
-    # tenta usar Pedido/Remessa como contagem única se existir
-    if "Pedido/Remessa" in df.columns:
-        total_pedidos = df["Pedido/Remessa"].nunique()
-    else:
-        total_pedidos = total_linhas
-
-    dias = df["Dias sem mov (auto)"] if "Dias sem mov (auto)" in df.columns else pd.Series([0])
-
-    gt_10 = int((dias > 10).sum())
-    gt_20 = int((dias > 20).sum())
-    gt_30 = int((dias > 30).sum())
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Pedidos/Remessas", f"{total_pedidos:,}".replace(",", "."))
-    c2.metric("> 10 dias sem mov", f"{gt_10:,}".replace(",", "."))
-    c3.metric("> 20 dias sem mov", f"{gt_20:,}".replace(",", "."))
-    c4.metric("> 30 dias sem mov", f"{gt_30:,}".replace(",", "."))
-
-
-# ==========================================================
-# RANKING
-# ==========================================================
-def ranking_simple(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
-    if group_col not in df.columns:
-        return pd.DataFrame()
-
-    g = (
-        df.groupby(group_col)
-        .agg(
-            qtd=("Pedido/Remessa", "nunique") if "Pedido/Remessa" in df.columns else ("Dias sem mov (auto)", "size"),
-            dias_medio=("Dias sem mov (auto)", "mean"),
-            dias_max=("Dias sem mov (auto)", "max"),
-        )
-        .reset_index()
-        .rename(columns={group_col: "Grupo"})
-        .sort_values("qtd", ascending=False)
+    resumo = (
+        df.group_by("__motorista_key")
+          .agg([
+              pl.len().alias("Linhas"),
+              pl.col(COL_REMESSA).n_unique().alias("Qtd pedidos (únicos)"),
+              pl.sum("__no_prazo").alias("Qtd no prazo"),
+              pl.sum("__fora_prazo").alias("Qtd fora do prazo"),
+          ])
+          .with_columns([
+              pl.when(pl.col("Qtd pedidos (únicos)") > 0)
+                .then(pl.col("Qtd no prazo") / pl.col("Qtd pedidos (únicos)"))
+                .otherwise(0.0)
+                .alias("Taxa no prazo (calc.)")
+          ])
+          .rename({"__motorista_key": COL_MOTORISTA})
+          .sort("Qtd pedidos (únicos)", descending=True)
     )
 
-    g["dias_medio"] = g["dias_medio"].round(2)
-    return g
+    return resumo
 
 
 # ==========================================================
-# TENDÊNCIA COM DIAS SEM OCORRÊNCIA
+# FILTRO ALVO
 # ==========================================================
-def tendencia_fill(df: pd.DataFrame) -> pd.DataFrame:
-    if "Última movimentação (auto)" not in df.columns:
-        return pd.DataFrame()
+def filtrar_motoristas_alvo(df: pl.DataFrame, motoristas_alvo: List[str]) -> pl.DataFrame:
+    if df.is_empty() or not motoristas_alvo:
+        return pl.DataFrame()
 
-    temp = df.dropna(subset=["Última movimentação (auto)"]).copy()
-    if temp.empty:
-        return pd.DataFrame()
+    alvo_up = [m.upper() for m in motoristas_alvo if m.strip()]
+    if not alvo_up:
+        return pl.DataFrame()
 
-    temp["dia"] = pd.to_datetime(temp["Última movimentação (auto)"], errors="coerce").dt.normalize()
-    temp = temp.dropna(subset=["dia"])
+    base = df.with_columns(
+        pl.col("__motorista_key").cast(pl.Utf8).fill_null("").str.to_uppercase().alias("__motorista_key_upper")
+    )
 
-    if temp.empty:
-        return pd.DataFrame()
+    if MOTORISTAS_MATCH_MODE.lower() == "exact":
+        return base.filter(pl.col("__motorista_key_upper").is_in(alvo_up)).drop("__motorista_key_upper")
 
-    # contagem por dia (preferindo unique pedidos)
-    if "Pedido/Remessa" in temp.columns:
-        g = temp.groupby("dia")["Pedido/Remessa"].nunique().reset_index(name="qtd")
-    else:
-        g = temp.groupby("dia").size().reset_index(name="qtd")
+    # contains
+    cond = None
+    for a in alvo_up:
+        c = pl.col("__motorista_key_upper").str.contains(a, literal=True)
+        cond = c if cond is None else (cond | c)
 
-    g = g.sort_values("dia")
-
-    min_d = g["dia"].min()
-    max_d = g["dia"].max()
-    full = pd.DataFrame({"dia": pd.date_range(min_d, max_d, freq="D")})
-
-    g = full.merge(g, on="dia", how="left")
-    g["qtd"] = g["qtd"].fillna(0).astype(int)
-
-    return g
+    return base.filter(cond).drop("__motorista_key_upper")
 
 
-def render_trend_bar(df: pd.DataFrame):
-    trend = tendencia_fill(df)
-    if trend.empty:
-        st.info("Sem dados de última movimentação para tendência.")
+# ==========================================================
+# EXPORT
+# ==========================================================
+def salvar_excel_resumo(resumo: pl.DataFrame, saida: str):
+    df_pd = resumo.to_pandas()
+    if "Taxa no prazo (calc.)" in df_pd.columns:
+        df_pd["Taxa no prazo (calc.)"] = (df_pd["Taxa no prazo (calc.)"] * 100).round(2)
+
+    with pd.ExcelWriter(saida, engine="openpyxl") as writer:
+        df_pd.to_excel(writer, index=False, sheet_name="resumo_motoristas")
+
+
+def salvar_excel_alvo(df_alvo: pl.DataFrame, saida: str):
+    if df_alvo.is_empty():
         return
 
-    fig = px.bar(
-        trend,
-        x="dia",
-        y="qtd",
-        text="qtd",
-        title="Tendência — Última movimentação (com dias sem ocorrência)"
-    )
-    fig.update_traces(textposition="outside", cliponaxis=False)
-    st.plotly_chart(fig, use_container_width=True)
-
-
-# ==========================================================
-# TOP 10 DISTRIBUIÇÃO (SEM PIZZA)
-# ==========================================================
-def render_distribution_top10(df: pd.DataFrame):
-    dims = [c for c in ["Base (auto)", "Coordenador (auto)", "Unidade (auto)", "Tipo operação (auto)"] if c in df.columns]
-    if not dims:
-        st.caption("Sem dimensões padronizadas para distribuição.")
-        return
-
-    dim = st.selectbox("Dimensão", dims, index=0)
-
-    if "Pedido/Remessa" in df.columns:
-        dist = (
-            df.groupby(dim)["Pedido/Remessa"].nunique()
-            .reset_index(name="qtd")
-            .sort_values("qtd", ascending=False)
-            .head(10)
-        )
-    else:
-        dist = (
-            df.groupby(dim).size()
-            .reset_index(name="qtd")
-            .sort_values("qtd", ascending=False)
-            .head(10)
-        )
-
-    fig = px.bar(dist, x=dim, y="qtd", text="qtd", title=f"Top 10 — {dim}")
-    fig.update_traces(textposition="outside", cliponaxis=False)
-    st.plotly_chart(fig, use_container_width=True)
-
-
-# ==========================================================
-# DOWNLOAD
-# ==========================================================
-def to_excel_bytes(data: pd.DataFrame) -> bytes:
-    from io import BytesIO
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        data.to_excel(writer, index=False, sheet_name="filtrado")
-    return output.getvalue()
-
-
-# ==========================================================
-# APP
-# ==========================================================
-st.title("🚚 Painel — Pedidos sem Movimentação")
-st.caption("Leitura por pasta ou upload • auto-detecção de colunas • KPIs, ranking e tendência.")
-
-# ---------------------------
-# Fonte de dados
-# ---------------------------
-st.sidebar.subheader("Fonte dos dados")
-mode = st.sidebar.radio(
-    "Como você quer carregar?",
-    ["Pasta local (Windows)", "Upload de arquivos"],
-    index=0
-)
-
-df = pd.DataFrame()
-
-# ---------------------------
-# MODO PASTA
-# ---------------------------
-if mode == "Pasta local (Windows)":
-    if "folder_path" not in st.session_state:
-        st.session_state.folder_path = ""
-
-    col_a, col_b = st.columns([3, 1])
-
-    with col_a:
-        folder_input = st.text_input(
-            "Caminho da pasta com os Excel",
-            value=st.session_state.folder_path,
-            placeholder=r"C:\Users\...\MinhaPasta"
-        )
-
-    with col_b:
-        if st.button("📁 Escolher pasta"):
-            picked = try_pick_folder_windows()
-            if picked:
-                st.session_state.folder_path = picked
-                folder_input = picked
-
-    st.session_state.folder_path = folder_input.strip()
-    folder = st.session_state.folder_path
-
-    if not folder:
-        st.info("Informe ou selecione uma pasta para carregar os dados.")
-        st.stop()
-
-    if not os.path.isdir(folder):
-        st.error("Pasta inválida ou não encontrada.")
-        st.stop()
-
-    files = _list_excel_files(folder)
-    if not files:
-        st.warning("Nenhum Excel encontrado nessa pasta.")
-        st.stop()
-
-    st.success(f"{len(files)} arquivo(s) encontrado(s).")
-    sig = _files_signature(files)
-
-    with st.spinner("Lendo arquivos da pasta..."):
-        df = load_from_folder_cached(folder, sig)
-
-# ---------------------------
-# MODO UPLOAD
-# ---------------------------
-else:
-    uploads = st.file_uploader(
-        "Selecione um ou mais Excel (.xlsx/.xls)",
-        type=["xlsx", "xls"],
-        accept_multiple_files=True
-    )
-
-    if not uploads:
-        st.info("Faça upload de pelo menos um arquivo.")
-        st.stop()
-
-    file_names = tuple([u.name for u in uploads])
-    file_sizes = tuple([getattr(u, "size", 0) for u in uploads])
-    files_bytes = tuple([u.getvalue() for u in uploads])
-
-    with st.spinner("Lendo uploads..."):
-        df = load_from_uploads_cached(file_names, file_sizes, files_bytes)
-
-# ---------------------------
-# Validação
-# ---------------------------
-if df.empty:
-    st.error("Não foi possível carregar dados válidos dos arquivos.")
-    st.stop()
-
-# ---------------------------
-# Enriquecimento + filtros
-# ---------------------------
-df = enrich_sem_mov(df)
-
-# ---------------------------
-# CONTROLES DE RANKING NO SIDEBAR
-# ---------------------------
-st.sidebar.divider()
-st.sidebar.subheader("Rankings")
-
-ranking_dims = [c for c in ["Base (auto)", "Coordenador (auto)", "Unidade (auto)", "Tipo operação (auto)"] if c in df.columns]
-if not ranking_dims:
-    ranking_dims = ["__arquivo_origem"]
-
-ranking_group = st.sidebar.selectbox("Agrupar por", ranking_dims, index=0)
-ranking_top_n = st.sidebar.slider("Top N", 5, 50, 15, step=5)
-
-# aplica filtros depois de definir dimensões
-df_f = apply_filters(df)
-
-# ---------------------------
-# TABS
-# ---------------------------
-tab1, tab2, tab3 = st.tabs(["Visão Geral", "Rankings", "Detalhe"])
-
-with tab1:
-    st.subheader("KPIs")
-    render_kpis(df_f)
-
-    st.divider()
-    st.subheader("Tendência (por última movimentação)")
-    render_trend_bar(df_f)
-
-    st.divider()
-    st.subheader("Distribuição operacional (Top 10)")
-    render_distribution_top10(df_f)
-
-with tab2:
-    st.subheader("Ranking (com filtros laterais)")
-    rank = ranking_simple(df_f, ranking_group)
-
-    if rank.empty:
-        st.info("Sem dados suficientes para ranking nessa dimensão.")
-    else:
-        view = rank.head(ranking_top_n).copy()
-        st.dataframe(view, use_container_width=True)
-
-        fig = px.bar(view, x="Grupo", y="qtd", text="qtd",
-                     title=f"Top {ranking_top_n} — {ranking_group}")
-        fig.update_traces(textposition="outside", cliponaxis=False)
-        st.plotly_chart(fig, use_container_width=True)
-
-with tab3:
-    st.subheader("Dados filtrados")
-
-    all_cols = df_f.columns.tolist()
-    default_cols = [c for c in [
-        "Pedido/Remessa",
-        "Base (auto)",
-        "Coordenador (auto)",
-        "Unidade (auto)",
-        "Tipo operação (auto)",
-        "Última movimentação (auto)",
-        "Dias sem mov (auto)",
+    cols = [
+        COL_REMESSA,
+        "__motorista_key",
+        COL_MOTORISTA,
+        COL_PRAZO,
+        "__no_prazo",
+        "__fora_prazo",
         "__arquivo_origem",
-    ] if c in all_cols]
+        "__aba_origem",
+    ]
+    cols = [c for c in cols if c in df_alvo.columns]
 
-    cols_sel = st.multiselect("Colunas para exibição", options=all_cols, default=default_cols)
-    st.dataframe(df_f[cols_sel] if cols_sel else df_f, use_container_width=True)
+    out = df_alvo.select(cols).sort("__motorista_key")
 
-    st.divider()
-    st.subheader("Download")
+    df_pd = out.to_pandas()
+    with pd.ExcelWriter(saida, engine="openpyxl") as writer:
+        df_pd.to_excel(writer, index=False, sheet_name="remessas_motoristas_alvo")
 
-    st.download_button(
-        label="⬇️ Baixar Excel filtrado",
-        data=to_excel_bytes(df_f),
-        file_name="pedidos_sem_mov_filtrado.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
 
-with st.expander("ℹ️ Notas rápidas"):
-    st.write(
-        "- O painel tenta identificar automaticamente colunas do relatório.\n"
-        "- Se existir uma coluna de dias sem movimentação, ele usa.\n"
-        "- Se não existir, calcula com base na última movimentação.\n"
-        "- Tendência em barras preenche dias sem ocorrência com 0 e mostra os números."
-    )
+# ==========================================================
+# MAIN
+# ==========================================================
+def main():
+    os.environ["POLARS_MAX_THREADS"] = str(CPU)
 
+    if not os.path.isdir(PASTA_ENTRADA):
+        print(f"❌ Pasta não encontrada: {PASTA_ENTRADA}")
+        return
+
+    arquivos = listar_excels(PASTA_ENTRADA)
+    if not arquivos:
+        print("❌ Nenhum Excel encontrado na pasta.")
+        return
+
+    motoristas_alvo = build_motoristas_alvo()
+    print(f"✅ Motoristas alvo carregados: {len(motoristas_alvo)}")
+
+    max_workers = min(BASE_MAX_WORKERS, len(arquivos))
+    max_workers = max(1, max_workers)
+
+    dfs: List[pl.DataFrame] = []
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(processar_arquivo, str(arq)): arq for arq in arquivos}
+
+        for fut in as_completed(futures):
+            arq = futures[fut]
+            try:
+                df_part = fut.result()
+                if df_part is not None and not df_part.is_empty():
+                    dfs.append(df_part)
+            except Exception as e:
+                print(f"⚠️ Falha ao ler: {arq.name} | {e}")
+
+    if not dfs:
+        print("❌ Nenhuma aba válida com Remessa/Entregador.")
+        return
+
+    df = pl.concat(dfs, how="vertical_relaxed")
+    df = preparar_df(df)
+
+    if df.is_empty():
+        print("❌ Estrutura inválida após preparação.")
+        return
+
+    # 1) Resumo geral
+    resumo = gerar_resumo(df)
+    if resumo.is_empty():
+        print("❌ Não foi possível gerar resumo.")
+        return
+
+    salvar_excel_resumo(resumo, ARQUIVO_SAIDA_RESUMO)
+    print(f"✅ Resumo gerado: {ARQUIVO_SAIDA_RESUMO}")
+
+    # 2) Detalhe só dos motoristas alvo
+    if motoristas_alvo:
+        df_alvo = filtrar_motoristas_alvo(df, motoristas_alvo)
+
+        if df_alvo.is_empty():
+            print("⚠️ Nenhuma remessa encontrada para os motoristas alvo.")
+        else:
+            salvar_excel_alvo(df_alvo, ARQUIVO_SAIDA_ALVO)
+            print(f"✅ Detalhe dos motoristas alvo: {ARQUIVO_SAIDA_ALVO}")
+
+
+if __name__ == "__main__":
+    main()

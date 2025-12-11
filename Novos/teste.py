@@ -10,7 +10,7 @@ from tqdm import tqdm
 # CONFIG
 # ==========================================================
 
-PASTA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Nova pasta\Entregues"
+PASTA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Nova pasta\Entrega Realizada"
 ARQUIVO_SAIDA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Nova pasta\resumo_motoristas.xlsx"
 
 COL_MOTORISTA = "Responsável pela entrega"
