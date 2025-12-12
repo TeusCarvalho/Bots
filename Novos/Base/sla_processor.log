@@ -1233,3 +1233,12 @@ KeyError: "Coluna 'DATA PREVISTA DE ENTREGA' não encontrada."
 2025-12-12 08:31:03,966 - INFO - 📨 Card enviado para Emerson Silva
 2025-12-12 08:31:05,532 - INFO - 📨 Card enviado para Marcos Caique
 2025-12-12 08:31:05,534 - INFO - 🏁 Processamento concluído (v2.8)
+2025-12-12 09:53:50,199 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-12-12 09:53:50,200 - INFO - 📅 Data usada para cálculo SLA: 2025-12-11
+2025-12-12 09:53:54,368 - INFO - 📥 Registros carregados: 195167
+2025-12-12 09:53:54,369 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-12 09:53:54,372 - INFO - 📊 Registros para 2025-12-11: 195167
+2025-12-12 09:53:54,616 - INFO - 🧩 Registros sem coordenador após join: 3405
+2025-12-12 09:53:54,627 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251212.xlsx
+2025-12-12 09:53:56,390 - INFO - 📨 Card enviado para Ana Cunha
+2025-12-12 09:53:56,391 - INFO - 🏁 Processamento concluído (v2.8)
