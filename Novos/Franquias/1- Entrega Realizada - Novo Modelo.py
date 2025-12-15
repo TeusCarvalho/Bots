@@ -52,28 +52,15 @@ COL_DATA_REF = "DATA_REF"
 # LISTA DE BASES VÁLIDAS
 # ==========================================================
 BASES_VALIDAS = [
-    'MAO FLUVIAL -AM', 'F CHR-AM', 'F CAC-RO', 'F PDR-GO', 'CZS -AC', 'F PVH-RO', 'GNT -MT', 'F ARQ - RO',
-    'F AGB-MT', 'F GYN 03-GO', 'SRS -MT', 'SNP -MT', 'MAO -AM', 'RBR 02-AC', 'F RBR-AC', 'IPR -GO',
-    'STM FLUVIAL -PA', 'AUX -TO', 'F GYN - GO', 'PTD -MT', 'JPN -RO', 'F VHL-RO', 'F PON-GO', 'F ANP-GO',
-    'F GYN 02-GO', 'MDT -MT', 'F CDN-AM', 'F AGL-GO', 'PRG -GO', 'F APG - GO', 'F RVD - GO', 'F PDT-TO',
-    'F PLN-DF', 'CGB 03-MT', 'CKS -PA', 'NVT -MT', 'F SEN-GO', 'RFI -DF', 'ATF -MT', 'SMB -GO',
-    'F PVL-MT', 'F TRD-GO', 'F CEI-DF', 'F CNF-MT', 'F FMA-GO', 'MCP FLUVIAL -AP', 'RBR -AC', 'RRP -RR',
-    'BVB INT-RR', 'F ALV-AM', 'ITT -PA', 'F POS-GO', 'TAR -AC', 'ANA FLUVIAL - PA', 'URC -GO', 'BGA -MT',
-    'GNA -GO', 'SMA -GO', 'LRV -MT', 'F PPA-MS', 'BRV -PA', 'F MAC-AP', 'SJA -GO', 'TLL -MS', 'F GAI-TO',
-    'F CRX-GO', 'F DOM -PA', 'F CCR-MT', 'F GRP-TO', 'F PVL 02-MT', 'PNA -TO', 'CTL -GO', 'F AMB-MS',
-    'F BVB-RR', 'NDI -MS', 'ARI -MT', 'F SVC-RR', 'ALX -AM', 'DNP -TO', 'F MCP-AP', 'JUI -MT',
-    'VGR 02-MT', 'F JPN 02-RO', 'F MCP 02-AP', 'ATM -PA', 'AGB -MT', 'URA -PA', 'F BSL-AC', 'SGO -MS',
-    'CDT -TO', 'CHS -MS', 'CGB 05-MT', 'AUG -TO', 'PMW 003-TO', 'F PVH 02-RO', 'F JPN-RO', 'F CMV-MT',
-    'VSU -PA', 'F DOU-MS', 'EMA -DF', 'F PGM-PA', 'F RDC -PA', 'CPP -PA', 'AQD -MS', 'F XIG-PA',
-    'CTN -GO', 'SBN -DF', 'F TGT-DF', 'CGB 04-MT', 'CGB 02-MT', 'F CGR - MS', 'F VLP-GO', 'F CGR 02-MS',
-    'F PLA-GO', 'F TGA-MT', 'NRE -PA', 'ROO -MT', 'VGR-MT', 'F RFI-DF', 'F ORL-PA', 'F ITI-PA',
-    'CXM -MS', 'JRD -MS', 'PRB -MS', 'PMW 002-TO', 'F PCA-PA', 'CRB -MS', 'BRC -PA', 'SDA -PA',
-    'SMD -AC', 'ICR -PA', 'F CNC-PA', 'BVD -PA', 'CPN -PA', 'IGM -PA', 'F SJA-GO', 'F IGA-PA',
-    'CNA -PA', 'F PAZ-AM', 'ABT -PA', 'COQ -PA', 'ANA -PA', 'CST -PA', 'PDR -PA', 'BEL -PA', 'SLP -PA',
-    'F TUR-PA', 'MRM -PA', 'F JCD-PA', 'F TLA-PA', 'VGA -PA', 'F ELD-PA', 'F BSB-DF', 'F OCD-GO',
-    'F EMA-DF', 'F GUA-DF', 'NMB -PA', 'AMP -PA', 'MJU -PA', 'F STM-PA', 'F SBN-DF',
+    'F CHR-AM', 'F CAC-RO', 'F PDR-GO','F PVH-RO','F ARQ - RO','F AGB-MT', 'F GYN 03-GO','MAO -AM', 'RBR 02-AC', 'F RBR-AC', 'IPR -GO',
+    'F GYN - GO','F VHL-RO', 'F PON-GO', 'F ANP-GO','F GYN 02-GO','F CDN-AM', 'F AGL-GO','F APG - GO', 'F RVD - GO', 'F PDT-TO',
+    'F PLN-DF','F SEN-GO','F PVL-MT', 'F TRD-GO', 'F CEI-DF','F CNF-MT', 'F FMA-GO','F ALV-AM','F POS-GO','F PPA-MS','F MAC-AP', 'F GAI-TO',
+    'F CRX-GO', 'F DOM -PA', 'F CCR-MT', 'F GRP-TO', 'F PVL 02-MT','F AMB-MS','F BVB-RR','F SVC-RR', 'F MCP-AP','F JPN 02-RO', 'F MCP 02-AP','F BSL-AC',
+    'F PVH 02-RO', 'F JPN-RO', 'F CMV-MT','F DOU-MS','F PGM-PA', 'F RDC -PA', 'F XIG-PA','F TGT-DF','F CGR - MS',
+    'F VLP-GO', 'F CGR 02-MS','F PLA-GO', 'F TGA-MT','F RFI-DF', 'F ORL-PA', 'F ITI-PA',
+    'F PCA-PA','F CNC-PA','F SJA-GO', 'F IGA-PA','F PAZ-AM','F TUR-PA','F JCD-PA', 'F TLA-PA','F ELD-PA', 'F BSB-DF', 'F OCD-GO',
+    'F EMA-DF', 'F GUA-DF','F STM-PA', 'F SBN-DF',
 ]
-
 
 # ==========================================================
 # FUNÇÕES DE PROCESSAMENTO DE DADOS

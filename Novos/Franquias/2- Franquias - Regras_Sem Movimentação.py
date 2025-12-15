@@ -34,17 +34,22 @@ COL_TRANSITO = 'Trânsito'
 
 # Bases válidas
 BASES_VALIDAS = [
-    "F AGL-GO", "F ALV-AM", "F ALX-AM", "F AMB-MS", "F ANP-GO", "F APG - GO",
-    "F ARQ - RO", "F BAO-PA", "F BSB - DF", "F BSB-DF", "F BSL-AC", "F CDN-AM",
-    "F CEI-DF", "F CGR - MS", "F CGR 02-MS", "F CHR-AM", "F CMV-MT", "F CNC-PA",
-    "F CNF-MT", "F DOM -PA", "F DOU-MS", "F ELD-PA", "F FMA-GO", "F GAI-TO",
-    "F GRP-TO", "F GYN - GO", "F GYN 02-GO", "F GYN 03-GO", "F IGA-PA", "F ITI -PA",
-    "F ITI-PA", "F JCD-PA", "F MCP 02-AP", "F MCP-AP", "F OCD - GO", "F OCD-GO",
-    "F ORL-PA", "F PCA-PA", "F PDR-GO", "F PGM-PA", "F PLN-DF", "F PON-GO",
-    "F POS-GO", "F PVH 02-RO", "F PVH-RO", "F PVL-MT", "F RDC -PA", "F RVD - GO",
-    "F SEN-GO", "F SFX-PA", "F TGA-MT", "F TGT-DF", "F TLA-PA", "F TRD-GO",
-    "F TUR-PA", "F VHL-RO", "F VLP-GO", "F XIG-PA", "F TRM-AM", "F STM-PA",
-    "F JPN 02-RO", "F CAC-RO"
+    "F AGB 02-MT", "F AGB-MT", "F AGL-GO", "F ALV-AM", "F AMB-MS", "F ANA-PA",
+    "F ANP-GO", "F APG - GO", "F ARQ - RO", "F BAO-PA", "F BSB-DF", "F BSL-AC",
+    "F BVB-RR", "F CAC-RO", "F CCR-MT", "F CDN-AM", "F CEI-DF", "F CGR - MS",
+    "F CGR 02-MS", "F CHR-AM", "F CMV-MT", "F CNC-PA", "F CNF-MT", "F CRX-GO",
+    "F CTL-GO", "F DOM -PA", "F DOU-MS", "F ELD-PA", "F EMA-DF", "F FMA-GO",
+    "F GAI-TO", "F GFN-PA", "F GNS-PA", "F GRP-TO", "F GUA-DF", "F GYN - GO",
+    "F GYN 02-GO", "F GYN 03-GO", "F IGA-PA", "F IPX-PA", "F ITI-PA", "F JAU-RO",
+    "F JCD-PA", "F JPN 02-RO", "F JPN-RO", "F JRG-GO", "F MAC-AP", "F MCP 02-AP",
+    "F MCP-AP", "F MDR-PA", "F MRL-AM", "F MTB-PA", "F NDI-MS", "F OCD-GO",
+    "F ORL-PA", "F PAZ-AM", "F PCA-PA", "F PDP-PA", "F PDR-GO", "F PDT-TO",
+    "F PGM-PA", "F PLA-GO", "F PLN-DF", "F PNA-TO", "F PON-GO", "F POS-GO",
+    "F PPA-MS", "F PTD-MT", "F PVH 02-RO", "F PVH-RO", "F PVL 02-MT", "F PVL-MT",
+    "F RBR-AC", "F RDC -PA", "F RFI-DF", "F ROO-MT", "F RVD - GO", "F SAM-DF",
+    "F SBN-DF", "F SBS-DF", "F SEN-GO", "F SFX-PA", "F SJA-GO", "F STM-PA",
+    "F SVC-RR", "F TGA-MT", "F TGT-DF", "F TLA-PA", "F TRD-GO", "F TUR-PA",
+    "F VHL-RO", "F VLP-GO", "F XIG-PA",
 ]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
