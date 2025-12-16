@@ -1261,3 +1261,22 @@ KeyError: "Coluna 'DATA PREVISTA DE ENTREGA' não encontrada."
 2025-12-15 10:26:44,979 - INFO - 📨 Card enviado para Marcos Caique
 2025-12-15 10:26:46,696 - INFO - 📨 Card enviado para Ana Cunha
 2025-12-15 10:26:46,698 - INFO - 🏁 Processamento concluído (v2.8)
+2025-12-16 08:25:53,946 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-12-16 08:25:53,947 - INFO - 📅 Data usada para cálculo SLA: 2025-12-15
+2025-12-16 08:25:58,243 - INFO - 📥 Registros carregados: 200764
+2025-12-16 08:25:58,246 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-16 08:25:58,251 - INFO - 📊 Registros para 2025-12-15: 200764
+2025-12-16 08:25:58,539 - INFO - 🧩 Registros sem coordenador após join: 3839
+2025-12-16 08:25:58,559 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251215.xlsx
+2025-12-16 08:26:04,307 - INFO - 📨 Card enviado para João Melo
+2025-12-16 08:26:05,977 - INFO - 📨 Card enviado para Johas Vieira
+2025-12-16 08:26:07,558 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-16 08:26:09,065 - INFO - 📨 Card enviado para Marcelo Medina
+2025-12-16 08:26:10,848 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-16 08:26:12,534 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-16 08:26:14,209 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-16 08:26:16,203 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-16 08:26:19,004 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-16 08:26:20,753 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-16 08:26:22,427 - INFO - 📨 Card enviado para Ana Cunha
+2025-12-16 08:26:22,428 - INFO - 🏁 Processamento concluído (v2.8)

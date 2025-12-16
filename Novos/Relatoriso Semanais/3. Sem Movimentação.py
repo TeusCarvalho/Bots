@@ -27,7 +27,6 @@ try:
     if importlib.util.find_spec("rich") is not None:
         from rich.console import Console
         from rich.table import Table
-        from rich.panel import Panel
         from rich.text import Text
         from rich import box
         HAS_RICH = True
@@ -41,9 +40,11 @@ except Exception:
 def _console():
     if HAS_RICH:
         return Console(highlight=False)
+
     class _Dummy:
         def print(self, *a, **k): print(*a)
         def rule(self, *a, **k): print("-" * 70)
+
     return _Dummy()
 
 console = _console()
@@ -87,7 +88,14 @@ def _listar_arquivos_xlsx(pasta: str) -> list[str]:
     ]
 
 def _wrap(s: str, w=100):
-    return "\n".join(textwrap.wrap(str(s), width=w, break_long_words=False, break_on_hyphens=False))
+    return "\n".join(
+        textwrap.wrap(
+            str(s),
+            width=w,
+            break_long_words=False,
+            break_on_hyphens=False
+        )
+    )
 
 
 # ======================================================
@@ -129,8 +137,6 @@ def _extract_sc_from_base(base: str) -> str:
         return f"{uf} {cidade}"
 
     return b
-
-
 # ======================================================
 # 🧾 RELATÓRIO FINAL — DINÂMICO + DETALHE PROBLEMÁTICOS (terminal)
 # ======================================================
@@ -152,34 +158,62 @@ def gerar_relatorio_terminal_e_excel(
     # Top 2 reais
     base1 = df_sorted.loc[0, "SC"] if len(df_sorted) > 0 else "N/D"
     base2 = df_sorted.loc[1, "SC"] if len(df_sorted) > 1 else "N/D"
+    base1_total = int(df_sorted.loc[0, "Total"]) if len(df_sorted) > 0 else 0
+    base2_total = int(df_sorted.loc[1, "Total"]) if len(df_sorted) > 1 else 0
 
     # totais reais na base bruta
     qtd_total = int(len(df_raw))
 
-    # % problemáticos (bipe)
+    # ========= BIPE (problemáticos): qtd e % =========
     qtd_bipe = 0
-    perc_bipe = 0
+    perc_bipe = 0.0
+
+    df_prob = pd.DataFrame()
     if col_problema in df_raw.columns:
-        qtd_bipe = int(df_raw[col_problema].notna().sum())
-        perc_bipe = round((qtd_bipe / qtd_total) * 100, 2) if qtd_total else 0
+        sprob = (
+            df_raw[col_problema]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+        mask_prob = (
+            sprob.ne("") &
+            (~sprob.str.lower().isin(["nan", "none"]))
+        )
 
-    perc_expedido = 24  # definido pela operação J&T
+        qtd_bipe = int(mask_prob.sum())
+        perc_bipe = round((qtd_bipe / qtd_total) * 100, 2) if qtd_total else 0.0
 
-    # ========= TERMINAL (texto executivo) =========
-    texto = f"""
+        df_prob = df_raw.loc[mask_prob].copy()
+
+    # Regra operacional (percentual fixo definido por vocês)
+    perc_expedido = 24.0
+    qtd_expedido = int(round((qtd_total * perc_expedido) / 100)) if qtd_total else 0
+
+    # ========= TERMINAL (texto executivo) — SEM BARRAS =========
+    texto_rich = f"""
 Ao todo, mais de [bold]{qtd_total:,}[/bold] pacotes ficaram sem movimentação acima de 6 dias.
-Entre os principais ofensores da semana, [bold]{base1}[/bold] e [bold]{base2}[/bold]
+
+Entre os principais ofensores da semana, [bold]{base1}[/bold] ([bold]{base1_total:,}[/bold]) e [bold]{base2}[/bold] ([bold]{base2_total:,}[/bold])
 aparecem com as maiores quantidades de pedidos.
 
-A operação, em que mais pacotes foram contabilizados foi o [bold]bipe de pacote problemático[/bold],
-sendo responsável por [bold]{perc_bipe}%[/bold] dos pedidos sem movimentação — 
-sendo [bold]{perc_expedido}%[/bold] somente de encomendas expedidas mas não chegaram.
-"""
+A operação em que mais pacotes foram contabilizados foi o [bold]bipe de pacote problemático[/bold]:
+[bold]{qtd_bipe:,}[/bold] pacotes ([bold]{perc_bipe}%[/bold] do total sem movimentação).
+
+Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) são somente de encomendas expedidas mas não chegaram.
+""".strip()
+
+    texto_plain = re.sub(r"\[/?bold\]", "", texto_rich)
 
     if HAS_RICH:
-        console.print(Panel.fit(Text.from_markup(_wrap(texto)), border_style="red"))
+        console.rule("[bold]📊 Resumo Executivo")
+        console.print(Text.from_markup(_wrap(texto_rich, w=100)))
     else:
-        print(texto)
+        print("\n" + "-" * 70)
+        print("📊 RESUMO EXECUTIVO")
+        print("-" * 70)
+        print(_wrap(texto_plain, w=100))
+        print("-" * 70)
 
     # ========= TABELA TOP 5 =========
     top5 = df_sorted.head(5)
@@ -198,62 +232,125 @@ sendo [bold]{perc_expedido}%[/bold] somente de encomendas expedidas mas não che
     else:
         print(top5[cols_order].to_string(index=False))
 
-    # ========= DETALHAMENTO PROBLEMÁTICOS POR BASE (TOP 5) =========
-    if col_problema in df_raw.columns:
-        df_prob = df_raw[df_raw[col_problema].notna()].copy()
-        if not df_prob.empty:
-            # garante SC na base bruta
-            if "SC" not in df_prob.columns:
-                df_prob["SC"] = df_prob[col_base].apply(_extract_sc_from_base)
+    # ========= MOTIVOS PROBLEMÁTICOS (GERAL): Qtd + % =========
+    if not df_prob.empty:
+        if "SC" not in df_prob.columns:
+            df_prob["SC"] = df_prob[col_base].apply(_extract_sc_from_base)
 
-            bases_top5 = top5["SC"].tolist()
+        motivos_geral = (
+            df_prob[col_problema]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+        motivos_geral = motivos_geral[motivos_geral.ne("")]
+        vc = motivos_geral.value_counts().head(10)
 
-            console.rule("[bold]🧩 Detalhamento dos problemáticos (Top 5 Bases)")
+        if HAS_RICH:
+            console.rule("[bold]🧾 Problemáticos — Motivos (Geral)")
+            tgeral = Table(title="Top 10 Motivos (Geral)", box=box.SIMPLE)
+            tgeral.add_column("Motivo", justify="left")
+            tgeral.add_column("Qtd", justify="right")
+            tgeral.add_column("%", justify="right")
 
-            for sc in bases_top5:
-                df_sc = df_prob[df_prob["SC"] == sc]
-                if df_sc.empty:
-                    console.print(f"[yellow]• {sc}: sem problemáticos nessa semana.")
-                    continue
+            total_prob = int(qtd_bipe) if qtd_bipe else 0
+            for motivo, qtd in vc.items():
+                pct = (qtd / total_prob * 100) if total_prob else 0.0
+                tgeral.add_row(str(motivo), f"{int(qtd):,}", f"{pct:.1f}%")
 
-                motivos = (
-                    df_sc[col_problema]
-                    .astype(str)
-                    .value_counts()
-                    .sort_values(ascending=False)
-                )
-
-                if HAS_RICH:
-                    t = Table(title=f"{sc} — Motivos Problemáticos", box=box.SIMPLE)
-                    t.add_column("Motivo", justify="left")
-                    t.add_column("Qtd", justify="right")
-
-                    for motivo, qtd in motivos.items():
-                        t.add_row(str(motivo), str(int(qtd)))
-
-                    console.print(t)
-                else:
-                    print(f"\n{sc} — Motivos Problemáticos")
-                    for motivo, qtd in motivos.items():
-                        print(f"- {motivo}: {int(qtd)}")
+            console.print(tgeral)
         else:
-            console.print("[yellow]Nenhum pacote problemático encontrado para detalhamento.")
+            print("\n" + "-" * 70)
+            print("🧾 PROBLEMÁTICOS — MOTIVOS (GERAL) — TOP 10")
+            print("-" * 70)
+            total_prob = int(qtd_bipe) if qtd_bipe else 0
+            for motivo, qtd in vc.items():
+                pct = (qtd / total_prob * 100) if total_prob else 0.0
+                print(f"- {motivo}: {int(qtd):,} ({pct:.1f}%)")
+            print("-" * 70)
+
+    # ========= DETALHAMENTO PROBLEMÁTICOS POR BASE (TOP 5): Qtd + % =========
+    if not df_prob.empty:
+        bases_top5 = top5["SC"].tolist()
+
+        if HAS_RICH:
+            console.rule("[bold]🧩 Detalhamento dos problemáticos (Top 5 Bases)")
+        else:
+            print("\n" + "-" * 70)
+            print("🧩 DETALHAMENTO DOS PROBLEMÁTICOS (TOP 5 BASES)")
+            print("-" * 70)
+
+        for sc in bases_top5:
+            df_sc = df_prob[df_prob["SC"] == sc].copy()
+            if df_sc.empty:
+                if HAS_RICH:
+                    console.print(f"[yellow]• {sc}: sem problemáticos nessa semana.")
+                else:
+                    print(f"• {sc}: sem problemáticos nessa semana.")
+                continue
+
+            motivos = (
+                df_sc[col_problema]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+            )
+            motivos = motivos[motivos.ne("")]
+            vc_sc = motivos.value_counts().sort_values(ascending=False)
+
+            total_sc = int(vc_sc.sum()) if len(vc_sc) else 0
+
+            if HAS_RICH:
+                t = Table(title=f"{sc} — Motivos Problemáticos", box=box.SIMPLE)
+                t.add_column("Motivo", justify="left")
+                t.add_column("Qtd", justify="right")
+                t.add_column("%", justify="right")
+
+                for motivo, qtd in vc_sc.items():
+                    pct = (qtd / total_sc * 100) if total_sc else 0.0
+                    t.add_row(str(motivo), f"{int(qtd):,}", f"{pct:.1f}%")
+
+                console.print(t)
+            else:
+                print(f"\n{sc} — Motivos Problemáticos (Total: {total_sc:,})")
+                for motivo, qtd in vc_sc.items():
+                    pct = (qtd / total_sc * 100) if total_sc else 0.0
+                    print(f"- {motivo}: {int(qtd):,} ({pct:.1f}%)")
     else:
-        console.print("[yellow]Coluna de problemáticos não encontrada, pulando detalhamento.")
+        if col_problema not in df_raw.columns:
+            if HAS_RICH:
+                console.print("[yellow]Coluna de problemáticos não encontrada, pulando detalhamento.")
+            else:
+                print("Coluna de problemáticos não encontrada, pulando detalhamento.")
+        else:
+            if HAS_RICH:
+                console.print("[yellow]Nenhum pacote problemático encontrado para detalhamento.")
+            else:
+                print("Nenhum pacote problemático encontrado para detalhamento.")
 
     # ========= GERAR EXCEL COMPLETO =========
     try:
         df_sorted.to_excel(output_excel_path, index=False)
-        console.print(f"[green]📁 Planilha única salva em: {output_excel_path}")
+        if HAS_RICH:
+            console.print(f"[green]📁 Planilha única salva em: {output_excel_path}")
+        else:
+            print(f"\n📁 Planilha única salva em: {output_excel_path}")
     except Exception as e:
-        console.print(f"[red]❌ Erro ao salvar Excel: {e}")
-
-
+        if HAS_RICH:
+            console.print(f"[red]❌ Erro ao salvar Excel: {e}")
+        else:
+            print(f"❌ Erro ao salvar Excel: {e}")
 # ======================================================
 # 🚀 MAIN PRINCIPAL
 # ======================================================
 def main():
-    console.rule("[bold]📦 Sem Movimentação — Relatório Semanal")
+    if HAS_RICH:
+        console.rule("[bold]📦 Sem Movimentação — Relatório Semanal")
+    else:
+        print("-" * 70)
+        print("📦 Sem Movimentação — Relatório Semanal")
+        print("-" * 70)
+
     log("Iniciando processamento...")
 
     col_regional = "Regionalresponsável责任所属代理区"
@@ -263,13 +360,19 @@ def main():
 
     arquivos = _listar_arquivos_xlsx(SEM_MOV_DIR)
     if not arquivos:
-        console.print("[red]Nenhum Excel encontrado.")
+        if HAS_RICH:
+            console.print("[red]Nenhum Excel encontrado.")
+        else:
+            print("Nenhum Excel encontrado.")
         return
 
     arquivos.sort(key=lambda f: os.path.getmtime(os.path.join(SEM_MOV_DIR, f)), reverse=True)
 
     for i, fn in enumerate(arquivos, 1):
-        console.print(f"{i:02d}. {fn}")
+        if HAS_RICH:
+            console.print(f"{i:02d}. {fn}")
+        else:
+            print(f"{i:02d}. {fn}")
         log(f"Arquivo: {fn}")
 
     # LER TODOS
@@ -294,23 +397,35 @@ def main():
                 dfs.append(df_aba)
 
     if not dfs:
-        console.print("[red]Nenhuma aba válida.")
+        if HAS_RICH:
+            console.print("[red]Nenhuma aba válida.")
+        else:
+            print("Nenhuma aba válida.")
         return
 
     df = pd.concat(dfs, ignore_index=True)
-    console.print(f"[green]Consolidação: {len(df):,} linhas.")
+    if HAS_RICH:
+        console.print(f"[green]Consolidação: {len(df):,} linhas.")
+    else:
+        print(f"Consolidação: {len(df):,} linhas.")
 
     # Base Atualizada (mantida como estava)
     try:
         df_info = _clean_cols(pd.read_excel(BASES_INFO_PATH, dtype=str))
     except:
-        console.print("[red]ERRO: Base_Atualizada.xlsx não encontrada.")
+        if HAS_RICH:
+            console.print("[red]ERRO: Base_Atualizada.xlsx não encontrada.")
+        else:
+            print("ERRO: Base_Atualizada.xlsx não encontrada.")
         return
 
     # Filtro regional
     df[col_regional] = df[col_regional].astype(str).str.strip()
     df = df[df[col_regional].str.upper() == REGIONAL_ALVO]
-    console.print(f"[cyan]Após filtro Regional {REGIONAL_ALVO}: {len(df):,}")
+    if HAS_RICH:
+        console.print(f"[cyan]Após filtro Regional {REGIONAL_ALVO}: {len(df):,}")
+    else:
+        print(f"Após filtro Regional {REGIONAL_ALVO}: {len(df):,}")
 
     # Aging
     aging_map = {
@@ -336,6 +451,7 @@ def main():
             .pivot(values="len", index=col_base, columns="AgingLabel")
             .fill_null(0)
         )
+
         for lbl in aging_map.values():
             if lbl not in base_counts.columns:
                 base_counts = base_counts.with_columns(pl.lit(0).alias(lbl))
@@ -383,5 +499,8 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        console.print(f"[red]❌ Erro fatal: {e}")
+        if HAS_RICH:
+            console.print(f"[red]❌ Erro fatal: {e}")
+        else:
+            print(f"❌ Erro fatal: {e}")
         log(f"Erro fatal: {e}")

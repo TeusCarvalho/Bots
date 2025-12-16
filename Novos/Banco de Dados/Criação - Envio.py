@@ -1,33 +1,42 @@
 # -*- coding: utf-8 -*-
 import os
+import io
 import unicodedata
 import traceback
-from typing import List, Optional
+import hashlib
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Tuple
 
 import polars as pl
 import psycopg2
-from psycopg2.extras import execute_values
 from psycopg2 import Error as PgError
 import logging
 
 # ======================================================
-# CONFIG BANCO
+# CONFIG BANCO (recomendado: usar env vars)
 # ======================================================
 DB = {
-    "host": "localhost",
-    "database": "analytics",
-    "user": "postgres",
-    "password": "Jt2025"
+    "host": os.getenv("PGHOST", "localhost"),
+    "database": os.getenv("PGDATABASE", "analytics"),
+    "user": os.getenv("PGUSER", "postgres"),
+    "password": os.getenv("PGPASSWORD", "Jt2025"),
+    "port": int(os.getenv("PGPORT", "5432")),
 }
 
 # ======================================================
 # CONFIG ETL
 # ======================================================
 PASTA_RAIZ = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\QUALIDADE_ FILIAL GO - BASE DE DADOS"
-MODO_CARGA = "upsert"  # upsert | append | truncate
 
-# BATCH
-BATCH_SIZE = 10000
+# upsert | append | truncate
+MODO_CARGA = "upsert"
+
+# Performance
+COPY_CHUNK_ROWS = 200_000   # 200k–500k conforme RAM
+PROCESSAR_SUBPASTAS = True  # varre tudo com os.walk
+
+# Incremental
+USAR_HASH_ARQUIVO = True    # True = sha256 quando mudou; False = só mtime+size (mais rápido, menos seguro)
 
 # POLARS — usa todos núcleos
 os.environ["POLARS_MAX_THREADS"] = "0"
@@ -38,13 +47,12 @@ os.environ["POLARS_MAX_THREADS"] = "0"
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
-    handlers=[logging.StreamHandler()]
+    handlers=[logging.StreamHandler()],
 )
-logger = logging.getLogger("etl_excel_pg")
-
+logger = logging.getLogger("etl_excel_pg_incremental_copy")
 
 # ======================================================
-# FUNÇÕES AUXILIARES
+# UTIL
 # ======================================================
 def limpar_nome(nome: str) -> str:
     if not nome or not isinstance(nome, str):
@@ -74,330 +82,474 @@ def conectar():
     return psycopg2.connect(**DB)
 
 
-def pl_dtype_to_pg(d: pl.DataType) -> str:
-    if d.is_integer():
-        return "BIGINT"
-    if d.is_float():
-        return "DOUBLE PRECISION"
-    if d == pl.Boolean:
-        return "BOOLEAN"
-    if d == pl.Date:
-        return "DATE"
-    if d.is_temporal():
-        return "TIMESTAMP"
-    return "TEXT"
+def stable_index_name(prefix: str, tabela: str, keys: List[str]) -> str:
+    base = f"{tabela}|{'|'.join(keys)}"
+    suf = hashlib.md5(base.encode("utf-8")).hexdigest()[:10]
+    name = limpar_nome(f"{prefix}_{tabela}_{suf}")
+    return name[:63]
+
+
+def sha256_file(path: str, chunk_size: int = 1024 * 1024) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            b = f.read(chunk_size)
+            if not b:
+                break
+            h.update(b)
+    return h.hexdigest()
+
+
+def list_excel_files(pasta: str) -> List[str]:
+    if not os.path.isdir(pasta):
+        return []
+    return [
+        os.path.join(pasta, f)
+        for f in os.listdir(pasta)
+        if f.lower().endswith((".xlsx", ".xls")) and not f.startswith("~$")
+    ]
+
+
+def now_utc_naive() -> datetime:
+    # Postgres TIMESTAMP (naive)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 # ======================================================
-# LEITURA DE EXCELS (LAZY)
+# META (controle incremental por arquivo)
 # ======================================================
-def ler_excels_lazy(pasta: str) -> Optional[pl.LazyFrame]:
-    arquivos = [f for f in os.listdir(pasta) if f.lower().endswith((".xlsx", ".xls"))]
-    if not arquivos:
-        return None
-
-    lfs: List[pl.LazyFrame] = []
-    col_names_global = set()
-
-    for arq in arquivos:
-        caminho = os.path.join(pasta, arq)
-        try:
-            lf = pl.read_excel(caminho, engine="calamine").lazy()
-        except Exception as e:
-            logger.error(f"❌ Erro lendo {caminho}: {e}")
-            continue
-
-        # Evita PerformanceWarning: usamos collect_schema().names()
-        cols_orig = lf.collect_schema().names()
-        cols_norm = [limpar_nome(c) for c in cols_orig]
-
-        rename_map = dict(zip(cols_orig, cols_norm))
-        lf = lf.rename(rename_map)
-        col_names_global.update(cols_norm)
-
-        lfs.append(lf)
-
-    if not lfs:
-        return None
-
-    col_names_global = sorted(col_names_global)
-
-    lfs_alinhados: List[pl.LazyFrame] = []
-    for lf in lfs:
-        cols_lf = lf.collect_schema().names()
-        faltantes = [c for c in col_names_global if c not in cols_lf]
-
-        if faltantes:
-            lf = lf.with_columns([pl.lit(None).alias(c) for c in faltantes])
-
-        lf = lf.select(col_names_global)
-        lfs_alinhados.append(lf)
-
-    lf_final = pl.concat(lfs_alinhados, how="vertical_relaxed")
-    return lf_final
+META_TABLE = "etl_ingest_files"
 
 
-# ======================================================
-# DETECÇÃO HEURÍSTICA DE PK
-# ======================================================
-def detectar_pk_por_valores(df: pl.DataFrame) -> List[str]:
-    """
-    Heurística: considera PK colunas cuja string começa com 888 ou 999.
-    """
-    colunas_pk: List[str] = []
-
-    for col in df.columns:
-        serie = df[col].drop_nulls()
-
-        if serie.is_empty():
-            continue
-
-        try:
-            s = serie.cast(str)
-            if s.str.starts_with("888").any() or s.str.starts_with("999").any():
-                colunas_pk.append(col)
-        except Exception:
-            continue
-
-    if colunas_pk:
-        logger.info(f"🔑 PK detectada automaticamente: {colunas_pk}")
-    else:
-        logger.warning("⚠ Nenhuma PK encontrada via 888/999")
-
-    return colunas_pk
-
-
-# ======================================================
-# CRIA / AJUSTA TABELA + ÍNDICE ÚNICO (PK)
-# ======================================================
-def criar_ou_ajustar_tabela(
-    tabela: str,
-    df: pl.DataFrame,
-    chaves: Optional[List[str]] = None
-) -> Optional[List[str]]:
-    """
-    - Cria a tabela se não existir.
-    - Adiciona colunas novas se necessário.
-    - Se 'chaves' for informado, tenta criar um UNIQUE INDEX nessas colunas.
-      Se falhar (duplicidade / coluna inexistente / etc.), loga e devolve None,
-      para que o chamador não use UPSERT nessa tabela.
-    """
-    schema = df.schema
-    effective_keys: Optional[List[str]] = None
-
+def ensure_meta_table() -> None:
     with conectar() as con:
         with con.cursor() as cur:
-            # Verifica se a tabela existe
-            cur.execute(
-                """
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM information_schema.tables
-                    WHERE table_schema = 'public'
-                      AND table_name = %s
+            cur.execute(f"""
+                CREATE TABLE IF NOT EXISTS public."{META_TABLE}" (
+                    file_path    TEXT PRIMARY KEY,
+                    file_mtime   TIMESTAMP,
+                    file_size    BIGINT,
+                    file_hash    TEXT,
+                    table_name   TEXT,
+                    processed_at TIMESTAMP DEFAULT now()
                 );
-                """,
-                (tabela,),
-            )
-            existe = cur.fetchone()[0]
-
-            if not existe:
-                # Criar tabela
-                cols_def = []
-                for col, dtype in schema.items():
-                    cols_def.append(f'"{col}" {pl_dtype_to_pg(dtype)}')
-
-                ddl = f'CREATE TABLE "{tabela}" (\n    ' + ",\n    ".join(cols_def) + "\n);"
-                cur.execute(ddl)
-                logger.info(f"✔ Tabela criada: {tabela}")
-            else:
-                # Ajustar colunas (ADD COLUMN)
-                cur.execute(
-                    """
-                    SELECT column_name
-                    FROM information_schema.columns
-                    WHERE table_schema = 'public'
-                      AND table_name = %s;
-                    """,
-                    (tabela,),
-                )
-                existentes = {r[0] for r in cur.fetchall()}
-
-                novas = [c for c in schema if c not in existentes]
-                for col in novas:
-                    cur.execute(
-                        f'ALTER TABLE "{tabela}" '
-                        f'ADD COLUMN "{col}" {pl_dtype_to_pg(schema[col])};'
-                    )
-
-                if novas:
-                    logger.info(f"➕ Colunas adicionadas: {novas}")
-
-            # Se temos chaves para UPSERT, tentar criar índice único
-            if chaves:
-                keys_str = ", ".join([f'"{c}"' for c in chaves])
-                index_name = f'idx_{limpar_nome(tabela)}_uniq_{abs(hash(tuple(chaves))) % 1000000}'
-
-                try:
-                    cur.execute(
-                        f'CREATE UNIQUE INDEX IF NOT EXISTS "{index_name}" '
-                        f'ON "{tabela}" ({keys_str});'
-                    )
-                    effective_keys = chaves
-                    logger.info(f"🔐 Índice único garantido para chaves {chaves} em {tabela}")
-                except PgError as e:
-                    # Algo deu errado: duplicidade, coluna inexistente, sintaxe etc.
-                    con.rollback()
-                    logger.warning(
-                        f"⚠ Falha ao criar índice único em {tabela} "
-                        f"para chaves {chaves}. Motivo: {e}"
-                    )
-                    logger.warning(
-                        f"⚠ UPSERT será desabilitado para {tabela}. "
-                        f"Será usado apenas INSERT com ON CONFLICT DO NOTHING."
-                    )
-                    # Após rollback, precisamos reabrir transação para não quebrar
-                    with con.cursor() as cur2:
-                        # Garante de novo que a tabela exista (se foi criada antes na mesma transação)
-                        cur2.execute(
-                            """
-                            SELECT EXISTS (
-                                SELECT 1
-                                FROM information_schema.tables
-                                WHERE table_schema = 'public'
-                                  AND table_name = %s
-                            );
-                            """,
-                            (tabela,),
-                        )
-                        _ = cur2.fetchone()[0]
-                    effective_keys = None
-
-            con.commit()
-
-    return effective_keys
+            """)
+            cur.execute(f'CREATE INDEX IF NOT EXISTS "idx_{META_TABLE}_table" ON public."{META_TABLE}" (table_name);')
+        con.commit()
 
 
+def get_file_meta(cur, file_path: str) -> Optional[Tuple[Optional[datetime], Optional[int], Optional[str]]]:
+    cur.execute(
+        f'SELECT file_mtime, file_size, file_hash FROM public."{META_TABLE}" WHERE file_path = %s;',
+        (file_path,),
+    )
+    row = cur.fetchone()
+    return row if row else None
+
+
+def upsert_file_meta(cur, file_path: str, mtime_dt: datetime, size: int, fhash: Optional[str], table_name: str) -> None:
+    cur.execute(
+        f"""
+        INSERT INTO public."{META_TABLE}" (file_path, file_mtime, file_size, file_hash, table_name, processed_at)
+        VALUES (%s, %s, %s, %s, %s, now())
+        ON CONFLICT (file_path) DO UPDATE SET
+            file_mtime = EXCLUDED.file_mtime,
+            file_size  = EXCLUDED.file_size,
+            file_hash  = EXCLUDED.file_hash,
+            table_name = EXCLUDED.table_name,
+            processed_at = now();
+        """,
+        (file_path, mtime_dt, int(size), fhash, table_name),
+    )
+
+
+def should_process_file(cur, file_path: str) -> Tuple[bool, Optional[str], int, datetime]:
+    st = os.stat(file_path)
+    size = int(st.st_size)
+    mtime_dt = datetime.fromtimestamp(st.st_mtime).replace(tzinfo=None)
+
+    old = get_file_meta(cur, file_path)
+    if old is None:
+        fhash = sha256_file(file_path) if USAR_HASH_ARQUIVO else None
+        return True, fhash, size, mtime_dt
+
+    old_mtime, old_size, old_hash = old
+
+    # Atalho (igual e hash desligado): não processa
+    if (old_size == size) and (old_mtime == mtime_dt) and (not USAR_HASH_ARQUIVO or old_hash):
+        return False, old_hash, size, mtime_dt
+
+    # Mudou size/mtime: confirma por hash se habilitado
+    if USAR_HASH_ARQUIVO:
+        fhash = sha256_file(file_path)
+        if old_hash and (old_hash == fhash):
+            return False, fhash, size, mtime_dt
+        return True, fhash, size, mtime_dt
+
+    # Sem hash: considera que mudou
+    return True, None, size, mtime_dt
 # ======================================================
-# INSERÇÃO / UPSERT
+# Heurísticas de colunas (ajuste se quiser refinar)
 # ======================================================
-def inserir_batch(tabela: str, df: pl.DataFrame) -> None:
+SEM_MOV_PATTERNS = {
+    "pk_pedido": ["运单号", "numero_de_pedido", "número_de_pedido", "pedido", "waybill", "tracking"],
+    "dias": ["dias_sem_mov", "dias", "断更天数"],
+    "qtd": ["qtd", "quantidade", "件量", "pedidos件量", "pedidos"],
+    "hora_ult": ["hora", "horario", "最新操作时间", "horario_da_ultima_operacao"],
+}
+
+
+def detect_col_by_patterns(columns: List[str], patterns: List[str]) -> Optional[str]:
+    cols_lower = {c.lower(): c for c in columns if isinstance(c, str)}
+    for pat in patterns:
+        p = pat.lower()
+        for name_low, orig in cols_lower.items():
+            if p in name_low:
+                return orig
+    return None
+
+
+def normalize_columns(df: pl.DataFrame) -> pl.DataFrame:
+    cols_orig = df.columns
+    cols_norm = [limpar_nome(c) for c in cols_orig]
+    rename_map = dict(zip(cols_orig, cols_norm))
+    return df.rename(rename_map)
+
+
+def parse_numeric_expr(colname: str) -> pl.Expr:
+    return (
+        pl.col(colname)
+        .cast(pl.Utf8, strict=False)
+        .str.strip_chars()
+        .str.replace_all(",", ".")
+        .str.replace_all(r"[^0-9\.\-]+", "")
+        .replace("", None)
+        .cast(pl.Float64, strict=False)
+    )
+
+
+def parse_datetime_expr(colname: str) -> pl.Expr:
+    c = pl.col(colname)
+    return pl.when(c.is_temporal()).then(c.cast(pl.Datetime, strict=False)).otherwise(
+        pl.coalesce(
+            [
+                c.cast(pl.Utf8, strict=False).str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S", strict=False),
+                c.cast(pl.Utf8, strict=False).str.strptime(pl.Datetime, "%d/%m/%Y %H:%M:%S", strict=False),
+                c.cast(pl.Utf8, strict=False).str.strptime(pl.Datetime, "%d/%m/%Y %H:%M", strict=False),
+                c.cast(pl.Utf8, strict=False).str.strptime(pl.Datetime, "%Y-%m-%d", strict=False),
+            ]
+        )
+    )
+
+
+def add_computed_fields(df: pl.DataFrame) -> pl.DataFrame:
     cols = df.columns
-    rows = df.rows()
 
-    if not rows:
-        logger.warning(f"⚠ Nada para inserir em {tabela}")
+    col_dias = detect_col_by_patterns(cols, SEM_MOV_PATTERNS["dias"])
+    col_qtd = detect_col_by_patterns(cols, SEM_MOV_PATTERNS["qtd"])
+    col_hora = detect_col_by_patterns(cols, SEM_MOV_PATTERNS["hora_ult"])
+
+    exprs = []
+
+    if col_dias and "dias_num" not in cols:
+        exprs.append(parse_numeric_expr(col_dias).cast(pl.Int64, strict=False).alias("dias_num"))
+
+    if col_qtd and "qtd_num" not in cols:
+        exprs.append(parse_numeric_expr(col_qtd).alias("qtd_num"))
+
+    if col_hora and "hora_ult_ts" not in cols:
+        exprs.append(parse_datetime_expr(col_hora).alias("hora_ult_ts"))
+
+    if "ingested_at" not in cols:
+        exprs.append(pl.lit(now_utc_naive()).cast(pl.Datetime).alias("ingested_at"))
+
+    if exprs:
+        df = df.with_columns(exprs)
+
+    return df
+
+
+def add_row_hash(df: pl.DataFrame, hash_cols: List[str]) -> pl.DataFrame:
+    # Hash rápido e estável (struct hash)
+    return df.with_columns(pl.struct([pl.col(c) for c in hash_cols]).hash(seed=0).cast(pl.Int64).alias("row_hash"))
+
+
+# ======================================================
+# DB helpers
+# ======================================================
+def get_table_columns(cur, tabela: str) -> List[str]:
+    cur.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema='public' AND table_name=%s
+        ORDER BY ordinal_position;
+        """,
+        (tabela,),
+    )
+    return [r[0] for r in cur.fetchall()]
+
+
+def table_exists(cur, tabela: str) -> bool:
+    cur.execute(
+        """
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema='public' AND table_name=%s
+        );
+        """,
+        (tabela,),
+    )
+    return bool(cur.fetchone()[0])
+
+
+def ensure_table_and_columns(cur, tabela: str, df_cols: List[str]) -> None:
+    """
+    - colunas originais: TEXT (robusto p/ excel heterogêneo)
+    - computadas: tipos fixos (bom p/ filtros/índices)
+    """
+    computed_types = {
+        "dias_num": "BIGINT",
+        "qtd_num": "DOUBLE PRECISION",
+        "hora_ult_ts": "TIMESTAMP",
+        "row_hash": "BIGINT",
+        "ingested_at": "TIMESTAMP",
+    }
+
+    if not table_exists(cur, tabela):
+        cols_def = []
+        for c in df_cols:
+            pg_type = computed_types.get(c, "TEXT")
+            cols_def.append(f'"{c}" {pg_type}')
+        ddl = f'CREATE TABLE public."{tabela}" (\n    ' + ",\n    ".join(cols_def) + "\n);"
+        cur.execute(ddl)
+        logger.info(f"✔ Tabela criada: {tabela}")
         return
 
+    existing = set(get_table_columns(cur, tabela))
+    new_cols = [c for c in df_cols if c not in existing]
+    for c in new_cols:
+        pg_type = computed_types.get(c, "TEXT")
+        cur.execute(f'ALTER TABLE public."{tabela}" ADD COLUMN "{c}" {pg_type};')
+    if new_cols:
+        logger.info(f"➕ {tabela}: colunas adicionadas = {new_cols}")
+
+
+def ensure_unique_index(cur, tabela: str, keys: List[str]) -> bool:
+    if not keys:
+        return False
+    idx = stable_index_name("uidx", tabela, keys)
+    keys_str = ", ".join([f'"{k}"' for k in keys])
+    try:
+        cur.execute(f'CREATE UNIQUE INDEX IF NOT EXISTS "{idx}" ON public."{tabela}" ({keys_str});')
+        logger.info(f"🔐 UNIQUE OK em {tabela}: {keys}")
+        return True
+    except PgError as e:
+        logger.warning(f"⚠ Falha UNIQUE em {tabela} ({keys}): {e}")
+        return False
+
+
+def ensure_btree_index(cur, tabela: str, col: str) -> None:
+    idx = limpar_nome(f"idx_{tabela}_{col}")[:63]
+    cur.execute(f'CREATE INDEX IF NOT EXISTS "{idx}" ON public."{tabela}" ("{col}");')
+
+
+def create_temp_staging(cur, target_table: str) -> str:
+    stg = f"stg_{target_table}"[:63]
+    cur.execute(f'DROP TABLE IF EXISTS "{stg}";')
+    cur.execute(f'CREATE TEMP TABLE "{stg}" (LIKE public."{target_table}" INCLUDING DEFAULTS) ON COMMIT PRESERVE ROWS;')
+    return stg
+
+
+def copy_df_to_table(cur, tabela: str, df: pl.DataFrame, cols: List[str]) -> None:
+    buf = io.StringIO()
+    df.select(cols).write_csv(
+        buf,
+        include_header=False,
+        separator=",",
+        null_value="\\N",
+    )
+    buf.seek(0)
+
     cols_str = ", ".join([f'"{c}"' for c in cols])
-
     sql = f"""
-        INSERT INTO "{tabela}" ({cols_str})
-        VALUES %s
-        ON CONFLICT DO NOTHING;
+        COPY "{tabela}" ({cols_str})
+        FROM STDIN WITH (FORMAT CSV, DELIMITER ',', NULL '\\N');
     """
-
-    with conectar() as con:
-        with con.cursor() as cur:
-            for i in range(0, len(rows), BATCH_SIZE):
-                bloco = rows[i:i + BATCH_SIZE]
-                execute_values(cur, sql, bloco)
-            con.commit()
-
-    logger.info(f"✔ Inseridos {len(rows)} registros (append safe) em {tabela}")
+    cur.copy_expert(sql, buf)
 
 
-def upsert_batch(tabela: str, df: pl.DataFrame, chaves: List[str]) -> None:
-    cols = df.columns
-    rows = df.rows()
+def detect_pk(cols: List[str]) -> List[str]:
+    # PK por nome (barato e estável)
+    c = detect_col_by_patterns(cols, SEM_MOV_PATTERNS["pk_pedido"])
+    return [c] if c else []
 
-    if not rows:
-        logger.warning(f"⚠ Nada para upsert em {tabela}")
-        return
 
+def merge_from_staging(cur, target: str, stg: str, cols: List[str], keys: Optional[List[str]]) -> None:
     cols_str = ", ".join([f'"{c}"' for c in cols])
-    keys_str = ", ".join([f'"{c}"' for c in chaves])
+    sel_str = ", ".join([f'"{c}"' for c in cols])
 
-    updates = [c for c in cols if c not in chaves]
-    set_str = ", ".join([f'"{c}" = EXCLUDED."{c}"' for c in updates])
+    if keys:
+        keys_str = ", ".join([f'"{k}"' for k in keys])
+        updates = [c for c in cols if c not in keys]
 
-    sql = f"""
-        INSERT INTO "{tabela}" ({cols_str})
-        VALUES %s
-        ON CONFLICT ({keys_str})
-        DO UPDATE SET {set_str};
-    """
+        # update só quando mudou
+        if "row_hash" in cols:
+            where_change = f'public."{target}"."row_hash" IS DISTINCT FROM EXCLUDED."row_hash"'
+        else:
+            where_change = "TRUE"
 
-    with conectar() as con:
-        with con.cursor() as cur:
-            for i in range(0, len(rows), BATCH_SIZE):
-                bloco = rows[i:i + BATCH_SIZE]
-                execute_values(cur, sql, bloco)
-            con.commit()
+        set_str = ", ".join([f'"{c}" = EXCLUDED."{c}"' for c in updates]) if updates else ""
 
-    logger.info(f"✔ UPSERT {len(rows)} registros em {tabela}")
-
-
-# ======================================================
-# PROCESSAMENTO DE CADA PASTA
-# ======================================================
-def processar_pasta(root: str) -> None:
+        if updates:
+            cur.execute(f"""
+                INSERT INTO public."{target}" ({cols_str})
+                SELECT {sel_str} FROM "{stg}"
+                ON CONFLICT ({keys_str})
+                DO UPDATE SET {set_str}
+                WHERE {where_change};
+            """)
+        else:
+            cur.execute(f"""
+                INSERT INTO public."{target}" ({cols_str})
+                SELECT {sel_str} FROM "{stg}"
+                ON CONFLICT ({keys_str}) DO NOTHING;
+            """)
+    else:
+        cur.execute(f"""
+            INSERT INTO public."{target}" ({cols_str})
+            SELECT {sel_str} FROM "{stg}"
+            ON CONFLICT DO NOTHING;
+        """)
+def processar_pasta(cur, root: str) -> None:
     nome = os.path.basename(root)
     tabela = limpar_nome("col_" + nome)
 
-    logger.info(f"\n📁 Pasta: {root}")
-    logger.info(f"📌 Tabela: {tabela}")
-
-    lf = ler_excels_lazy(root)
-    if lf is None:
-        logger.info("⏭ Sem Excel válido.")
+    files = list_excel_files(root)
+    if not files:
         return
 
-    # Materializa somente agora
-    df = lf.collect()
+    # Delta por arquivo
+    to_process = []
+    for fp in files:
+        ok, fhash, size, mtime_dt = should_process_file(cur, fp)
+        if ok:
+            to_process.append((fp, fhash, size, mtime_dt))
 
-    # Detecta PK antes de criar/ajustar tabela
-    chaves: Optional[List[str]] = None
-    if MODO_CARGA == "upsert":
-        chaves = detectar_pk_por_valores(df)
+    if not to_process:
+        logger.info(f"⏭ {tabela}: nenhum arquivo novo/alterado.")
+        return
 
-    # Cria/ajusta tabela + tenta criar índice único (pode devolver None se falhar)
-    chaves_efetivas = criar_ou_ajustar_tabela(tabela, df, chaves)
+    logger.info(f"\n📁 Pasta: {root}")
+    logger.info(f"📌 Tabela: {tabela}")
+    logger.info(f"🆕 Arquivos a processar: {len(to_process)}/{len(files)}")
 
-    # Estratégia de carga
-    if MODO_CARGA == "upsert":
-        if chaves_efetivas:
-            upsert_batch(tabela, df, chaves_efetivas)
-        else:
-            logger.warning(
-                f"⚠ MODO_CARGA=upsert, mas sem índice único válido em {tabela}. "
-                f"Usando INSERT com ON CONFLICT DO NOTHING."
-            )
-            inserir_batch(tabela, df)
+    # Performance (carga local)
+    cur.execute("SET synchronous_commit TO OFF;")
 
-    elif MODO_CARGA == "append":
-        inserir_batch(tabela, df)
+    pk_cols_table: Optional[List[str]] = None
+    pk_ready = False
 
-    elif MODO_CARGA == "truncate":
-        with conectar() as con:
-            with con.cursor() as cur:
-                cur.execute(f'TRUNCATE TABLE "{tabela}"')
-                con.commit()
-        inserir_batch(tabela, df)
+    for (fp, fhash, size, mtime_dt) in to_process:
+        try:
+            logger.info(f"➡️ Lendo: {os.path.basename(fp)}")
+
+            df = pl.read_excel(fp, engine="calamine")
+            df = normalize_columns(df)
+            df = add_computed_fields(df)
+
+            # garante colunas de controle (caso não existam por algum motivo)
+            if "row_hash" not in df.columns:
+                df = df.with_columns(pl.lit(None).cast(pl.Int64).alias("row_hash"))
+
+            # garante tabela e colunas antes de truncate/merge
+            ensure_table_and_columns(cur, tabela, df.columns)
+
+            # truncate (1x por tabela) — executa na primeira vez que entrar numa pasta
+            if MODO_CARGA == "truncate":
+                cur.execute(f'TRUNCATE TABLE public."{tabela}";')
+                # depois do truncate, muda para append para não truncar de novo nessa pasta
+                # (mantém o comportamento por pasta)
+                # Se você quer truncar sempre que rodar o ETL, mantenha assim mesmo.
+                logger.info(f"🧹 TRUNCATE: {tabela}")
+
+            # pega colunas atuais da tabela (ordem estável)
+            table_cols = get_table_columns(cur, tabela)
+
+            # PK detecta 1x por tabela
+            if pk_cols_table is None:
+                pk_cols_table = detect_pk(table_cols)
+                if (MODO_CARGA == "upsert") and pk_cols_table:
+                    pk_ready = ensure_unique_index(cur, tabela, pk_cols_table)
+                else:
+                    pk_ready = False
+
+            # staging
+            stg = create_temp_staging(cur, tabela)
+
+            # alinha DF para exatamente as colunas da tabela
+            missing = [c for c in table_cols if c not in df.columns]
+            if missing:
+                df = df.with_columns([pl.lit(None).alias(c) for c in missing])
+            df = df.select(table_cols)
+
+            # row_hash baseado em todas colunas exceto ele próprio
+            hash_cols = [c for c in table_cols if c != "row_hash"]
+            df = add_row_hash(df, hash_cols)
+
+            n = df.height
+            logger.info(f"📦 Linhas no arquivo: {n:,}".replace(",", "."))
+
+            for start in range(0, n, COPY_CHUNK_ROWS):
+                chunk = df.slice(start, min(COPY_CHUNK_ROWS, n - start))
+
+                cur.execute(f'TRUNCATE "{stg}";')
+                copy_df_to_table(cur, stg, chunk, table_cols)
+
+                if (MODO_CARGA == "upsert") and pk_ready and pk_cols_table:
+                    merge_from_staging(cur, tabela, stg, table_cols, pk_cols_table)
+                else:
+                    merge_from_staging(cur, tabela, stg, table_cols, keys=None)
+
+            # marca meta como processado apenas se terminou OK
+            upsert_file_meta(cur, fp, mtime_dt, size, fhash, tabela)
+            logger.info(f"✅ Processado e registrado: {os.path.basename(fp)}")
+
+        except Exception:
+            logger.error(f"❌ Erro no arquivo: {fp}")
+            logger.error(traceback.format_exc())
+            # não atualiza meta deste arquivo
+
+    # Índices mínimos úteis (não cria índice para tudo)
+    cols_set = set(get_table_columns(cur, tabela))
+    if "dias_num" in cols_set:
+        ensure_btree_index(cur, tabela, "dias_num")
+    if "hora_ult_ts" in cols_set:
+        ensure_btree_index(cur, tabela, "hora_ult_ts")
+
+    cur.execute(f'ANALYZE public."{tabela}";')
+    logger.info(f"📊 ANALYZE: {tabela}")
 
 
-# ======================================================
-# MAIN
-# ======================================================
 def main(pasta_raiz: str) -> None:
-    logger.info("\n🚀 Iniciando ETL Ultra Performance\n")
+    logger.info("\n🚀 Iniciando ETL Incremental (PostgreSQL) — COPY + UPSERT\n")
+    ensure_meta_table()
 
-    for root, dirs, files in os.walk(pasta_raiz):
-        if any(f.lower().endswith((".xlsx", ".xls")) for f in files):
+    with conectar() as con:
+        with con.cursor() as cur:
             try:
-                processar_pasta(root)
+                if PROCESSAR_SUBPASTAS:
+                    for root, _, files in os.walk(pasta_raiz):
+                        if any(f.lower().endswith((".xlsx", ".xls")) for f in files):
+                            processar_pasta(cur, root)
+                    con.commit()
+                else:
+                    processar_pasta(cur, pasta_raiz)
+                    con.commit()
+
             except Exception:
-                logger.error(f"❌ Erro em {root}")
+                con.rollback()
+                logger.error("❌ Erro geral no ETL")
                 logger.error(traceback.format_exc())
 
     logger.info("\n🏁 Finalizado.\n")

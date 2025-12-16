@@ -1,4 +1,4 @@
-# app.py - Versão Completa (Responsiva - SQL First + Cast seguro)
+# app.py - Versão Completa (Mais rápida: Form Apply + Seções + CTE cast único)
 # -*- coding: utf-8 -*-
 
 import pandas as pd
@@ -53,9 +53,12 @@ CONFIG = {
         "info_color": "#3b82f6",
     },
     "PERF": {
-        "DISTINCT_LIMIT": 2000,
+        "DISTINCT_LIMIT": 600,          # antes 2000 (pode ser pesado)
         "DETAIL_PAGE_SIZE": 2000,
         "DETAIL_MAX_EXPORT": 300000,
+        "CACHE_TTL_SEC": 300,           # cache curto para não travar memória
+        "DEFAULT_DIAS_MIN": 0,          # evita varrer a tabela só pra achar min/max
+        "DEFAULT_DIAS_MAX": 60,
     },
 }
 
@@ -160,7 +163,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 # ==========================================================
 # UTILITÁRIOS
 # ==========================================================
@@ -208,22 +210,6 @@ def _non_empty_where(col_expr: str) -> str:
     return f"{col_expr} IS NOT NULL AND NULLIF(TRIM(({col_expr})::text),'') IS NOT NULL"
 
 
-def numeric_expr(col: str) -> str:
-    """
-    Cast seguro para NUMERIC.
-    - Trata valores TEXT (ex.: ' 12 ', '12', '12,0')
-    - Remove lixo não numérico
-    - Retorna NULL se vazio
-    """
-    cq = qname(col)
-    # replace vírgula por ponto; remove tudo que não é dígito, '.' ou '-'
-    return (
-        "NULLIF("
-        f"regexp_replace(replace(trim(({cq})::text), ',', '.'), '[^0-9\\.\\-]+', '', 'g')"
-        ", '')::numeric"
-    )
-
-
 # ==========================================================
 # BANCO / CACHE
 # ==========================================================
@@ -232,7 +218,7 @@ def get_db_engine():
     return get_engine()
 
 
-@st.cache_data(show_spinner="🔍 Carregando tabelas...")
+@st.cache_data(ttl=CONFIG["PERF"]["CACHE_TTL_SEC"], show_spinner="🔍 Carregando tabelas...")
 def list_tables() -> List[str]:
     try:
         engine = get_db_engine()
@@ -244,7 +230,7 @@ def list_tables() -> List[str]:
         return []
 
 
-@st.cache_data(show_spinner="🧾 Lendo colunas da tabela...")
+@st.cache_data(ttl=3600, show_spinner="🧾 Lendo colunas da tabela...")
 def get_table_columns(table_name: str) -> List[str]:
     engine = get_db_engine()
     insp = inspect(engine)
@@ -252,7 +238,7 @@ def get_table_columns(table_name: str) -> List[str]:
     return [c["name"] for c in cols]
 
 
-@st.cache_data(show_spinner="🧾 Lendo tipos das colunas...")
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_table_coltypes(table_name: str) -> Dict[str, str]:
     engine = get_db_engine()
     insp = inspect(engine)
@@ -265,38 +251,94 @@ def detect_sem_mov_columns_db(table_name: str) -> Dict[str, Optional[str]]:
     return {k: detect_columns_from_list(columns, patterns) for k, patterns in CONFIG["COLUNAS_SEM_MOV"].items()}
 
 
-@st.cache_data(show_spinner=False)
+def numeric_expr(table_name: str, col: str) -> str:
+    """
+    Cast seguro para NUMERIC.
+    Otimização: se o tipo já é numérico, evita regexp_replace.
+    """
+    cq = qname(col)
+    coltypes = get_table_coltypes(table_name)
+    t = coltypes.get(col, "")
+
+    if any(x in t for x in ["INT", "NUMERIC", "DECIMAL", "REAL", "DOUBLE", "FLOAT"]):
+        return f"({cq})::numeric"
+
+    return (
+        "NULLIF("
+        f"regexp_replace(replace(trim(({cq})::text), ',', '.'), '[^0-9\\.\\-]+', '', 'g')"
+        ", '')::numeric"
+    )
+
+
 def sql_df(query: str, params: Dict[str, Any]) -> pd.DataFrame:
     engine = get_db_engine()
     with engine.connect() as conn:
         return pd.read_sql(text(query), conn, params=params)
+# ==========================================================
+# WHERE + CTE (reduz custo: calcula dias_num/qtd_num 1x por query)
+# ==========================================================
+def build_base_cte(table_name: str, cols: Dict[str, Optional[str]], need_mes: bool, extra_cols: Optional[List[str]] = None) -> str:
+    extra_cols = extra_cols or []
+    needed: List[str] = []
+
+    # colunas usadas em filtros
+    for k in ["unid_resp", "base_entrega", "est_dest", "reg_resp", "aging", "hora_ult"]:
+        c = cols.get(k)
+        if c:
+            needed.append(c)
+
+    # colunas extras (dimensão etc)
+    for c in extra_cols:
+        if c:
+            needed.append(c)
+
+    # remove duplicadas mantendo ordem
+    needed = list(dict.fromkeys([c for c in needed if isinstance(c, str)]))
+
+    select_parts: List[str] = []
+    for c in needed:
+        select_parts.append(f"{qname(c)} AS {qname(c)}")
+
+    # computed nums
+    col_dias = cols.get("dias")
+    col_qtd = cols.get("qtd")
+    if col_dias:
+        select_parts.append(f"{numeric_expr(table_name, col_dias)} AS dias_num")
+    if col_qtd:
+        select_parts.append(f"{numeric_expr(table_name, col_qtd)} AS qtd_num")
+
+    # computed mes
+    if need_mes:
+        col_hora = cols.get("hora_ult")
+        if col_hora:
+            select_parts.append(f"to_char(date_trunc('month', {qname(col_hora)}), 'YYYY-MM') AS mes")
+
+    if not select_parts:
+        select_parts = ["1 AS dummy"]
+
+    select_sql = ",\n            ".join(select_parts)
+    return f"""
+        WITH b AS (
+            SELECT
+            {select_sql}
+            FROM {tqname(SCHEMA, table_name)}
+        )
+    """
 
 
-# ==========================================================
-# WHERE BUILDER (SQL responsivo)
-# ==========================================================
-def build_where_sql(cols: Dict[str, Optional[str]], filters: Dict[str, Any], table_name: str) -> Tuple[str, Dict[str, Any]]:
+def build_where_cte(cols: Dict[str, Optional[str]], filters: Dict[str, Any], has_mes: bool) -> Tuple[str, Dict[str, Any]]:
     where_parts = ["1=1"]
     params: Dict[str, Any] = {}
 
-    col_dias = cols.get("dias")
-    if col_dias and filters.get("dias_range") is not None:
-        # >>> CORREÇÃO PRINCIPAL: comparar pelo CAST NUMERIC (coluna pode ser TEXT)
-        where_parts.append(f"{numeric_expr(col_dias)} BETWEEN :dias_min AND :dias_max")
+    if cols.get("dias") and filters.get("dias_range") is not None:
+        where_parts.append("b.dias_num BETWEEN :dias_min AND :dias_max")
         params["dias_min"] = int(filters["dias_range"][0])
         params["dias_max"] = int(filters["dias_range"][1])
 
-    # Filtro por mês só se a coluna for timestamp/date no banco
-    col_hora = cols.get("hora_ult")
-    if col_hora and filters.get("meses"):
-        coltypes = get_table_coltypes(table_name)
-        t = coltypes.get(col_hora, "")
-        if "TIMESTAMP" in t or "DATE" in t:
-            mes_expr = f"to_char(date_trunc('month', {qname(col_hora)}), 'YYYY-MM')"
-            where_parts.append(f"{mes_expr} = ANY(:meses)")
-            params["meses"] = list(filters["meses"])
+    if has_mes and filters.get("meses"):
+        where_parts.append("b.mes = ANY(:meses)")
+        params["meses"] = list(filters["meses"])
 
-    # Multiselects (dimensões)
     for key, param_name in [
         ("unid_resp", "unids"),
         ("base_entrega", "bases"),
@@ -307,47 +349,17 @@ def build_where_sql(cols: Dict[str, Optional[str]], filters: Dict[str, Any], tab
         col = cols.get(key)
         sel = filters.get(key) or []
         if col and sel:
-            where_parts.append(f"{qname(col)} = ANY(:{param_name})")
+            where_parts.append(f"b.{qname(col)} = ANY(:{param_name})")
             params[param_name] = list(sel)
 
     return " AND ".join(where_parts), params
 
 
 # ==========================================================
-# PRÉ-CÁLCULOS PARA FILTROS
+# PRÉ-CÁLCULOS (mais leves / opcionais)
 # ==========================================================
-@st.cache_data(show_spinner=False)
-def get_min_max_numeric(table_name: str, col: str) -> Tuple[int, int]:
-    q = f"""
-        SELECT
-            COALESCE(MIN({numeric_expr(col)}), 0) AS mn,
-            COALESCE(MAX({numeric_expr(col)}), 0) AS mx
-        FROM {tqname(SCHEMA, table_name)}
-        WHERE {numeric_expr(col)} IS NOT NULL
-    """
-    df = sql_df(q, {})
-    mn = int(df.loc[0, "mn"]) if not df.empty else 0
-    mx = int(df.loc[0, "mx"]) if not df.empty else 0
-    if mn > mx:
-        mn, mx = 0, 0
-    return mn, mx
-
-
-@st.cache_data(show_spinner=False)
-def get_distinct_values(table_name: str, col: str, limit: int) -> List[str]:
-    q = f"""
-        SELECT DISTINCT {qname(col)}::text AS v
-        FROM {tqname(SCHEMA, table_name)}
-        WHERE {_non_empty_where(qname(col))}
-        ORDER BY 1
-        LIMIT :lim
-    """
-    df = sql_df(q, {"lim": int(limit)})
-    return df["v"].astype(str).tolist() if not df.empty else []
-
-
-@st.cache_data(show_spinner=False)
-def get_distinct_months(table_name: str, col_hora: str, limit: int = 120) -> List[str]:
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_distinct_months(table_name: str, col_hora: str, limit: int = 36) -> List[str]:
     coltypes = get_table_coltypes(table_name)
     t = coltypes.get(col_hora, "")
     if not ("TIMESTAMP" in t or "DATE" in t):
@@ -364,35 +376,56 @@ def get_distinct_months(table_name: str, col_hora: str, limit: int = 120) -> Lis
     return df["mes"].astype(str).tolist() if not df.empty else []
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_distinct_values(table_name: str, col: str, limit: int) -> List[str]:
+    q = f"""
+        SELECT DISTINCT {qname(col)}::text AS v
+        FROM {tqname(SCHEMA, table_name)}
+        WHERE {_non_empty_where(qname(col))}
+        ORDER BY 1
+        LIMIT :lim
+    """
+    df = sql_df(q, {"lim": int(limit)})
+    return df["v"].astype(str).tolist() if not df.empty else []
+
+
 # ==========================================================
 # KPIs / GRÁFICOS (SQL)
 # ==========================================================
-@st.cache_data(show_spinner="📈 Calculando KPIs (SQL)...")
+@st.cache_data(ttl=CONFIG["PERF"]["CACHE_TTL_SEC"], show_spinner="📈 Calculando KPIs (SQL)...")
 def query_kpis(table_name: str, cols: Dict[str, Optional[str]], filters: Dict[str, Any]) -> Dict[str, float]:
-    where_sql, params = build_where_sql(cols, filters, table_name)
+    col_hora = cols.get("hora_ult")
+    has_mes = False
+    if col_hora:
+        t = get_table_coltypes(table_name).get(col_hora, "")
+        has_mes = ("TIMESTAMP" in t or "DATE" in t)
 
-    col_dias = cols.get("dias")
+    cte = build_base_cte(table_name, cols, need_mes=has_mes, extra_cols=[])
+    where_sql, params = build_where_cte(cols, filters, has_mes=has_mes)
+
     col_qtd = cols.get("qtd")
+    col_dias = cols.get("dias")
 
     linhas_expr = "COUNT(*)::bigint"
-    qtd_expr = f"COALESCE(SUM({numeric_expr(col_qtd)}),0)" if col_qtd else "COUNT(*)::bigint"
-    media_dias_expr = f"COALESCE(AVG({numeric_expr(col_dias)}),0)" if col_dias else "0"
-    max_dias_expr = f"COALESCE(MAX({numeric_expr(col_dias)}),0)" if col_dias else "0"
+    qtd_expr = "COALESCE(SUM(b.qtd_num),0)" if col_qtd else "COUNT(*)::bigint"
+    media_dias_expr = "COALESCE(AVG(b.dias_num),0)" if col_dias else "0"
+    max_dias_expr = "COALESCE(MAX(b.dias_num),0)" if col_dias else "0"
 
     c1 = CONFIG["CRITICOS"]["dias_crit_1"]
     c2 = CONFIG["CRITICOS"]["dias_crit_2"]
     c3 = CONFIG["CRITICOS"]["dias_crit_3"]
 
     if col_dias:
-        crit1_expr = f"SUM(CASE WHEN {numeric_expr(col_dias)} >= {c1} THEN 1 ELSE 0 END)::bigint"
-        crit2_expr = f"SUM(CASE WHEN {numeric_expr(col_dias)} >= {c2} THEN 1 ELSE 0 END)::bigint"
-        crit3_expr = f"SUM(CASE WHEN {numeric_expr(col_dias)} >= {c3} THEN 1 ELSE 0 END)::bigint"
+        crit1_expr = f"SUM(CASE WHEN b.dias_num >= {c1} THEN 1 ELSE 0 END)::bigint"
+        crit2_expr = f"SUM(CASE WHEN b.dias_num >= {c2} THEN 1 ELSE 0 END)::bigint"
+        crit3_expr = f"SUM(CASE WHEN b.dias_num >= {c3} THEN 1 ELSE 0 END)::bigint"
     else:
         crit1_expr = "0"
         crit2_expr = "0"
         crit3_expr = "0"
 
     q = f"""
+        {cte}
         SELECT
             {linhas_expr} AS total_linhas,
             {qtd_expr} AS total_volume,
@@ -401,7 +434,7 @@ def query_kpis(table_name: str, cols: Dict[str, Optional[str]], filters: Dict[st
             {crit1_expr} AS crit_1,
             {crit2_expr} AS crit_2,
             {crit3_expr} AS crit_3
-        FROM {tqname(SCHEMA, table_name)}
+        FROM b
         WHERE {where_sql}
     """
     df = sql_df(q, params)
@@ -412,77 +445,80 @@ def query_kpis(table_name: str, cols: Dict[str, Optional[str]], filters: Dict[st
     return {k: float(row[k]) for k in row.keys()}
 
 
-@st.cache_data(show_spinner="📊 Carregando distribuição de dias (SQL)...")
+@st.cache_data(ttl=CONFIG["PERF"]["CACHE_TTL_SEC"], show_spinner="📊 Carregando distribuição de dias (SQL)...")
 def query_hist_dias(table_name: str, cols: Dict[str, Optional[str]], filters: Dict[str, Any]) -> pd.DataFrame:
-    col_dias = cols.get("dias")
-    if not col_dias:
+    if not cols.get("dias"):
         return pd.DataFrame()
 
-    where_sql, params = build_where_sql(cols, filters, table_name)
-    dias_num = numeric_expr(col_dias)
+    cte = build_base_cte(table_name, cols, need_mes=False, extra_cols=[])
+    where_sql, params = build_where_cte(cols, filters, has_mes=False)
 
     q = f"""
-        SELECT {dias_num} AS dias, COUNT(*)::bigint AS linhas
-        FROM {tqname(SCHEMA, table_name)}
-        WHERE {where_sql} AND {dias_num} IS NOT NULL
+        {cte}
+        SELECT b.dias_num::int AS dias, COUNT(*)::bigint AS linhas
+        FROM b
+        WHERE {where_sql} AND b.dias_num IS NOT NULL
         GROUP BY 1
         ORDER BY 1
     """
     return sql_df(q, params)
 
 
-@st.cache_data(show_spinner="📈 Carregando volume por mês (SQL)...")
+@st.cache_data(ttl=CONFIG["PERF"]["CACHE_TTL_SEC"], show_spinner="📈 Carregando volume por mês (SQL)...")
 def query_volume_mes(table_name: str, cols: Dict[str, Optional[str]], filters: Dict[str, Any]) -> pd.DataFrame:
     col_hora = cols.get("hora_ult")
     if not col_hora:
         return pd.DataFrame()
 
-    coltypes = get_table_coltypes(table_name)
-    t = coltypes.get(col_hora, "")
-    if not ("TIMESTAMP" in t or "DATE" in t):
+    t = get_table_coltypes(table_name).get(col_hora, "")
+    has_mes = ("TIMESTAMP" in t or "DATE" in t)
+    if not has_mes:
         return pd.DataFrame()
 
-    where_sql, params = build_where_sql(cols, filters, table_name)
-    col_qtd = cols.get("qtd")
+    cte = build_base_cte(table_name, cols, need_mes=True, extra_cols=[])
+    where_sql, params = build_where_cte(cols, filters, has_mes=True)
 
-    mes_expr = f"to_char(date_trunc('month', {qname(col_hora)}), 'YYYY-MM')"
+    col_qtd = cols.get("qtd")
     if col_qtd:
-        y_expr = f"COALESCE(SUM({numeric_expr(col_qtd)}),0)"
+        y_expr = "COALESCE(SUM(b.qtd_num),0)"
         y_name = "volume"
     else:
         y_expr = "COUNT(*)::bigint"
         y_name = "linhas"
 
     q = f"""
-        SELECT {mes_expr} AS mes, {y_expr} AS {y_name}
-        FROM {tqname(SCHEMA, table_name)}
-        WHERE {where_sql} AND {qname(col_hora)} IS NOT NULL
+        {cte}
+        SELECT b.mes AS mes, {y_expr} AS {y_name}
+        FROM b
+        WHERE {where_sql} AND b.mes IS NOT NULL
         GROUP BY 1
         ORDER BY 1
     """
     return sql_df(q, params)
 
 
-@st.cache_data(show_spinner="🏆 Carregando TOPs (SQL)...")
+@st.cache_data(ttl=CONFIG["PERF"]["CACHE_TTL_SEC"], show_spinner="🏆 Carregando TOPs (SQL)...")
 def query_top_dim(table_name: str, cols: Dict[str, Optional[str]], filters: Dict[str, Any], dim_key: str, topn: int = 10) -> pd.DataFrame:
     dim_col = cols.get(dim_key)
     if not dim_col:
         return pd.DataFrame()
 
-    where_sql, params = build_where_sql(cols, filters, table_name)
-    col_qtd = cols.get("qtd")
+    cte = build_base_cte(table_name, cols, need_mes=False, extra_cols=[dim_col])
+    where_sql, params = build_where_cte(cols, filters, has_mes=False)
 
+    col_qtd = cols.get("qtd")
     if col_qtd:
-        y_expr = f"COALESCE(SUM({numeric_expr(col_qtd)}),0)"
+        y_expr = "COALESCE(SUM(b.qtd_num),0)"
         y_name = "volume"
     else:
         y_expr = "COUNT(*)::bigint"
         y_name = "linhas"
 
     q = f"""
-        SELECT {qname(dim_col)}::text AS dim, {y_expr} AS {y_name}
-        FROM {tqname(SCHEMA, table_name)}
-        WHERE {where_sql} AND {_non_empty_where(qname(dim_col))}
+        {cte}
+        SELECT b.{qname(dim_col)}::text AS dim, {y_expr} AS {y_name}
+        FROM b
+        WHERE {where_sql} AND {_non_empty_where(f"b.{qname(dim_col)}")}
         GROUP BY 1
         ORDER BY 2 DESC
         LIMIT :lim
@@ -492,36 +528,36 @@ def query_top_dim(table_name: str, cols: Dict[str, Optional[str]], filters: Dict
     return sql_df(q, params2)
 
 
-@st.cache_data(show_spinner="⚠️ Carregando risco (SQL)...")
+@st.cache_data(ttl=CONFIG["PERF"]["CACHE_TTL_SEC"], show_spinner="⚠️ Carregando risco (SQL)...")
 def query_risk_dim(table_name: str, cols: Dict[str, Optional[str]], filters: Dict[str, Any], dim_key: str, dias_crit: int) -> pd.DataFrame:
     dim_col = cols.get(dim_key)
-    col_dias = cols.get("dias")
-    col_qtd = cols.get("qtd")
-    if not dim_col or not col_dias:
+    if not dim_col or not cols.get("dias"):
         return pd.DataFrame()
 
-    where_sql, params = build_where_sql(cols, filters, table_name)
-    dias_num = numeric_expr(col_dias)
+    cte = build_base_cte(table_name, cols, need_mes=False, extra_cols=[dim_col])
+    where_sql, params = build_where_cte(cols, filters, has_mes=False)
 
+    col_qtd = cols.get("qtd")
     if col_qtd:
-        qtd_expr = f"COALESCE(SUM({numeric_expr(col_qtd)}),0) AS qtd_pedidos"
+        qtd_expr = "COALESCE(SUM(b.qtd_num),0) AS qtd_pedidos"
         linhas_expr = "COUNT(*)::bigint AS linhas"
     else:
         qtd_expr = "COUNT(*)::bigint AS qtd_pedidos"
         linhas_expr = "COUNT(*)::bigint AS linhas"
 
     q = f"""
+        {cte}
         SELECT
-            {qname(dim_col)}::text AS dim,
+            b.{qname(dim_col)}::text AS dim,
             {qtd_expr},
             {linhas_expr},
-            COALESCE(AVG({dias_num}),0) AS media_dias,
-            COALESCE(MAX({dias_num}),0) AS max_dias,
-            SUM(CASE WHEN {dias_num} >= :dias_crit THEN 1 ELSE 0 END)::bigint AS pedidos_crit
-        FROM {tqname(SCHEMA, table_name)}
+            COALESCE(AVG(b.dias_num),0) AS media_dias,
+            COALESCE(MAX(b.dias_num),0) AS max_dias,
+            SUM(CASE WHEN b.dias_num >= :dias_crit THEN 1 ELSE 0 END)::bigint AS pedidos_crit
+        FROM b
         WHERE {where_sql}
-          AND {_non_empty_where(qname(dim_col))}
-          AND {dias_num} IS NOT NULL
+          AND {_non_empty_where(f"b.{qname(dim_col)}")}
+          AND b.dias_num IS NOT NULL
         GROUP BY 1
         ORDER BY 5 DESC
         LIMIT 5000
@@ -531,7 +567,7 @@ def query_risk_dim(table_name: str, cols: Dict[str, Optional[str]], filters: Dic
     return sql_df(q, params2)
 
 
-@st.cache_data(show_spinner="📄 Carregando detalhes (SQL)...")
+@st.cache_data(ttl=120, show_spinner="📄 Carregando detalhes (SQL)...")
 def query_details_page(
     table_name: str,
     cols_sel: List[str],
@@ -540,20 +576,49 @@ def query_details_page(
     page: int,
     page_size: int,
 ) -> pd.DataFrame:
-    where_sql, params = build_where_sql(cols, filters, table_name)
+    # detalhes continuam direto na tabela (sem CTE) para permitir SELECT de várias colunas
     all_cols = get_table_columns(table_name)
-
     safe_cols = [c for c in cols_sel if isinstance(c, str) and c in all_cols]
     if not safe_cols:
         safe_cols = all_cols
 
+    # WHERE (sem mes/dias_num aqui: usa expressão direta se necessário)
+    # Para manter simples, reaproveita build_where_cte via CTE apenas para filtros "dimensionais",
+    # e aplica dias_range diretamente com numeric_expr na query de detalhes.
+    where_parts = ["1=1"]
+    params: Dict[str, Any] = {}
+
+    col_dias = cols.get("dias")
+    if col_dias and filters.get("dias_range") is not None:
+        where_parts.append(f"{numeric_expr(table_name, col_dias)} BETWEEN :dias_min AND :dias_max")
+        params["dias_min"] = int(filters["dias_range"][0])
+        params["dias_max"] = int(filters["dias_range"][1])
+
+    for key, param_name in [
+        ("unid_resp", "unids"),
+        ("base_entrega", "bases"),
+        ("est_dest", "ufs"),
+        ("reg_resp", "regs"),
+        ("aging", "aging"),
+    ]:
+        col = cols.get(key)
+        sel = filters.get(key) or []
+        if col and sel:
+            where_parts.append(f"{qname(col)} = ANY(:{param_name})")
+            params[param_name] = list(sel)
+
     select_list = ", ".join([qname(c) for c in safe_cols])
     offset = max(0, int(page)) * int(page_size)
+
+    # ORDER BY para paginação ficar estável (se tiver pedido, usa ele)
+    order_col = cols.get("pedido")
+    order_sql = f"ORDER BY {qname(order_col)}" if order_col and order_col in all_cols else ""
 
     q = f"""
         SELECT {select_list}
         FROM {tqname(SCHEMA, table_name)}
-        WHERE {where_sql}
+        WHERE {" AND ".join(where_parts)}
+        {order_sql}
         OFFSET :off
         LIMIT :lim
     """
@@ -561,8 +626,6 @@ def query_details_page(
     params2["off"] = int(offset)
     params2["lim"] = int(page_size)
     return sql_df(q, params2)
-
-
 # ==========================================================
 # UI / RENDER
 # ==========================================================
@@ -575,7 +638,7 @@ def render_header():
                 <div>
                     <h1 style="margin: 0; color: #e2e8f0; font-weight: 700;">Painel de Análise - Sem Movimentação</h1>
                     <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 0.95rem;">
-                        Modo responsivo: filtros e agregações no PostgreSQL
+                        Otimizado: filtros via Form + seções sob demanda
                     </p>
                 </div>
             </div>
@@ -583,7 +646,7 @@ def render_header():
                 <span class="badge badge-primary">PostgreSQL</span>
                 <span class="badge badge-success">Streamlit</span>
                 <span class="badge badge-warning">SQL First</span>
-                <span class="badge badge-info">Responsivo</span>
+                <span class="badge badge-info">Performance</span>
             </div>
         </div>
         """,
@@ -591,44 +654,66 @@ def render_header():
     )
 
 
-def render_filters_ui(table_name: str, cols: Dict[str, Optional[str]]) -> Dict[str, Any]:
+def render_filters_form(table_name: str, cols: Dict[str, Optional[str]]) -> Dict[str, Any]:
     st.sidebar.markdown("## ⚙️ Filtros (SQL)")
     filters: Dict[str, Any] = {}
 
-    col_dias = cols.get("dias")
-    if col_dias:
-        mn, mx = get_min_max_numeric(table_name, col_dias)
-        if mx < mn:
-            mn, mx = 0, 0
-        if mx == mn:
-            mx = mn + 1
-        filters["dias_range"] = st.sidebar.slider(
-            "📅 Dias sem movimentação",
-            min_value=int(mn),
-            max_value=int(mx),
-            value=(int(mn), int(mx)),
-            step=1,
-        )
+    with st.sidebar.form("filters_form", clear_on_submit=False):
+        # Dias (por padrão NÃO varre a tabela para descobrir min/max)
+        col_dias = cols.get("dias")
+        if col_dias:
+            auto_range = st.checkbox("Auto-detectar min/max (mais lento)", value=False)
+            if auto_range:
+                # opcional: você pode reativar um get_min_max_numeric aqui se quiser.
+                mn = CONFIG["PERF"]["DEFAULT_DIAS_MIN"]
+                mx = CONFIG["PERF"]["DEFAULT_DIAS_MAX"]
+            else:
+                mn = CONFIG["PERF"]["DEFAULT_DIAS_MIN"]
+                mx = CONFIG["PERF"]["DEFAULT_DIAS_MAX"]
 
-    col_hora = cols.get("hora_ult")
-    if col_hora:
-        meses = get_distinct_months(table_name, col_hora, limit=120)
-        filters["meses"] = st.sidebar.multiselect("📆 Mês da última operação", meses, default=[]) if meses else []
+            filters["dias_range"] = st.slider(
+                "📅 Dias sem movimentação",
+                min_value=int(mn),
+                max_value=int(mx),
+                value=(int(mn), int(mx)),
+                step=1,
+            )
 
-    lim = CONFIG["PERF"]["DISTINCT_LIMIT"]
+        # Mês (só carrega lista se você ativar)
+        col_hora = cols.get("hora_ult")
+        usar_mes = False
+        meses = []
+        if col_hora:
+            usar_mes = st.checkbox("Filtrar por mês da última operação", value=False)
+            if usar_mes:
+                meses = get_distinct_months(table_name, col_hora, limit=36)
 
-    def _ms(key: str, label: str) -> List[str]:
-        col = cols.get(key)
-        if not col:
-            return []
-        opts = get_distinct_values(table_name, col, limit=lim)
-        return st.sidebar.multiselect(label, opts, default=[])
+        filters["meses"] = st.multiselect("📆 Mês da última operação", meses, default=[]) if (usar_mes and meses) else []
 
-    filters["unid_resp"] = _ms("unid_resp", "🏢 Unidade responsável")
-    filters["base_entrega"] = _ms("base_entrega", "🏠 Base de entrega")
-    filters["est_dest"] = _ms("est_dest", "🗺️ Estado (UF) destino")
-    filters["reg_resp"] = _ms("reg_resp", "🧭 Regional responsável")
-    filters["aging"] = _ms("aging", "⏱️ Aging / Tipo de atraso")
+        lim = CONFIG["PERF"]["DISTINCT_LIMIT"]
+
+        def _ms(key: str, label: str) -> List[str]:
+            col = cols.get(key)
+            if not col:
+                return []
+            enabled = st.checkbox(f"Ativar filtro: {label}", value=False, key=f"en_{key}")
+            if not enabled:
+                return []
+
+            opts = get_distinct_values(table_name, col, limit=lim)
+            return st.multiselect(label, opts, default=[])
+
+        filters["unid_resp"] = _ms("unid_resp", "🏢 Unidade responsável")
+        filters["base_entrega"] = _ms("base_entrega", "🏠 Base de entrega")
+        filters["est_dest"] = _ms("est_dest", "🗺️ Estado (UF) destino")
+        filters["reg_resp"] = _ms("reg_resp", "🧭 Regional responsável")
+        filters["aging"] = _ms("aging", "⏱️ Aging / Tipo de atraso")
+
+        apply = st.form_submit_button("✅ Aplicar filtros", type="primary")
+
+    # marca em session_state se foi aplicado
+    if apply:
+        st.session_state["filters_applied"] = True
 
     return filters
 
@@ -663,14 +748,14 @@ def render_charts_sql(table_name: str, cols: Dict[str, Optional[str]], filters: 
 
     with col1:
         st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">📊 Distribuição de Dias sem Movimentação (SQL)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">📊 Distribuição de Dias (SQL)</div>', unsafe_allow_html=True)
         df_hist = query_hist_dias(table_name, cols, filters)
         if not df_hist.empty:
             fig = px.bar(df_hist, x="dias", y="linhas", template="plotly_dark", title="Contagem por dia (agrupado)")
             fig.update_layout(margin=dict(l=10, r=10, t=40, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("📝 Sem dados para histograma (ou coluna 'dias' não detectada).")
+            st.info("📝 Sem dados para histograma.")
         st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown('<div class="custom-card">', unsafe_allow_html=True)
@@ -682,12 +767,12 @@ def render_charts_sql(table_name: str, cols: Dict[str, Optional[str]], filters: 
             figm.update_layout(margin=dict(l=10, r=10, t=40, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(figm, use_container_width=True)
         else:
-            st.info("📝 Mês indisponível (coluna de data não é timestamp/date ou não detectada).")
+            st.info("📝 Mês indisponível (ou filtro por mês desativado).")
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col2:
         st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">🏢 Top 10 Unidades Responsáveis (SQL)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">🏢 Top 10 Unidades (SQL)</div>', unsafe_allow_html=True)
         df_top_u = query_top_dim(table_name, cols, filters, "unid_resp", topn=10)
         if not df_top_u.empty:
             ycol = "volume" if "volume" in df_top_u.columns else "linhas"
@@ -695,11 +780,11 @@ def render_charts_sql(table_name: str, cols: Dict[str, Optional[str]], filters: 
             fig.update_layout(xaxis_title="", margin=dict(l=10, r=10, t=40, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("📝 Coluna não encontrada ou sem dados.")
+            st.info("📝 Sem dados.")
         st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">🏠 Top 10 Bases de Entrega (SQL)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">🏠 Top 10 Bases (SQL)</div>', unsafe_allow_html=True)
         df_top_b = query_top_dim(table_name, cols, filters, "base_entrega", topn=10)
         if not df_top_b.empty:
             ycol = "volume" if "volume" in df_top_b.columns else "linhas"
@@ -707,7 +792,7 @@ def render_charts_sql(table_name: str, cols: Dict[str, Optional[str]], filters: 
             fig.update_layout(xaxis_title="", margin=dict(l=10, r=10, t=40, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("📝 Coluna não encontrada ou sem dados.")
+            st.info("📝 Sem dados.")
         st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -719,7 +804,7 @@ def render_risk_sql(table_name: str, cols: Dict[str, Optional[str]], filters: Di
     df_risk = query_risk_dim(table_name, cols, filters, dim_key, dias_crit)
 
     if df_risk.empty:
-        st.info("📝 Colunas necessárias não encontradas (dimensão ou dias).")
+        st.info("📝 Sem dados/colunas necessárias.")
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
@@ -727,7 +812,7 @@ def render_risk_sql(table_name: str, cols: Dict[str, Optional[str]], filters: Di
 
     top = df_risk.head(15).copy()
     fig = px.bar(top, x="dim", y="max_dias", color="max_dias", template="plotly_dark", title=f"Top {title} por Maior Tempo Parado")
-    fig.update_layout(xaxis_title="", yaxis_title="Máx. Dias Sem Mov", margin=dict(l=10, r=10, t=40, b=10),
+    fig.update_layout(xaxis_title="", yaxis_title="Máx. Dias", margin=dict(l=10, r=10, t=40, b=10),
                       paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig, use_container_width=True)
 
@@ -736,7 +821,7 @@ def render_risk_sql(table_name: str, cols: Dict[str, Optional[str]], filters: Di
 
 def render_detail_and_download(table_name: str, cols: Dict[str, Optional[str]], filters: Dict[str, Any]):
     st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">📥 Tabela Detalhada (Paginada) & Download</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">📥 Detalhes (Paginado) & Download</div>', unsafe_allow_html=True)
 
     all_cols = get_table_columns(table_name)
     default_cols = [c for c in [
@@ -763,29 +848,49 @@ def render_detail_and_download(table_name: str, cols: Dict[str, Optional[str]], 
 
     st.markdown("---")
     max_export = st.number_input(
-        "⬇️ Exportar até (linhas) — segurança",
+        "⬇️ Exportar até (linhas)",
         min_value=10_000,
         max_value=1_000_000,
         value=CONFIG["PERF"]["DETAIL_MAX_EXPORT"],
         step=10_000,
-        help="Export muito grande pode ficar lento.",
     )
 
     if st.button("📄 Gerar CSV (SQL)"):
-        where_sql, params = build_where_sql(cols, filters, table_name)
+        # Export direto
+        where_parts = ["1=1"]
+        params: Dict[str, Any] = {}
+
+        col_dias = cols.get("dias")
+        if col_dias and filters.get("dias_range") is not None:
+            where_parts.append(f"{numeric_expr(table_name, col_dias)} BETWEEN :dias_min AND :dias_max")
+            params["dias_min"] = int(filters["dias_range"][0])
+            params["dias_max"] = int(filters["dias_range"][1])
+
+        for key, param_name in [
+            ("unid_resp", "unids"),
+            ("base_entrega", "bases"),
+            ("est_dest", "ufs"),
+            ("reg_resp", "regs"),
+            ("aging", "aging"),
+        ]:
+            col = cols.get(key)
+            sel = filters.get(key) or []
+            if col and sel:
+                where_parts.append(f"{qname(col)} = ANY(:{param_name})")
+                params[param_name] = list(sel)
+
         safe_cols = [c for c in cols_sel if c in all_cols] or all_cols
         select_list = ", ".join([qname(c) for c in safe_cols])
 
         q = f"""
             SELECT {select_list}
             FROM {tqname(SCHEMA, table_name)}
-            WHERE {where_sql}
+            WHERE {" AND ".join(where_parts)}
             LIMIT :lim
         """
-        params2 = dict(params)
-        params2["lim"] = int(max_export)
+        params["lim"] = int(max_export)
 
-        df_export = sql_df(q, params2)
+        df_export = sql_df(q, params)
         csv_bytes = df_export.to_csv(index=False).encode("utf-8")
         st.download_button("⬇️ Baixar CSV", data=csv_bytes, file_name="sem_mov_filtrado.csv", mime="text/csv")
 
@@ -798,6 +903,16 @@ def render_detail_and_download(table_name: str, cols: Dict[str, Optional[str]], 
 def main():
     render_header()
 
+    # session state
+    if "run_panel" not in st.session_state:
+        st.session_state["run_panel"] = False
+    if "last_table" not in st.session_state:
+        st.session_state["last_table"] = None
+    if "filters_applied" not in st.session_state:
+        st.session_state["filters_applied"] = False
+    if "filters_last" not in st.session_state:
+        st.session_state["filters_last"] = None
+
     tabelas = list_tables()
     if not tabelas:
         st.error("❌ Nenhuma tabela encontrada no schema public")
@@ -809,9 +924,18 @@ def main():
     st.sidebar.markdown("## 🗃️ Fonte de Dados")
     tabela_escolhida = st.sidebar.selectbox("📋 Tabela (schema public)", options=tabelas, index=default_idx)
 
-    carregar = st.sidebar.button("🚀 Carregar (Modo Responsivo)", type="primary")
-    if not carregar:
-        st.info("Escolha a tabela na esquerda e clique em **🚀 Carregar (Modo Responsivo)**.")
+    # reset ao trocar tabela
+    if st.session_state["last_table"] != tabela_escolhida:
+        st.session_state["last_table"] = tabela_escolhida
+        st.session_state["run_panel"] = False
+        st.session_state["filters_last"] = None
+        st.session_state["filters_applied"] = False
+
+    if st.sidebar.button("🚀 Carregar painel", type="primary"):
+        st.session_state["run_panel"] = True
+
+    if not st.session_state["run_panel"]:
+        st.info("Escolha a tabela na esquerda e clique em **🚀 Carregar painel**.")
         return
 
     try:
@@ -822,32 +946,46 @@ def main():
         st.json({k: v for k, v in cols.items() if v})
         st.markdown("</div>", unsafe_allow_html=True)
 
-        filters = render_filters_ui(tabela_escolhida, cols)
+        # filtros (form)
+        filters = render_filters_form(tabela_escolhida, cols)
 
+        # usa o último filtro aplicado (para não “sumir”)
+        if st.session_state["filters_applied"] or st.session_state["filters_last"] is None:
+            st.session_state["filters_last"] = filters
+            st.session_state["filters_applied"] = False
+
+        filters_use = st.session_state["filters_last"] or {}
+
+        # KPIs sempre
         st.markdown('<div class="custom-card">', unsafe_allow_html=True)
         st.markdown('<div class="section-title">📈 KPIs Gerais (SQL)</div>', unsafe_allow_html=True)
-        render_kpis_sql(tabela_escolhida, cols, filters)
+        render_kpis_sql(tabela_escolhida, cols, filters_use)
         st.markdown("</div>", unsafe_allow_html=True)
 
-        tab1, tab2, tab3, tab4 = st.tabs(
-            ["📊 Visão Geral (SQL)", "🏢 Unidade Responsável (SQL)", "🏠 Base de Entrega (SQL)", "📥 Detalhes & Download"]
+        # Seção sob demanda (evita rodar tudo de uma vez)
+        st.sidebar.markdown("## 📌 Seção")
+        sec = st.sidebar.radio(
+            "Escolha o que carregar",
+            ["📊 Visão Geral", "🏢 Unidade Responsável", "🏠 Base de Entrega", "📥 Detalhes & Download"],
+            index=0
         )
 
-        with tab1:
-            render_charts_sql(tabela_escolhida, cols, filters)
+        if sec == "📊 Visão Geral":
+            render_charts_sql(tabela_escolhida, cols, filters_use)
 
-        with tab2:
-            render_risk_sql(tabela_escolhida, cols, filters, "unid_resp", "Unidade Responsável")
+        elif sec == "🏢 Unidade Responsável":
+            render_risk_sql(tabela_escolhida, cols, filters_use, "unid_resp", "Unidade Responsável")
 
-        with tab3:
-            render_risk_sql(tabela_escolhida, cols, filters, "base_entrega", "Base de Entrega")
+        elif sec == "🏠 Base de Entrega":
+            render_risk_sql(tabela_escolhida, cols, filters_use, "base_entrega", "Base de Entrega")
 
-        with tab4:
-            render_detail_and_download(tabela_escolhida, cols, filters)
+        else:
+            render_detail_and_download(tabela_escolhida, cols, filters_use)
 
     except Exception as e:
         st.error("❌ Erro inesperado")
         st.code("".join(traceback.format_exception(type(e), e, e.__traceback__)))
+
 
 if __name__ == "__main__":
     main()

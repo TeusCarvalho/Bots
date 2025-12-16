@@ -1,25 +1,11 @@
 # -*- coding: utf-8 -*-
-"""
-📦 Comparativo Shipping Time Semanal — FINAL v2.6.1
----------------------------------------------------------------
-- Corrige tipos numéricos automaticamente
-- Calcula Etapas 6, 7, 8 e Tempo Total
-- Gera comparativo limpo e compatível
-- Filtra UFs
-- MOSTRA:
-    ✔ Maior piora (tratado para None)
-    ✔ Maior melhora (tratado para None)
-    ✔ Comparativo Geral com Δ
-    ✔ TOP 5 das Etapas com Δ
-    ✔ Resumo diário
-- Cria abas separadas por Data
-- Divide automaticamente base consolidada
-"""
 
 import polars as pl
 import pandas as pd
 import os
 import glob
+import re
+from datetime import datetime
 from tqdm import tqdm
 import warnings
 
@@ -33,6 +19,10 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 UFS_PERMITIDAS = ["PA", "MT", "GO", "AM", "MS", "RO", "TO", "DF", "RR", "AC", "AP"]
 LIMITE_EXCEL = 1_048_000
 
+# (Opcional) Override manual, se quiser travar quais semanas comparar:
+SEMANA_ATUAL_OVERRIDE = None   # ex: r"...\Semana_50_2025"
+SEMANA_ANT_OVERRIDE   = None   # ex: r"...\Semana_49_2025"
+
 # COLUNAS
 COL_PDD_ENTREGA = "PDD de Entrega"
 COL_ESTADO_ENTREGA = "Estado de Entrega"
@@ -41,24 +31,125 @@ COL_ETAPA_6 = "Tempo trânsito SC Destino->Base Entrega"
 COL_ETAPA_7 = "Tempo médio processamento Base Entrega"
 COL_ETAPA_8 = "Tempo médio Saída para Entrega->Entrega"
 COL_TEMPO_TOTAL = "Tempo Total (h)"
-
-# =================== FUNÇÕES ===================
-
-def encontrar_duas_ultimas_pastas(path):
-    pastas = [
-        os.path.join(path, p)
-        for p in os.listdir(path)
-        if os.path.isdir(os.path.join(path, p)) and "output" not in p.lower()
-    ]
-    pastas.sort(key=os.path.getmtime, reverse=True)
-    return pastas[:2]
-
-
-def ler_todos_excel(pasta):
+def _arquivos_excel_na_pasta(pasta: str):
     arquivos = [
         arq for arq in glob.glob(os.path.join(pasta, "*.xls*"))
         if not os.path.basename(arq).startswith("~$")
     ]
+    return arquivos
+
+
+def _extrair_data_do_nome(nome_pasta: str):
+    """
+    Tenta extrair uma "chave temporal" do nome da pasta.
+    Retorna datetime (sem hora) ou None.
+    Suporta:
+      - YYYY-MM-DD / YYYY_MM_DD / YYYY.MM.DD
+      - DD-MM-YYYY / DD_MM_YYYY / DD.MM.YYYY
+      - 2025W50 / 2025-W50 / 2025 W50
+      - Semana 50 2025 / 2025 Semana 50
+    """
+    s = nome_pasta.strip()
+
+    datas = []
+
+    # YYYY-MM-DD
+    for y, m, d in re.findall(r"(\d{4})[._/-](\d{2})[._/-](\d{2})", s):
+        try:
+            datas.append(datetime(int(y), int(m), int(d)))
+        except Exception:
+            pass
+
+    # DD-MM-YYYY
+    for d, m, y in re.findall(r"(\d{2})[._/-](\d{2})[._/-](\d{4})", s):
+        try:
+            datas.append(datetime(int(y), int(m), int(d)))
+        except Exception:
+            pass
+
+    if datas:
+        # Se tiver intervalo (duas datas), usa a maior (normalmente fim da semana)
+        return max(datas)
+
+    # 2025W50 / 2025-W50
+    m = re.search(r"(\d{4})\s*[-_ ]?\s*W\s*([0-5]?\d)", s, flags=re.IGNORECASE)
+    if m:
+        y = int(m.group(1))
+        w = int(m.group(2))
+        try:
+            # usa domingo da ISO-week como "fim da semana"
+            return datetime.fromisocalendar(y, w, 7)
+        except Exception:
+            return None
+
+    # Semana 50 2025 / 2025 Semana 50
+    m = re.search(r"(?:semana)\s*([0-5]?\d)\s*(\d{4})", s, flags=re.IGNORECASE)
+    if m:
+        w = int(m.group(1))
+        y = int(m.group(2))
+        try:
+            return datetime.fromisocalendar(y, w, 7)
+        except Exception:
+            return None
+
+    m = re.search(r"(\d{4})\s*(?:semana)\s*([0-5]?\d)", s, flags=re.IGNORECASE)
+    if m:
+        y = int(m.group(1))
+        w = int(m.group(2))
+        try:
+            return datetime.fromisocalendar(y, w, 7)
+        except Exception:
+            return None
+
+    return None
+
+
+def encontrar_duas_ultimas_pastas(path: str):
+    """
+    Versão robusta:
+    1) ignora "Output"
+    2) só considera pastas com Excel
+    3) ordena por data no nome; fallback: mtime do Excel mais recente
+    """
+    candidatos = []
+
+    for p in os.listdir(path):
+        full = os.path.join(path, p)
+        if not os.path.isdir(full):
+            continue
+        if "output" in p.lower():
+            continue
+
+        arquivos = _arquivos_excel_na_pasta(full)
+        if not arquivos:
+            continue
+
+        chave_nome = _extrair_data_do_nome(p)
+        if chave_nome is not None:
+            chave = chave_nome
+            fonte = "nome_da_pasta"
+        else:
+            ultimo_mtime = max(os.path.getmtime(a) for a in arquivos)
+            chave = datetime.fromtimestamp(ultimo_mtime)
+            fonte = "mtime_do_excel"
+
+        candidatos.append((chave, full, p, fonte))
+
+    candidatos.sort(key=lambda x: x[0], reverse=True)
+
+    print("\n📅 Pastas candidatas (ordenadas pela chave temporal):")
+    if not candidatos:
+        print("  (nenhuma pasta válida com Excel encontrada)")
+        return []
+
+    for chave, _, nome, fonte in candidatos[:20]:
+        print(f"  - {nome} | chave={chave.strftime('%Y-%m-%d %H:%M:%S')} | fonte={fonte}")
+
+    return [c[1] for c in candidatos[:2]]
+
+
+def ler_todos_excel(pasta):
+    arquivos = _arquivos_excel_na_pasta(pasta)
 
     if not arquivos:
         print(f"⚠️ Nenhum arquivo Excel encontrado em: {pasta}")
@@ -67,16 +158,22 @@ def ler_todos_excel(pasta):
     print(f"\n📂 Lendo planilhas da pasta: {os.path.basename(pasta)}")
     dfs = []
 
-    for arq in tqdm(arquivos, desc="📊 Processando arquivos", unit="arquivo"):
+    pbar = tqdm(arquivos, desc="📊 Processando arquivos", unit="arquivo")
+    for arq in pbar:
+        nome = os.path.basename(arq)
+        pbar.set_postfix_str(nome[:60])
         try:
             df = pl.read_excel(arq)
             dfs.append(df)
         except Exception as e:
-            print(f"⚠️ Erro ao ler {os.path.basename(arq)}: {e}")
+            print(f"⚠️ Erro ao ler {nome}: {e}")
+
+    if not dfs:
+        print("❌ Nenhum arquivo foi lido com sucesso.")
+        return None
 
     final = pl.concat(dfs, how="vertical")
     final = final.with_columns([pl.col(c).cast(pl.Utf8, strict=False) for c in final.columns])
-
     return final
 
 
@@ -102,7 +199,6 @@ def limpar_coluna_num(df, col):
 
 
 def calcular_tempo_medio(df):
-
     for col in [COL_ETAPA_6, COL_ETAPA_7, COL_ETAPA_8]:
         if col not in df.columns:
             df = df.with_columns(pl.lit(0).alias(col))
@@ -153,7 +249,6 @@ def gerar_comparativo(ant, atual):
 
 
 def calcular_media_por_dia(df):
-
     if COL_DATA not in df.columns:
         return None
 
@@ -172,7 +267,6 @@ def calcular_media_por_dia(df):
 
 
 def separar_por_data(df):
-
     if COL_DATA not in df.columns:
         return {}
 
@@ -204,20 +298,15 @@ def exportar_base_consolidada(writer, df):
 
     for i in range(abas):
         ini = i * LIMITE_EXCEL
-        fim = min((i + 1)*LIMITE_EXCEL, total)
+        fim = min((i + 1) * LIMITE_EXCEL, total)
         aba = f"Base Consolidada {i+1}"
         df.slice(ini, fim - ini).to_pandas().to_excel(writer, aba, index=False)
 
 
-# =================================================================
-# 🔥 RESUMO EXECUTIVO COM TRATAMENTO DE None (v2.6.1)
-# =================================================================
-
 def mostrar_resumo_executivo(comp_df, sem_at_df, media_dia_df=None):
-
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("📊 --- RESUMO EXECUTIVO ---".center(70))
-    print("="*70)
+    print("=" * 70)
 
     if not isinstance(comp_df, pl.DataFrame):
         comp_df = pl.from_pandas(comp_df)
@@ -227,38 +316,26 @@ def mostrar_resumo_executivo(comp_df, sem_at_df, media_dia_df=None):
 
     bases = comp_df.filter(pl.col("Base Entrega") != "TOTAL GERAL")
 
-    # ------------------------------
-    # MAIOR PIORA (COM TRATAMENTO)
-    # ------------------------------
     piora = bases.sort("Tempo Total Δ (h)", descending=True).head(1)
-
     if not piora.is_empty():
-        delta = piora['Tempo Total Δ (h)'][0]
+        delta = piora["Tempo Total Δ (h)"][0]
         delta = 0 if delta is None else float(delta)
         print(f"🟥 MAIOR PIORA: {piora['Base Entrega'][0]} (+{delta:.2f}h)")
 
-    # ------------------------------
-    # MAIOR MELHORA (COM TRATAMENTO)
-    # ------------------------------
     melhora = bases.sort("Tempo Total Δ (h)").head(1)
-
     if not melhora.is_empty():
-        delta = melhora['Tempo Total Δ (h)'][0]
+        delta = melhora["Tempo Total Δ (h)"][0]
         delta = 0 if delta is None else float(delta)
         print(f"🟩 MAIOR MELHORA: {melhora['Base Entrega'][0]} ({delta:.2f}h)")
 
-    # ------------------------------
-    # COMPARATIVO GERAL
-    # ------------------------------
-    print("\n" + "-"*70)
+    print("\n" + "-" * 70)
     print("📦 COMPARATIVO GERAL — Semana Atual vs Anterior".center(70))
-    print("-"*70)
+    print("-" * 70)
 
     ant = comp_df.filter(pl.col("Base Entrega") == "TOTAL GERAL")
     at = sem_at_df.filter(pl.col("Base Entrega") == "TOTAL GERAL")
 
     if not ant.is_empty() and not at.is_empty():
-
         def seta(v): return "↑" if v > 0 else "↓"
 
         e6 = at["Etapa 6 (h)"][0]
@@ -276,25 +353,20 @@ def mostrar_resumo_executivo(comp_df, sem_at_df, media_dia_df=None):
         print(f"Etapa 7:       {e7:.2f}h ({seta(d7)}{abs(d7):.2f}h)")
         print(f"Etapa 8:       {e8:.2f}h ({seta(d8)}{abs(d8):.2f}h)")
 
-    # ------------------------------
-    # TOP 5 COM VARIAÇÃO Δ
-    # ------------------------------
-    print("\n" + "-"*70)
+    print("\n" + "-" * 70)
     print("🚨 TOP 5 OFENSORES (com Δ)".center(70))
-    print("-"*70)
+    print("-" * 70)
 
     def top5(col, titulo):
         print(f"\n{titulo}:")
-        at = sem_at_df.filter(pl.col("Base Entrega") != "TOTAL GERAL")
-
-        top = at.sort(col, descending=True).head(5)
+        at_local = sem_at_df.filter(pl.col("Base Entrega") != "TOTAL GERAL")
+        top = at_local.sort(col, descending=True).head(5)
 
         for row in top.iter_rows(named=True):
             base = row["Base Entrega"]
             atual = row[col]
 
             comp_row = comp_df.filter(pl.col("Base Entrega") == base)
-
             if comp_row.is_empty():
                 print(f"  - {base}: {atual:.2f}h (Δ N/A)")
                 continue
@@ -302,23 +374,20 @@ def mostrar_resumo_executivo(comp_df, sem_at_df, media_dia_df=None):
             nome_delta = f"{col.replace(' (h)', '')} Δ (h)"
             delta = comp_row[nome_delta][0]
 
-            if delta is None or delta != delta:  # None ou NaN
+            if delta is None or delta != delta:
                 print(f"  - {base}: {atual:.2f}h (Δ N/A)")
             else:
-                seta = "↑" if delta > 0 else "↓"
-                print(f"  - {base}: {atual:.2f}h ({seta}{abs(delta):.2f}h)")
+                s = "↑" if delta > 0 else "↓"
+                print(f"  - {base}: {atual:.2f}h ({s}{abs(delta):.2f}h)")
 
     top5("Etapa 6 (h)", "🔹 TOP 5 - ETAPA 6 (SC Destino -> Base Entrega)")
     top5("Etapa 7 (h)", "🔹 TOP 5 - ETAPA 7 (Processamento na Base)")
     top5("Etapa 8 (h)", "🔹 TOP 5 - ETAPA 8 (Saída para Entrega)")
 
-    # ------------------------------
-    # RESUMO DIÁRIO
-    # ------------------------------
     if media_dia_df is not None:
-        print("\n" + "-"*70)
+        print("\n" + "-" * 70)
         print("📆 MÉDIAS DIÁRIAS — Semana Atual".center(70))
-        print("-"*70)
+        print("-" * 70)
 
         for row in media_dia_df.iter_rows(named=True):
             print(f"\n📅 {row['Data']}")
@@ -327,20 +396,28 @@ def mostrar_resumo_executivo(comp_df, sem_at_df, media_dia_df=None):
             print(f"  - Etapa 8: {row['Etapa 8 (h)']:.2f}h")
             print(f"  - Tempo Total: {row['Tempo Total (h)']:.2f}h")
 
-    print("="*70)
-
-
-# =================== MAIN ===================
-
+    print("=" * 70)
 def main():
     print("\n🚀 Iniciando análise...")
 
-    pastas = encontrar_duas_ultimas_pastas(BASE_DIR)
-    if len(pastas) < 2:
-        print("❌ Não há duas semanas para comparar.")
-        return
+    # Override manual (se preenchido)
+    if SEMANA_ATUAL_OVERRIDE and SEMANA_ANT_OVERRIDE:
+        sem_atual_pasta = SEMANA_ATUAL_OVERRIDE
+        sem_ant_pasta = SEMANA_ANT_OVERRIDE
+        print("\n🧷 Override manual ligado:")
+        print(f"  - Semana ATUAL:    {os.path.basename(sem_atual_pasta)}")
+        print(f"  - Semana ANTERIOR: {os.path.basename(sem_ant_pasta)}")
+    else:
+        pastas = encontrar_duas_ultimas_pastas(BASE_DIR)
+        if len(pastas) < 2:
+            print("❌ Não há duas semanas válidas (pastas com Excel) para comparar.")
+            return
 
-    sem_atual_pasta, sem_ant_pasta = pastas[0], pastas[1]
+        sem_atual_pasta, sem_ant_pasta = pastas[0], pastas[1]
+
+        print("\n✅ Semanas selecionadas para comparação:")
+        print(f"  - Semana ATUAL:    {os.path.basename(sem_atual_pasta)}")
+        print(f"  - Semana ANTERIOR: {os.path.basename(sem_ant_pasta)}")
 
     df_atual = ler_todos_excel(sem_atual_pasta)
     df_ant = ler_todos_excel(sem_ant_pasta)
@@ -362,14 +439,13 @@ def main():
 
     output = os.path.join(OUTPUT_DIR, "Comparativo_ShippingTime_PorData.xlsx")
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-
         comp.to_pandas().to_excel(writer, "Comparativo Semanal", index=False)
 
         if media_dia is not None:
             media_dia.to_pandas().to_excel(writer, "Média por Dia", index=False)
 
         for d, df_dia in por_data.items():
-            aba = d.replace("/", "-")[:31]
+            aba = str(d).replace("/", "-")[:31]
             df_dia.to_pandas().to_excel(writer, aba, index=False)
 
         exportar_base_consolidada(writer, df_atual_limpo)
