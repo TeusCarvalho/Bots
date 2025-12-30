@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # 🚀 T-0 - Processamento Consolidado (Lê todas as planilhas) — v1.9 (SLA por dia e prazo de coleta)
+
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -19,6 +20,9 @@ COL_STATUS_ENTREGA = 'Status de Entrega'
 COL_SIGNED = 'T日签收率-已签收量'
 COL_SHOULD = 'T日签收率-应签收量'
 COL_PRAZO_COLETA = 'Horário de término do prazo de coleta'  # NOVA COLUNA
+
+# ✅ ALTERAÇÃO: quantidade de bases nos rankings
+TOP_N_BASES = 10
 
 # --- Variações para mapear colunas (PT/中文) ---
 VARIACOES = {
@@ -197,15 +201,18 @@ class ReportProcessor:
         _, sla_geral = self._sla_por_base_fallback_status(df)
         return sla_geral
 
-    def _mostrar_top5(self, grp: pd.DataFrame, sla_geral: float):
+    # ✅ ALTERAÇÃO: generaliza Top N (antes era Top 5)
+    def _mostrar_topn(self, grp: pd.DataFrame, sla_geral: float, n: int = 10):
         print(
-            "\n📊 --- SLA por Base (usando 已签收量/应签收量) ---" if 'Deveriam' in grp.columns else "\n📊 --- SLA por Base ---")
+            "\n📊 --- SLA por Base (usando 已签收量/应签收量) ---" if 'Deveriam' in grp.columns else "\n📊 --- SLA por Base ---"
+        )
+
         grp_ord = grp.copy()
         grp_ord['_ord_sla'] = grp_ord['SLA (%)'].fillna(-1)
 
-        top5 = grp_ord.sort_values(['_ord_sla', 'Entregues', 'Deveriam'], ascending=[False, False, False]).head(5)
+        topn = grp_ord.sort_values(['_ord_sla', 'Entregues', 'Deveriam'], ascending=[False, False, False]).head(n)
         base_validas = grp_ord[grp_ord['Deveriam'] > 0].copy()
-        worst5 = base_validas.sort_values(['SLA (%)', 'Deveriam'], ascending=[True, False]).head(5)
+        worstn = base_validas.sort_values(['SLA (%)', 'Deveriam'], ascending=[True, False]).head(n)
 
         def _fmt(df_show: pd.DataFrame) -> pd.DataFrame:
             out = df_show[[COL_NOME_BASE, 'Entregues', 'Deveriam', 'SLA (%)']].copy()
@@ -214,14 +221,14 @@ class ReportProcessor:
             out['SLA (%)'] = out['SLA (%)'].map(lambda x: f"{x:.2f}%" if pd.notna(x) else "n/d")
             return out
 
-        print("\n🥇 Top 5 Melhores Bases:")
-        print(_fmt(top5).to_string(index=False))
+        print(f"\n🥇 Top {n} Melhores Bases:")
+        print(_fmt(topn).to_string(index=False))
 
-        print("\n🟥 Top 5 Piores Bases (com demanda):")
-        if worst5.empty:
+        print(f"\n🟥 Top {n} Piores Bases (com demanda):")
+        if worstn.empty:
             print("Nenhuma base com 'Deveriam' > 0 encontrada.")
         else:
-            print(_fmt(worst5).to_string(index=False))
+            print(_fmt(worstn).to_string(index=False))
 
         if pd.notna(sla_geral):
             print(f"\n📌 SLA Geral (Σ Entregues / Σ Deveriam): {sla_geral:.2f}%")
@@ -251,7 +258,6 @@ class ReportProcessor:
 
             # Agrupa pelo horário de prazo de coleta e calcula o SLA para cada grupo
             try:
-                # Dropna=False garante que prazos vazios também sejam considerados
                 for prazo, grupo_df in df_arq.groupby(COL_PRAZO_COLETA, dropna=False):
                     sla_prazo = self._calcular_sla_para_df(grupo_df)
 
@@ -272,7 +278,7 @@ class ReportProcessor:
         res = self._sla_por_base_contadores(df_consolidado)
         if res is not None:
             grp, sla_geral = res
-            self._mostrar_top5(grp, sla_geral)
+            self._mostrar_topn(grp, sla_geral, n=TOP_N_BASES)  # ✅ Top 10
         else:
             print("ℹ️ Colunas T日 não encontradas. Usando fallback por Status/Remessa.")
             grp, sla_geral = self._sla_por_base_fallback_status(df_consolidado)
@@ -280,7 +286,7 @@ class ReportProcessor:
                 print("❌ Não foi possível calcular SLA (faltam colunas).")
                 print(f"Colunas disponíveis: {list(df_consolidado.columns)}")
                 return
-            self._mostrar_top5(grp, sla_geral)
+            self._mostrar_topn(grp, sla_geral, n=TOP_N_BASES)  # ✅ Top 10
 
 
 # ======================================================

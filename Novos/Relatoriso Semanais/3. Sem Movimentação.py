@@ -97,6 +97,12 @@ def _wrap(s: str, w=100):
         )
     )
 
+def _safe_pct(num: float, den: float) -> float:
+    try:
+        return round((num / den) * 100, 2) if den else 0.0
+    except Exception:
+        return 0.0
+
 
 # ======================================================
 # 🧠 CORREÇÃO SC/DC — VERSÃO FINAL
@@ -137,6 +143,101 @@ def _extract_sc_from_base(base: str) -> str:
         return f"{uf} {cidade}"
 
     return b
+
+
+# ======================================================
+# ✅ NOVO: Monta Top10 enriquecido (pior aging + % problemáticos + top motivo)
+# ======================================================
+def _build_top10_enriquecido(df_sorted: pd.DataFrame, df_raw: pd.DataFrame, col_problema: str) -> pd.DataFrame:
+    """
+    df_sorted: agregado por base (tem colunas 6/7/10/14/30/Total e SC)
+    df_raw   : granularidade pacote (já filtrado por regional+aging) e com SC
+    col_problema: coluna do "nome de pacote problemático"
+    """
+    aging_cols = [c for c in ["6 dias", "7 dias", "10 dias", "14 dias", "30 dias"] if c in df_sorted.columns]
+
+    top10 = df_sorted.head(10).copy()
+    if top10.empty:
+        return top10
+
+    # total por SC na base bruta (para % problemático)
+    if "SC" in df_raw.columns:
+        total_sc = df_raw.groupby("SC").size().to_dict()
+    else:
+        total_sc = {}
+
+    # problemáticos na base bruta
+    df_prob = pd.DataFrame()
+    has_prob_col = col_problema in df_raw.columns
+
+    if has_prob_col:
+        sprob = (
+            df_raw[col_problema]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+        mask_prob = sprob.ne("") & (~sprob.str.lower().isin(["nan", "none"]))
+        df_prob = df_raw.loc[mask_prob].copy()
+
+    rows = []
+    for _, r in top10.iterrows():
+        sc = r.get("SC", "N/D")
+        total = int(r.get("Total", 0))
+
+        # pior bucket (aging) dentro da base
+        bucket_pior = "N/D"
+        bucket_qtd = 0
+        bucket_pct = 0.0
+        if aging_cols:
+            # pega coluna com maior valor
+            vals = {c: int(r.get(c, 0)) for c in aging_cols}
+            bucket_pior = max(vals, key=vals.get) if vals else "N/D"
+            bucket_qtd = int(vals.get(bucket_pior, 0))
+            bucket_pct = _safe_pct(bucket_qtd, total)
+
+        # problemáticos por SC
+        prob_qtd = 0
+        prob_pct = 0.0
+        top_motivo = ""
+        top_motivo_qtd = 0
+        top_motivo_pct = 0.0
+
+        if has_prob_col and not df_prob.empty and sc != "N/D":
+            df_sc_prob = df_prob[df_prob["SC"] == sc].copy()
+            prob_qtd = int(len(df_sc_prob))
+            prob_pct = _safe_pct(prob_qtd, total_sc.get(sc, total))
+
+            if prob_qtd:
+                vc = (
+                    df_sc_prob[col_problema]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                )
+                vc = vc[vc.ne("")]
+                if len(vc):
+                    vc_counts = vc.value_counts()
+                    top_motivo = str(vc_counts.index[0])
+                    top_motivo_qtd = int(vc_counts.iloc[0])
+                    top_motivo_pct = _safe_pct(top_motivo_qtd, prob_qtd)
+
+        rows.append({
+            "SC": sc,
+            "Total": total,
+            "Pior Aging": bucket_pior,
+            "Qtd Pior Aging": bucket_qtd,
+            "% Pior Aging": bucket_pct,
+            "Qtd Problemáticos": prob_qtd,
+            "% Problemáticos": prob_pct,
+            "Top Motivo (Problemático)": top_motivo,
+            "Qtd Top Motivo": top_motivo_qtd,
+            "% Top Motivo": top_motivo_pct
+        })
+
+    return pd.DataFrame(rows)
+
+
 # ======================================================
 # 🧾 RELATÓRIO FINAL — DINÂMICO + DETALHE PROBLEMÁTICOS (terminal)
 # ======================================================
@@ -225,14 +326,55 @@ Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) s�
             table.add_column(c, justify="right", style="cyan" if c == "SC" else "")
         for _, r in top5.iterrows():
             table.add_row(
-                r["SC"],
-                *(str(int(r[c])) for c in cols_order[1:])
+                r.get("SC", "N/D"),
+                *(str(int(r.get(c, 0))) for c in cols_order[1:])
             )
         console.print(table)
     else:
         print(top5[cols_order].to_string(index=False))
 
+    # ======================================================
+    # ✅ NOVO: TOP 10 PIORES BASES + MOTIVO (ENRIQUECIDO)
+    # ======================================================
+    top10_enriq = _build_top10_enriquecido(df_sorted, df_raw, col_problema)
+
+    if not top10_enriq.empty:
+        if HAS_RICH:
+            console.rule("[bold]🚨 Top 10 — Piores Bases + Motivo")
+            t10 = Table(title="Top 10 — Piores Bases + Motivo", box=box.SIMPLE)
+            t10.add_column("SC", justify="left", style="cyan")
+            t10.add_column("Total", justify="right")
+            t10.add_column("Pior Aging", justify="right")
+            t10.add_column("Qtd", justify="right")
+            t10.add_column("%", justify="right")
+            t10.add_column("% Prob", justify="right")
+            t10.add_column("Top Motivo (Prob.)", justify="left")
+
+            for _, r in top10_enriq.iterrows():
+                t10.add_row(
+                    str(r["SC"]),
+                    f"{int(r['Total']):,}",
+                    str(r["Pior Aging"]),
+                    f"{int(r['Qtd Pior Aging']):,}",
+                    f"{float(r['% Pior Aging']):.1f}%",
+                    f"{float(r['% Problemáticos']):.1f}%",
+                    _wrap(str(r["Top Motivo (Problemático)"]), w=40) if r["Top Motivo (Problemático)"] else "-"
+                )
+            console.print(t10)
+        else:
+            print("\n" + "-" * 70)
+            print("🚨 TOP 10 — PIORES BASES + MOTIVO")
+            print("-" * 70)
+            for i, r in enumerate(top10_enriq.to_dict("records"), 1):
+                print(
+                    f"{i:02d}. {r['SC']} | Total={r['Total']:,} | "
+                    f"Pior={r['Pior Aging']} ({r['Qtd Pior Aging']:,}, {r['% Pior Aging']:.1f}%) | "
+                    f"Prob={r['% Problemáticos']:.1f}% | Motivo={r['Top Motivo (Problemático)'] or '-'}"
+                )
+            print("-" * 70)
+
     # ========= MOTIVOS PROBLEMÁTICOS (GERAL): Qtd + % =========
+    vc_geral = None
     if not df_prob.empty:
         if "SC" not in df_prob.columns:
             df_prob["SC"] = df_prob[col_base].apply(_extract_sc_from_base)
@@ -244,7 +386,7 @@ Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) s�
             .str.strip()
         )
         motivos_geral = motivos_geral[motivos_geral.ne("")]
-        vc = motivos_geral.value_counts().head(10)
+        vc_geral = motivos_geral.value_counts().head(10)
 
         if HAS_RICH:
             console.rule("[bold]🧾 Problemáticos — Motivos (Geral)")
@@ -254,7 +396,7 @@ Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) s�
             tgeral.add_column("%", justify="right")
 
             total_prob = int(qtd_bipe) if qtd_bipe else 0
-            for motivo, qtd in vc.items():
+            for motivo, qtd in vc_geral.items():
                 pct = (qtd / total_prob * 100) if total_prob else 0.0
                 tgeral.add_row(str(motivo), f"{int(qtd):,}", f"{pct:.1f}%")
 
@@ -264,7 +406,7 @@ Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) s�
             print("🧾 PROBLEMÁTICOS — MOTIVOS (GERAL) — TOP 10")
             print("-" * 70)
             total_prob = int(qtd_bipe) if qtd_bipe else 0
-            for motivo, qtd in vc.items():
+            for motivo, qtd in vc_geral.items():
                 pct = (qtd / total_prob * 100) if total_prob else 0.0
                 print(f"- {motivo}: {int(qtd):,} ({pct:.1f}%)")
             print("-" * 70)
@@ -328,18 +470,47 @@ Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) s�
             else:
                 print("Nenhum pacote problemático encontrado para detalhamento.")
 
-    # ========= GERAR EXCEL COMPLETO =========
-    try:
-        df_sorted.to_excel(output_excel_path, index=False)
+    # ======================================================
+    # ✅ ALTERAÇÃO: GERAR EXCEL COM ABAS (mantém o mesmo arquivo)
+    # ======================================================
+    if not SAVE_EXCEL:
         if HAS_RICH:
-            console.print(f"[green]📁 Planilha única salva em: {output_excel_path}")
+            console.print("[yellow]SAVE_EXCEL=False — Excel não será gerado.")
         else:
-            print(f"\n📁 Planilha única salva em: {output_excel_path}")
+            print("SAVE_EXCEL=False — Excel não será gerado.")
+        return
+
+    try:
+        with pd.ExcelWriter(output_excel_path, engine="xlsxwriter") as writer:
+            # Aba principal (tudo)
+            df_sorted.to_excel(writer, sheet_name="Resumo Bases", index=False)
+
+            # Top10 enriquecido
+            if top10_enriq is not None and not top10_enriq.empty:
+                top10_enriq.to_excel(writer, sheet_name="Top10 Bases + Motivo", index=False)
+
+            # Motivos geral
+            if vc_geral is not None:
+                df_motivos = (
+                    vc_geral.reset_index()
+                    .rename(columns={"index": "Motivo", 0: "Qtd"})
+                )
+                total_prob = int(qtd_bipe) if qtd_bipe else 0
+                df_motivos["%"] = df_motivos["Qtd"].apply(lambda x: round((x / total_prob) * 100, 2) if total_prob else 0.0)
+                df_motivos.to_excel(writer, sheet_name="Motivos Geral", index=False)
+
+        if HAS_RICH:
+            console.print(f"[green]📁 Planilha salva em: {output_excel_path}")
+        else:
+            print(f"\n📁 Planilha salva em: {output_excel_path}")
+
     except Exception as e:
         if HAS_RICH:
             console.print(f"[red]❌ Erro ao salvar Excel: {e}")
         else:
             print(f"❌ Erro ao salvar Excel: {e}")
+
+
 # ======================================================
 # 🚀 MAIN PRINCIPAL
 # ======================================================

@@ -31,6 +31,8 @@ COL_ETAPA_6 = "Tempo trânsito SC Destino->Base Entrega"
 COL_ETAPA_7 = "Tempo médio processamento Base Entrega"
 COL_ETAPA_8 = "Tempo médio Saída para Entrega->Entrega"
 COL_TEMPO_TOTAL = "Tempo Total (h)"
+
+
 def _arquivos_excel_na_pasta(pasta: str):
     arquivos = [
         arq for arq in glob.glob(os.path.join(pasta, "*.xls*"))
@@ -146,8 +148,6 @@ def encontrar_duas_ultimas_pastas(path: str):
         print(f"  - {nome} | chave={chave.strftime('%Y-%m-%d %H:%M:%S')} | fonte={fonte}")
 
     return [c[1] for c in candidatos[:2]]
-
-
 def ler_todos_excel(pasta):
     arquivos = _arquivos_excel_na_pasta(pasta)
 
@@ -303,6 +303,43 @@ def exportar_base_consolidada(writer, df):
         df.slice(ini, fim - ini).to_pandas().to_excel(writer, aba, index=False)
 
 
+# =================== NOVO: TOP N PIORAS (Δ>0) ===================
+def top_n_pioras_por_etapa(comp_df: pl.DataFrame, etapa: str, n: int = 10) -> pl.DataFrame:
+    """
+    Retorna TOP N piores (Δ>0) por etapa, usando a tabela 'comp_df' (comparativo).
+    Ordena por Δ desc (maior piora primeiro).
+    """
+    base_col = "Base Entrega"
+    col_ant = f"{etapa} (h)"
+    col_atual = f"{etapa} (h)_Atual"
+    col_delta = f"{etapa} Δ (h)"
+
+    for c in [base_col, col_ant, col_atual, col_delta]:
+        if c not in comp_df.columns:
+            return pl.DataFrame()
+
+    df = (
+        comp_df
+        .filter(pl.col(base_col) != "TOTAL GERAL")
+        .with_columns([
+            pl.col(col_ant).cast(pl.Float64, strict=False),
+            pl.col(col_atual).cast(pl.Float64, strict=False),
+            pl.col(col_delta).cast(pl.Float64, strict=False),
+        ])
+        .filter(pl.col(col_delta) > 0)  # piora = aumento
+        .sort(col_delta, descending=True)
+        .head(n)
+        .with_row_index("Rank", offset=1)
+        .select(["Rank", base_col, col_ant, col_atual, col_delta])
+        .rename({
+            col_ant: f"{etapa} Semana Ant (h)",
+            col_atual: f"{etapa} Semana Atual (h)",
+            col_delta: f"{etapa} Δ (h)"
+        })
+    )
+    return df
+
+
 def mostrar_resumo_executivo(comp_df, sem_at_df, media_dia_df=None):
     print("\n" + "=" * 70)
     print("📊 --- RESUMO EXECUTIVO ---".center(70))
@@ -353,36 +390,33 @@ def mostrar_resumo_executivo(comp_df, sem_at_df, media_dia_df=None):
         print(f"Etapa 7:       {e7:.2f}h ({seta(d7)}{abs(d7):.2f}h)")
         print(f"Etapa 8:       {e8:.2f}h ({seta(d8)}{abs(d8):.2f}h)")
 
+    # =================== NOVO: TOP 10 PIORAS (Δ>0) ETAPA 7 e 8 ===================
     print("\n" + "-" * 70)
-    print("🚨 TOP 5 OFENSORES (com Δ)".center(70))
+    print("🚨 TOP 10 PIOR VARIAÇÃO (Δ>0) — Etapas 7 e 8".center(70))
     print("-" * 70)
 
-    def top5(col, titulo):
-        print(f"\n{titulo}:")
-        at_local = sem_at_df.filter(pl.col("Base Entrega") != "TOTAL GERAL")
-        top = at_local.sort(col, descending=True).head(5)
+    def print_top_pioras(etapa: str, n: int = 10):
+        df_top = top_n_pioras_por_etapa(comp_df, etapa, n=n)
+        if df_top.is_empty():
+            print(f"\n{etapa}: (sem dados / colunas ausentes / nenhuma piora Δ>0)")
+            return
 
-        for row in top.iter_rows(named=True):
+        print(f"\n🔸 {etapa} — TOP {min(n, df_top.height)} (maior aumento vs semana anterior):")
+        for row in df_top.iter_rows(named=True):
             base = row["Base Entrega"]
-            atual = row[col]
+            ant_v = row.get(f"{etapa} Semana Ant (h)")
+            at_v = row.get(f"{etapa} Semana Atual (h)")
+            dv = row.get(f"{etapa} Δ (h)")
 
-            comp_row = comp_df.filter(pl.col("Base Entrega") == base)
-            if comp_row.is_empty():
-                print(f"  - {base}: {atual:.2f}h (Δ N/A)")
-                continue
+            def fmt(x):
+                if x is None or (isinstance(x, float) and x != x):
+                    return "N/A"
+                return f"{float(x):.2f}h"
 
-            nome_delta = f"{col.replace(' (h)', '')} Δ (h)"
-            delta = comp_row[nome_delta][0]
+            print(f"  {int(row['Rank']):02d}. {base}: {fmt(at_v)} (antes {fmt(ant_v)} | ↑{fmt(dv)})")
 
-            if delta is None or delta != delta:
-                print(f"  - {base}: {atual:.2f}h (Δ N/A)")
-            else:
-                s = "↑" if delta > 0 else "↓"
-                print(f"  - {base}: {atual:.2f}h ({s}{abs(delta):.2f}h)")
-
-    top5("Etapa 6 (h)", "🔹 TOP 5 - ETAPA 6 (SC Destino -> Base Entrega)")
-    top5("Etapa 7 (h)", "🔹 TOP 5 - ETAPA 7 (Processamento na Base)")
-    top5("Etapa 8 (h)", "🔹 TOP 5 - ETAPA 8 (Saída para Entrega)")
+    print_top_pioras("Etapa 7", n=10)
+    print_top_pioras("Etapa 8", n=10)
 
     if media_dia_df is not None:
         print("\n" + "-" * 70)
@@ -437,9 +471,19 @@ def main():
     media_dia = calcular_media_por_dia(df_atual_limpo)
     por_data = separar_por_data(df_atual_limpo)
 
+    # =================== NOVO: TOP 10 PIORAS (Δ>0) para exportar no Excel ===================
+    top10_e7 = top_n_pioras_por_etapa(comp, "Etapa 7", n=10)
+    top10_e8 = top_n_pioras_por_etapa(comp, "Etapa 8", n=10)
+
     output = os.path.join(OUTPUT_DIR, "Comparativo_ShippingTime_PorData.xlsx")
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         comp.to_pandas().to_excel(writer, "Comparativo Semanal", index=False)
+
+        # Abas novas (Top 10 pioras)
+        if not top10_e7.is_empty():
+            top10_e7.to_pandas().to_excel(writer, "Top10 Piora Etapa 7", index=False)
+        if not top10_e8.is_empty():
+            top10_e8.to_pandas().to_excel(writer, "Top10 Piora Etapa 8", index=False)
 
         if media_dia is not None:
             media_dia.to_pandas().to_excel(writer, "Média por Dia", index=False)

@@ -9,8 +9,9 @@ import multiprocessing
 import logging
 import shutil
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from concurrent.futures import ThreadPoolExecutor
+from typing import List, Optional, Tuple
 
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
@@ -61,7 +62,7 @@ EXTS = (".xlsx", ".xls", ".csv")
 # ============================================================
 # 🔧 Normalização para garantir JOIN
 # ============================================================
-def normalizar(s):
+def normalizar(s) -> str:
     if s is None:
         return ""
     s = str(s).upper().strip()
@@ -70,26 +71,43 @@ def normalizar(s):
     while "  " in s:
         s = s.replace("  ", " ")
     return s
-
-
 # ============================================================
-# 🗓️ Cálculo de data inteligente (v2.8)
+# 🗓️ Período inteligente
+# - Seg: considera Sex+Sáb+Dom
+# - Ter–Sex: considera Ontem
+# - Sáb/Dom: não roda
 # ============================================================
-def calcular_data_base():
+def calcular_periodo_base() -> Optional[Tuple[date, date, List[date]]]:
     hoje = datetime.now().date()
     dia = hoje.weekday()  # 0=Seg, 1=Ter, ..., 5=Sáb, 6=Dom
 
-    # Sábado e Domingo → NÃO RODAR
     if dia in (5, 6):
         logging.warning("⛔ Hoje é sábado ou domingo. Execução cancelada.")
         return None
 
-    # Segunda → pegar sexta-feira
-    if dia == 0:
-        return hoje - timedelta(days=3)
+    fim = hoje - timedelta(days=1)  # fecha sempre em "ontem"
 
-    # Terça a Sexta → ontem
-    return hoje - timedelta(days=1)
+    if dia == 0:  # segunda
+        inicio = hoje - timedelta(days=3)  # sexta
+    else:
+        inicio = fim  # ontem
+
+    dias = (fim - inicio).days
+    datas = [inicio + timedelta(days=i) for i in range(dias + 1)]
+    return inicio, fim, datas
+
+
+def formatar_periodo(inicio: date, fim: date) -> str:
+    if inicio == fim:
+        return inicio.strftime("%d/%m/%Y")
+    return f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}"
+
+
+def formatar_lista_dias(datas: List[date]) -> str:
+    # Ex.: "Sex 27/12, Sáb 28/12, Dom 29/12"
+    dias_pt = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    partes = [f"{dias_pt[d.weekday()]} {d.strftime('%d/%m')}" for d in datas]
+    return ", ".join(partes)
 
 
 # ============================================================
@@ -103,7 +121,7 @@ def cor_percentual(p: float) -> str:
     return "🟢"
 
 
-def arquivar_relatorios_antigos(pasta_origem, pasta_destino, prefixo):
+def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo: str) -> None:
     os.makedirs(pasta_destino, exist_ok=True)
     for arquivo in os.listdir(pasta_origem):
         if arquivo.startswith(prefixo) and arquivo.endswith(".xlsx"):
@@ -127,7 +145,7 @@ def ler_planilha_rapido(caminho: str) -> pl.DataFrame:
         return pl.DataFrame()
 
 
-def consolidar_planilhas(pasta_entrada):
+def consolidar_planilhas(pasta_entrada: str) -> pl.DataFrame:
     arquivos = [
         os.path.join(pasta_entrada, f)
         for f in os.listdir(pasta_entrada)
@@ -147,6 +165,10 @@ def consolidar_planilhas(pasta_entrada):
     return pl.concat(validos, how="vertical_relaxed")
 
 
+# ============================================================
+# ✅ CORREÇÃO AQUI:
+# Lida com "26/12/2025  23:59:59" (espaço duplo) e converte para Date
+# ============================================================
 def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
     if coluna not in df.columns:
         raise KeyError(f"Coluna '{coluna}' não encontrada.")
@@ -160,29 +182,49 @@ def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
         return df.with_columns(pl.col(coluna).dt.date().alias(coluna))
 
     if tipo == pl.Utf8:
+        # normaliza espaços: qualquer sequência de whitespace vira 1 espaço
+        s = (
+            pl.col(coluna)
+            .cast(pl.Utf8)
+            .str.strip_chars()
+            .str.replace_all(r"\s+", " ")
+        )
+
         formatos = [
-            "%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y",
-            "%d/%m/%Y %H:%M:%S"
+            "%d/%m/%Y %H:%M:%S",  # seu caso principal
+            "%d/%m/%Y %H:%M",
+            "%d/%m/%Y",
+            "%Y-%m-%d",
+            "%Y/%m/%d",
+            "%d-%m-%Y",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y/%m/%d %H:%M:%S",
         ]
+
         expr = None
         for f in formatos:
-            tentativa = pl.col(coluna).str.strptime(pl.Datetime, f, strict=False)
+            tentativa = s.str.strptime(pl.Datetime, f, strict=False)
             expr = tentativa if expr is None else expr.fill_null(tentativa)
+
+        # Converte para Date (remove horas)
         return df.with_columns(expr.dt.date().alias(coluna))
 
     raise TypeError(f"Tipo inválido para coluna '{coluna}': {tipo}")
-
-
 # ============================================================
-# Envio do card via Feishu
+# Envio do card via Feishu (com período + dias)
 # ============================================================
-def enviar_card_feishu(resumo: pd.DataFrame, webhook: str, coord: str, sla: float):
+def enviar_card_feishu(
+    resumo: pd.DataFrame,
+    webhook: str,
+    coord: str,
+    sla: float,
+    periodo_txt: str,
+    dias_txt: str
+) -> bool:
     try:
         if resumo.empty:
             logging.warning(f"⚠️ Nenhuma base para {coord}")
             return False
-
-        data_card = (datetime.now() - timedelta(days=1)).strftime("%d/%m/%Y")
 
         bases = resumo["Base De Entrega"].nunique()
 
@@ -202,8 +244,9 @@ def enviar_card_feishu(resumo: pd.DataFrame, webhook: str, coord: str, sla: floa
 
         conteudo = (
             f"👤 **Coordenador:** {coord}\n"
-            f"📅 **Atualizado em:** {data_card}\n"
-            f"📈 **SLA (Ontem):** {sla:.2%}\n"
+            f"📅 **Período:** {periodo_txt}\n"
+            f"🗓️ **Dias considerados:** {dias_txt}\n"
+            f"📈 **SLA (Período):** {sla:.2%}\n"
             f"🏢 **Bases analisadas:** {bases}\n\n"
             f"🔻 **3 Piores:**\n" + "\n".join(linhas_piores) +
             "\n\n🏆 **3 Melhores:**\n" + "\n".join(linhas_melhores)
@@ -215,8 +258,7 @@ def enviar_card_feishu(resumo: pd.DataFrame, webhook: str, coord: str, sla: floa
                 "config": {"wide_screen_mode": True},
                 "header": {
                     "template": "blue",
-                    "title": {"tag": "plain_text",
-                              "content": f"SLA - Entrega no Prazo — {coord}"}
+                    "title": {"tag": "plain_text", "content": f"SLA - Entrega no Prazo — {coord}"}
                 },
                 "elements": [
                     {"tag": "div", "text": {"tag": "lark_md", "content": conteudo}},
@@ -232,34 +274,36 @@ def enviar_card_feishu(resumo: pd.DataFrame, webhook: str, coord: str, sla: floa
         r = requests.post(webhook, json=payload, timeout=15)
 
         if r.status_code != 200:
-            logging.error(
-                f"❌ ERRO ao enviar card para {coord}. Status: {r.status_code}. Resposta: {r.text}"
-            )
+            logging.error(f"❌ ERRO ao enviar card para {coord}. Status: {r.status_code}. Resposta: {r.text}")
             return False
 
         logging.info(f"📨 Card enviado para {coord}")
         return True
 
     except Exception as e:
-        logging.error(
-            f"❌ Falha no envio para {coord}. Erro: {e}. Webhook: {webhook}"
-        )
+        logging.error(f"❌ Falha no envio para {coord}. Erro: {e}. Webhook: {webhook}")
         return False
 
 
 # ============================================================
-# 🚀 Execução principal v2.8
+# 🚀 Execução principal v2.11
 # ============================================================
 if __name__ == "__main__":
-    logging.info("🚀 Iniciando processamento SLA (v2.8)...")
+    logging.info("🚀 Iniciando processamento SLA (v2.11)...")
 
     try:
-        # 0) Calcular data-base
-        data_base = calcular_data_base()
-        if data_base is None:
-            exit()
+        # 0) Período-base
+        periodo = calcular_periodo_base()
+        if periodo is None:
+            raise SystemExit(0)
 
-        logging.info(f"📅 Data usada para cálculo SLA: {data_base}")
+        inicio, fim, datas = periodo
+        periodo_txt = formatar_periodo(inicio, fim)
+        dias_txt = formatar_lista_dias(datas)
+
+        logging.info(f"📅 Período usado para cálculo SLA: {periodo_txt}")
+        logging.info(f"🗓️ Dias considerados: {dias_txt}")
+        logging.info(f"📌 Datas (ISO): {', '.join([d.strftime('%Y-%m-%d') for d in datas])}")
 
         # 1) Ler planilhas
         df = consolidar_planilhas(PASTA_ENTRADA)
@@ -268,10 +312,10 @@ if __name__ == "__main__":
         # 2) Padronizar nomes colunas
         df = df.rename({c: c.strip().upper() for c in df.columns})
 
-        # 3) Garantir conversão correta da data
+        # 3) Garantir conversão correta da data (formato "26/12/2025  23:59:59")
         df = garantir_coluna_data(df, "DATA PREVISTA DE ENTREGA")
 
-        # 4) Detectar a coluna ENTREGUE NO PRAZO
+        # 4) Detectar coluna ENTREGUE NO PRAZO
         colunas = list(df.columns)
         col_upper = [c.upper() for c in colunas]
 
@@ -294,9 +338,9 @@ if __name__ == "__main__":
             .then(1).otherwise(0).alias("_ENTREGUE_PRAZO")
         )
 
-        # 6) Filtrar somente registros da data-base
-        df_ontem = df.filter(pl.col("DATA PREVISTA DE ENTREGA") == data_base)
-        logging.info(f"📊 Registros para {data_base}: {df_ontem.height}")
+        # 6) Filtrar registros do período-base usando DATA PREVISTA DE ENTREGA (já virou Date)
+        df_periodo = df.filter(pl.col("DATA PREVISTA DE ENTREGA").is_in(datas))
+        logging.info(f"📊 Registros para {periodo_txt}: {df_periodo.height}")
 
         # 7) Carregar Excel dos coordenadores
         coord_df = pl.read_excel(PASTA_COORDENADOR).rename({
@@ -304,8 +348,8 @@ if __name__ == "__main__":
             "Coordenadores": "COORDENADOR"
         })
 
-        # 8) Normalizar nomes de base em ambos
-        df_ontem = df_ontem.with_columns(
+        # 8) Normalizar nomes de base
+        df_periodo = df_periodo.with_columns(
             pl.col("BASE DE ENTREGA").map_elements(normalizar).alias("BASE_NORM")
         )
 
@@ -313,22 +357,21 @@ if __name__ == "__main__":
             pl.col("BASE DE ENTREGA").map_elements(normalizar).alias("BASE_NORM")
         )
 
-        # 9) JOIN corrigido
-        df_ontem = df_ontem.join(coord_df, on="BASE_NORM", how="left")
+        # 9) JOIN
+        df_periodo = df_periodo.join(coord_df, on="BASE_NORM", how="left")
 
-        # Diagnóstico do JOIN
-        sem_coord = df_ontem.filter(pl.col("COORDENADOR").is_null()).height
+        sem_coord = df_periodo.filter(pl.col("COORDENADOR").is_null()).height
         logging.info(f"🧩 Registros sem coordenador após join: {sem_coord}")
 
-        # 10) Resumo por coordenador
-        if df_ontem.is_empty():
+        # 10) Resumo por base + coordenador (no período)
+        if df_periodo.is_empty():
             resumo_pd = pd.DataFrame(columns=[
                 "Base De Entrega", "COORDENADOR",
                 "Total", "Entregues no Prazo", "Fora do Prazo", "% SLA Cumprido"
             ])
         else:
             resumo = (
-                df_ontem.group_by(["BASE DE ENTREGA", "COORDENADOR"])
+                df_periodo.group_by(["BASE DE ENTREGA", "COORDENADOR"])
                 .agg([
                     pl.len().alias("Total"),
                     pl.col("_ENTREGUE_PRAZO").sum().alias("Entregues no Prazo"),
@@ -338,9 +381,7 @@ if __name__ == "__main__":
                 .sort("% SLA Cumprido", descending=True)
             )
 
-            resumo_pd = resumo.to_pandas().rename(columns={
-                "BASE DE ENTREGA": "Base De Entrega"
-            })
+            resumo_pd = resumo.to_pandas().rename(columns={"BASE DE ENTREGA": "Base De Entrega"})
 
         # 11) Exportar Excel
         arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, "Resumo_Consolidado_")
@@ -348,7 +389,7 @@ if __name__ == "__main__":
         with pd.ExcelWriter(ARQUIVO_SAIDA, engine="openpyxl") as w:
             resumo_pd.to_excel(w, index=False, sheet_name="Resumo SLA")
 
-        # 12) Enviar cards
+        # 12) Enviar cards (SLA ponderado por volume)
         for coord, webhook in COORDENADOR_WEBHOOKS.items():
             sub = resumo_pd[resumo_pd["COORDENADOR"] == coord]
 
@@ -356,10 +397,13 @@ if __name__ == "__main__":
                 logging.warning(f"⚠️ Nenhuma base encontrada para {coord}")
                 continue
 
-            sla = sub["% SLA Cumprido"].mean()
-            enviar_card_feishu(sub, webhook, coord, sla)
+            total = float(sub["Total"].sum()) if "Total" in sub.columns else 0.0
+            ent = float(sub["Entregues no Prazo"].sum()) if "Entregues no Prazo" in sub.columns else 0.0
+            sla = (ent / total) if total > 0 else 0.0
 
-        logging.info("🏁 Processamento concluído (v2.8)")
+            enviar_card_feishu(sub, webhook, coord, sla, periodo_txt, dias_txt)
+
+        logging.info("🏁 Processamento concluído (v2.11)")
 
     except Exception as e:
         logging.critical(f"❌ ERRO FATAL: {e}", exc_info=True)

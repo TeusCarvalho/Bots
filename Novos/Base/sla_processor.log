@@ -1280,3 +1280,180 @@ KeyError: "Coluna 'DATA PREVISTA DE ENTREGA' não encontrada."
 2025-12-16 08:26:20,753 - INFO - 📨 Card enviado para Marcos Caique
 2025-12-16 08:26:22,427 - INFO - 📨 Card enviado para Ana Cunha
 2025-12-16 08:26:22,428 - INFO - 🏁 Processamento concluído (v2.8)
+2025-12-18 09:07:38,311 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-12-18 09:07:38,311 - INFO - 📅 Data usada para cálculo SLA: 2025-12-17
+2025-12-18 09:07:44,798 - INFO - 📥 Registros carregados: 194419
+2025-12-18 09:07:44,801 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-18 09:07:44,804 - INFO - 📊 Registros para 2025-12-17: 194419
+2025-12-18 09:07:45,087 - INFO - 🧩 Registros sem coordenador após join: 5533
+2025-12-18 09:07:45,109 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251216.xlsx
+2025-12-18 09:07:48,024 - INFO - 📨 Card enviado para João Melo
+2025-12-18 09:07:49,821 - INFO - 📨 Card enviado para Johas Vieira
+2025-12-18 09:07:51,580 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-18 09:07:53,314 - INFO - 📨 Card enviado para Marcelo Medina
+2025-12-18 09:07:55,222 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-18 09:07:56,817 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-18 09:07:58,506 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-18 09:08:00,152 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-18 09:08:01,779 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-18 09:08:03,403 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-18 09:08:05,100 - INFO - 📨 Card enviado para Ana Cunha
+2025-12-18 09:08:05,102 - INFO - 🏁 Processamento concluído (v2.8)
+2025-12-19 08:33:57,677 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-12-19 08:33:57,677 - INFO - 📅 Data usada para cálculo SLA: 2025-12-18
+2025-12-19 08:34:02,366 - INFO - 📥 Registros carregados: 181806
+2025-12-19 08:34:02,368 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-19 08:34:02,372 - INFO - 📊 Registros para 2025-12-18: 181806
+2025-12-19 08:34:02,613 - INFO - 🧩 Registros sem coordenador após join: 5439
+2025-12-19 08:34:02,638 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251218.xlsx
+2025-12-19 08:34:05,433 - INFO - 📨 Card enviado para João Melo
+2025-12-19 08:34:07,114 - INFO - 📨 Card enviado para Johas Vieira
+2025-12-19 08:34:08,695 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-19 08:34:10,245 - INFO - 📨 Card enviado para Marcelo Medina
+2025-12-19 08:34:11,795 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-19 08:34:13,387 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-19 08:34:14,932 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-19 08:34:16,417 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-19 08:34:17,937 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-19 08:34:19,615 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-19 08:34:21,229 - INFO - 📨 Card enviado para Ana Cunha
+2025-12-19 08:34:21,230 - INFO - 🏁 Processamento concluído (v2.8)
+2025-12-22 10:18:33,119 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-12-22 10:18:33,132 - INFO - 📅 Data usada para cálculo SLA: 2025-12-19
+2025-12-22 10:18:39,753 - INFO - 📥 Registros carregados: 207570
+2025-12-22 10:18:39,756 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-22 10:18:39,763 - INFO - 📊 Registros para 2025-12-19: 207570
+2025-12-22 10:18:40,045 - INFO - 🧩 Registros sem coordenador após join: 2714
+2025-12-22 10:18:40,082 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251219.xlsx
+2025-12-22 10:19:01,415 - INFO - 📨 Card enviado para João Melo
+2025-12-22 10:19:31,429 - ERROR - ❌ Falha no envio para Johas Vieira. Erro: HTTPSConnectionPool(host='open.feishu.cn', port=443): Max retries exceeded with url: /open-apis/bot/v2/hook/0b907801-c73e-4de8-9f84-682d7b54f6fd (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x000002558CD7B9D0>, 'Connection to open.feishu.cn timed out. (connect timeout=15)')). Webhook: https://open.feishu.cn/open-apis/bot/v2/hook/0b907801-c73e-4de8-9f84-682d7b54f6fd
+2025-12-22 10:19:50,317 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-22 10:20:21,868 - ERROR - ❌ Falha no envio para Marcelo Medina. Erro: HTTPSConnectionPool(host='open.feishu.cn', port=443): Read timed out. (read timeout=15). Webhook: https://open.feishu.cn/open-apis/bot/v2/hook/b749fd36-d287-460e-b1e2-c78bfb4c1946
+2025-12-22 10:20:45,462 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-22 10:21:00,070 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-22 10:21:06,185 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-22 10:21:12,215 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-22 10:21:22,478 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-22 10:21:31,493 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-22 10:21:41,524 - INFO - 📨 Card enviado para Ana Cunha
+2025-12-22 10:21:41,526 - INFO - 🏁 Processamento concluído (v2.8)
+2025-12-23 08:34:55,814 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-12-23 08:34:55,814 - INFO - 📅 Data usada para cálculo SLA: 2025-12-22
+2025-12-23 08:35:00,314 - INFO - 📥 Registros carregados: 205885
+2025-12-23 08:35:00,317 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-23 08:35:00,325 - INFO - 📊 Registros para 2025-12-22: 205885
+2025-12-23 08:35:00,600 - INFO - 🧩 Registros sem coordenador após join: 5116
+2025-12-23 08:35:00,631 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251222.xlsx
+2025-12-23 08:35:03,297 - INFO - 📨 Card enviado para João Melo
+2025-12-23 08:35:04,939 - INFO - 📨 Card enviado para Johas Vieira
+2025-12-23 08:35:06,629 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-23 08:35:08,394 - INFO - 📨 Card enviado para Marcelo Medina
+2025-12-23 08:35:10,041 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-23 08:35:11,809 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-23 08:35:13,461 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-23 08:35:15,045 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-23 08:35:16,630 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-23 08:35:18,364 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-23 08:35:20,006 - INFO - 📨 Card enviado para Ana Cunha
+2025-12-23 08:35:20,008 - INFO - 🏁 Processamento concluído (v2.8)
+2025-12-24 08:15:43,114 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-12-24 08:15:43,115 - INFO - 📅 Data usada para cálculo SLA: 2025-12-23
+2025-12-24 08:15:47,346 - INFO - 📥 Registros carregados: 183330
+2025-12-24 08:15:47,350 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-24 08:15:47,358 - INFO - 📊 Registros para 2025-12-23: 183330
+2025-12-24 08:15:47,697 - INFO - 🧩 Registros sem coordenador após join: 5541
+2025-12-24 08:15:47,731 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251223.xlsx
+2025-12-24 08:15:50,905 - INFO - 📨 Card enviado para João Melo
+2025-12-24 08:15:52,671 - INFO - 📨 Card enviado para Johas Vieira
+2025-12-24 08:15:54,406 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-24 08:15:56,065 - INFO - 📨 Card enviado para Marcelo Medina
+2025-12-24 08:15:57,993 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-24 08:15:59,799 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-24 08:16:01,553 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-24 08:16:03,119 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-24 08:16:04,936 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-24 08:16:06,614 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-24 08:16:08,410 - INFO - 📨 Card enviado para Ana Cunha
+2025-12-24 08:16:08,411 - INFO - 🏁 Processamento concluído (v2.8)
+2025-12-26 08:19:13,869 - INFO - 🚀 Iniciando processamento SLA (v2.8)...
+2025-12-26 08:19:13,869 - INFO - 📅 Data usada para cálculo SLA: 2025-12-25
+2025-12-26 08:19:16,399 - INFO - 📥 Registros carregados: 115582
+2025-12-26 08:19:16,401 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-26 08:19:16,405 - INFO - 📊 Registros para 2025-12-25: 115582
+2025-12-26 08:19:16,565 - INFO - 🧩 Registros sem coordenador após join: 3607
+2025-12-26 08:19:16,576 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251224.xlsx
+2025-12-26 08:19:20,759 - INFO - 📨 Card enviado para João Melo
+2025-12-26 08:19:22,316 - INFO - 📨 Card enviado para Johas Vieira
+2025-12-26 08:19:23,836 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-26 08:19:25,514 - INFO - 📨 Card enviado para Marcelo Medina
+2025-12-26 08:19:27,106 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-26 08:19:28,646 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-26 08:19:30,224 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-26 08:19:31,770 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-26 08:19:33,375 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-26 08:19:34,935 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-26 08:19:36,474 - INFO - 📨 Card enviado para Ana Cunha
+2025-12-26 08:19:36,475 - INFO - 🏁 Processamento concluído (v2.8)
+2025-12-29 08:10:02,258 - INFO - 🚀 Iniciando processamento SLA (v2.11)...
+2025-12-29 08:10:02,259 - INFO - 📅 Período usado para cálculo SLA: 26/12/2025 a 28/12/2025
+2025-12-29 08:10:02,259 - INFO - 🗓️ Dias considerados: Sex 26/12, Sáb 27/12, Dom 28/12
+2025-12-29 08:10:02,259 - INFO - 📌 Datas (ISO): 2025-12-26, 2025-12-27, 2025-12-28
+2025-12-29 08:10:10,209 - INFO - 📥 Registros carregados: 354588
+2025-12-29 08:10:10,211 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-29 08:10:10,216 - INFO - 📊 Registros para 26/12/2025 a 28/12/2025: 354588
+2025-12-29 08:10:10,692 - INFO - 🧩 Registros sem coordenador após join: 15548
+2025-12-29 08:10:10,716 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251226.xlsx
+2025-12-29 08:10:16,057 - ERROR - ❌ Falha no envio para João Melo. Erro: HTTPSConnectionPool(host='open.feishu.cn', port=443): Max retries exceeded with url: /open-apis/bot/v2/hook/3663dd30-722c-45d6-9e3c-1d4e2838f112 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001CE502AE900>: Failed to resolve 'open.feishu.cn' ([Errno 11002] getaddrinfo failed)")). Webhook: https://open.feishu.cn/open-apis/bot/v2/hook/3663dd30-722c-45d6-9e3c-1d4e2838f112
+2025-12-29 08:10:16,060 - ERROR - ❌ Falha no envio para Johas Vieira. Erro: HTTPSConnectionPool(host='open.feishu.cn', port=443): Max retries exceeded with url: /open-apis/bot/v2/hook/0b907801-c73e-4de8-9f84-682d7b54f6fd (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001CE504487D0>: Failed to resolve 'open.feishu.cn' ([Errno 11002] getaddrinfo failed)")). Webhook: https://open.feishu.cn/open-apis/bot/v2/hook/0b907801-c73e-4de8-9f84-682d7b54f6fd
+2025-12-29 08:10:16,063 - ERROR - ❌ Falha no envio para Anderson Matheus. Erro: HTTPSConnectionPool(host='open.feishu.cn', port=443): Max retries exceeded with url: /open-apis/bot/v2/hook/261cefd4-5528-4760-b18e-49a0249718c7 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001CE50449090>: Failed to resolve 'open.feishu.cn' ([Errno 11002] getaddrinfo failed)")). Webhook: https://open.feishu.cn/open-apis/bot/v2/hook/261cefd4-5528-4760-b18e-49a0249718c7
+2025-12-29 08:10:16,065 - ERROR - ❌ Falha no envio para Marcelo Medina. Erro: HTTPSConnectionPool(host='open.feishu.cn', port=443): Max retries exceeded with url: /open-apis/bot/v2/hook/b749fd36-d287-460e-b1e2-c78bfb4c1946 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001CE50449310>: Failed to resolve 'open.feishu.cn' ([Errno 11002] getaddrinfo failed)")). Webhook: https://open.feishu.cn/open-apis/bot/v2/hook/b749fd36-d287-460e-b1e2-c78bfb4c1946
+2025-12-29 08:10:16,066 - ERROR - ❌ Falha no envio para Odária Fereira. Erro: HTTPSConnectionPool(host='open.feishu.cn', port=443): Max retries exceeded with url: /open-apis/bot/v2/hook/48c4db73-b5a4-4007-96af-f5d28301f0c1 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001CE50449590>: Failed to resolve 'open.feishu.cn' ([Errno 11002] getaddrinfo failed)")). Webhook: https://open.feishu.cn/open-apis/bot/v2/hook/48c4db73-b5a4-4007-96af-f5d28301f0c1
+2025-12-29 08:10:16,068 - ERROR - ❌ Falha no envio para Rodrigo Castro. Erro: HTTPSConnectionPool(host='open.feishu.cn', port=443): Max retries exceeded with url: /open-apis/bot/v2/hook/606ed22b-dc49-451d-9bfe-0a8829dbe76e (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001CE50449810>: Failed to resolve 'open.feishu.cn' ([Errno 11002] getaddrinfo failed)")). Webhook: https://open.feishu.cn/open-apis/bot/v2/hook/606ed22b-dc49-451d-9bfe-0a8829dbe76e
+2025-12-29 08:10:16,070 - ERROR - ❌ Falha no envio para Orlean Nascimento. Erro: HTTPSConnectionPool(host='open.feishu.cn', port=443): Max retries exceeded with url: /open-apis/bot/v2/hook/840f79b0-1eff-42fe-aae0-433c9edbad80 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001CE503B3ED0>: Failed to resolve 'open.feishu.cn' ([Errno 11002] getaddrinfo failed)")). Webhook: https://open.feishu.cn/open-apis/bot/v2/hook/840f79b0-1eff-42fe-aae0-433c9edbad80
+2025-12-29 08:10:16,072 - ERROR - ❌ Falha no envio para Jose Marlon. Erro: HTTPSConnectionPool(host='open.feishu.cn', port=443): Max retries exceeded with url: /open-apis/bot/v2/hook/95c8e4d2-27aa-4811-b6bf-ebf99cdfd42d (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001CE503B3610>: Failed to resolve 'open.feishu.cn' ([Errno 11002] getaddrinfo failed)")). Webhook: https://open.feishu.cn/open-apis/bot/v2/hook/95c8e4d2-27aa-4811-b6bf-ebf99cdfd42d
+2025-12-29 08:10:16,074 - ERROR - ❌ Falha no envio para Emerson Silva. Erro: HTTPSConnectionPool(host='open.feishu.cn', port=443): Max retries exceeded with url: /open-apis/bot/v2/hook/63751a67-efe8-40e4-b841-b290a4819836 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001CE503B3750>: Failed to resolve 'open.feishu.cn' ([Errno 11002] getaddrinfo failed)")). Webhook: https://open.feishu.cn/open-apis/bot/v2/hook/63751a67-efe8-40e4-b841-b290a4819836
+2025-12-29 08:10:16,076 - ERROR - ❌ Falha no envio para Marcos Caique. Erro: HTTPSConnectionPool(host='open.feishu.cn', port=443): Max retries exceeded with url: /open-apis/bot/v2/hook/3ddc5962-2d32-4b2d-92d9-a4bc95ac3393 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001CE503B3C50>: Failed to resolve 'open.feishu.cn' ([Errno 11002] getaddrinfo failed)")). Webhook: https://open.feishu.cn/open-apis/bot/v2/hook/3ddc5962-2d32-4b2d-92d9-a4bc95ac3393
+2025-12-29 08:10:16,078 - ERROR - ❌ Falha no envio para Ana Cunha. Erro: HTTPSConnectionPool(host='open.feishu.cn', port=443): Max retries exceeded with url: /open-apis/bot/v2/hook/b2ec868f-3149-4808-af53-9e0c6d2cd94e (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001CE503B39D0>: Failed to resolve 'open.feishu.cn' ([Errno 11002] getaddrinfo failed)")). Webhook: https://open.feishu.cn/open-apis/bot/v2/hook/b2ec868f-3149-4808-af53-9e0c6d2cd94e
+2025-12-29 08:10:16,078 - INFO - 🏁 Processamento concluído (v2.11)
+2025-12-29 08:11:12,592 - INFO - 🚀 Iniciando processamento SLA (v2.11)...
+2025-12-29 08:11:12,592 - INFO - 📅 Período usado para cálculo SLA: 26/12/2025 a 28/12/2025
+2025-12-29 08:11:12,592 - INFO - 🗓️ Dias considerados: Sex 26/12, Sáb 27/12, Dom 28/12
+2025-12-29 08:11:12,592 - INFO - 📌 Datas (ISO): 2025-12-26, 2025-12-27, 2025-12-28
+2025-12-29 08:11:20,201 - INFO - 📥 Registros carregados: 354588
+2025-12-29 08:11:20,206 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-29 08:11:20,211 - INFO - 📊 Registros para 26/12/2025 a 28/12/2025: 354588
+2025-12-29 08:11:20,658 - INFO - 🧩 Registros sem coordenador após join: 15548
+2025-12-29 08:11:20,675 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251229.xlsx
+2025-12-29 08:11:22,748 - INFO - 📨 Card enviado para João Melo
+2025-12-29 08:11:24,385 - INFO - 📨 Card enviado para Johas Vieira
+2025-12-29 08:11:26,043 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-29 08:11:27,713 - INFO - 📨 Card enviado para Marcelo Medina
+2025-12-29 08:11:29,264 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-29 08:11:30,910 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-29 08:11:32,674 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-29 08:11:34,397 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-29 08:11:35,974 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-29 08:11:37,571 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-29 08:11:39,164 - INFO - 📨 Card enviado para Ana Cunha
+2025-12-29 08:11:39,166 - INFO - 🏁 Processamento concluído (v2.11)
+2025-12-30 08:19:41,016 - INFO - 🚀 Iniciando processamento SLA (v2.11)...
+2025-12-30 08:19:41,017 - INFO - 📅 Período usado para cálculo SLA: 29/12/2025
+2025-12-30 08:19:41,017 - INFO - 🗓️ Dias considerados: Seg 29/12
+2025-12-30 08:19:41,017 - INFO - 📌 Datas (ISO): 2025-12-29
+2025-12-30 08:19:44,546 - INFO - 📥 Registros carregados: 163089
+2025-12-30 08:19:44,548 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-30 08:19:44,554 - INFO - 📊 Registros para 29/12/2025: 163089
+2025-12-30 08:19:44,793 - INFO - 🧩 Registros sem coordenador após join: 5673
+2025-12-30 08:19:44,811 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251229.xlsx
+2025-12-30 08:19:47,884 - INFO - 📨 Card enviado para João Melo
+2025-12-30 08:19:49,470 - INFO - 📨 Card enviado para Johas Vieira
+2025-12-30 08:19:51,033 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-30 08:19:52,613 - INFO - 📨 Card enviado para Marcelo Medina
+2025-12-30 08:19:54,350 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-30 08:19:55,886 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-30 08:19:57,475 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-30 08:19:59,040 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-30 08:20:02,629 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-30 08:20:04,385 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-30 08:20:06,029 - INFO - 📨 Card enviado para Ana Cunha
+2025-12-30 08:20:06,031 - INFO - 🏁 Processamento concluído (v2.11)
