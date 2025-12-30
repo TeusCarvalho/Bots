@@ -41,7 +41,7 @@ LINK_PASTA = (
     "IgCARpXmNw6wSpHnywwNSSl8AVmzz434V7O5cFKYxUNHVpI?e=pue9Kk"
 )
 
-WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/77c4243e-6876-4e1f-ab96-59003f733dce"
+WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b"
 
 # COORDENADORES
 ARQ_COORDENADORES = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"

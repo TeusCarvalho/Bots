@@ -32,8 +32,8 @@ HORAS_ATIVAS = range(8, 22)
 
 # Persistência
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR   = os.path.join(BASE_DIR, "data")
-LOGS_DIR   = os.path.join(BASE_DIR, "logs")
+DATA_DIR   = os.path.join(BASE_DIR, "../Novos/Base de Dados/data")
+LOGS_DIR   = os.path.join(BASE_DIR, "../Novos/Base de Dados/logs")
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(LOGS_DIR, exist_ok=True)
 
