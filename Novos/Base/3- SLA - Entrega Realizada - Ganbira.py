@@ -14,7 +14,7 @@ import shutil
 import unicodedata
 from datetime import datetime, timedelta, date
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Set
 
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
@@ -62,8 +62,19 @@ COORDENADOR_WEBHOOKS = {
 
 EXTS = (".xlsx", ".xls", ".csv")
 COL_DATA_BASE = "DATA PREVISTA DE ENTREGA"
+
+# ============================================================
+# ✅ NOVO: Controle de feriados nacionais
+# - PULAR_FERIADOS_NACIONAIS: remove feriados nacionais das datas consideradas
+# - PULAR_FERIADOS_EM_FDS: se False, NÃO remove feriado quando cair em sábado/domingo
+# ============================================================
+PULAR_FERIADOS_NACIONAIS = True
+PULAR_FERIADOS_EM_FDS = False
+
+# Cache por ano (evita recomputar)
+_CACHE_FERIADOS: Dict[int, Set[date]] = {}
 # =========================
-# BLOCO 2/4 — FUNÇÕES (PERÍODO / LEITURA / DATA / FALLBACK)
+# BLOCO 2/4 — FUNÇÕES (FERIADOS / PERÍODO / LEITURA / DATA / FALLBACK)
 # =========================
 
 def normalizar(s) -> str:
@@ -77,30 +88,61 @@ def normalizar(s) -> str:
     return s
 
 
-# ============================================================
-# 🗓️ Período inteligente
-# - Seg: considera Sex+Sáb+Dom
-# - Ter–Sex: considera Ontem
-# - Sáb/Dom: não roda
-# ============================================================
-def calcular_periodo_base() -> Optional[Tuple[date, date, List[date]]]:
-    hoje = datetime.now().date()
-    dia = hoje.weekday()  # 0=Seg, 1=Ter, ..., 5=Sáb, 6=Dom
+def pascoa_gregoriana(ano: int) -> date:
+    # Algoritmo de Meeus/Jones/Butcher (calendário gregoriano)
+    a = ano % 19
+    b = ano // 100
+    c = ano % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    mes = (h + l - 7 * m + 114) // 31
+    dia = ((h + l - 7 * m + 114) % 31) + 1
+    return date(ano, mes, dia)
 
-    if dia in (5, 6):
-        logging.warning("⛔ Hoje é sábado ou domingo. Execução cancelada.")
-        return None
 
-    fim = hoje - timedelta(days=1)  # fecha sempre em "ontem"
+def feriados_nacionais_br(ano: int) -> Set[date]:
+    """
+    Feriados nacionais (fixos + Paixão de Cristo + Consciência Negra 20/11).
+    Baseado no calendário oficial federal e legislação vigente. :contentReference[oaicite:1]{index=1}
+    """
+    # Fixos
+    fer = {
+        date(ano, 1, 1),    # Confraternização Universal
+        date(ano, 4, 21),   # Tiradentes
+        date(ano, 5, 1),    # Dia do Trabalho
+        date(ano, 9, 7),    # Independência
+        date(ano, 10, 12),  # N. Sra. Aparecida
+        date(ano, 11, 2),   # Finados
+        date(ano, 11, 15),  # Proclamação da República
+        date(ano, 11, 20),  # Consciência Negra
+        date(ano, 12, 25),  # Natal
+    }
 
-    if dia == 0:  # segunda
-        inicio = hoje - timedelta(days=3)  # sexta
-    else:
-        inicio = fim  # ontem
+    # Móvel: Paixão de Cristo (Sexta-feira Santa) = Páscoa - 2
+    pascoa = pascoa_gregoriana(ano)
+    fer.add(pascoa - timedelta(days=2))
 
-    dias = (fim - inicio).days
-    datas = [inicio + timedelta(days=i) for i in range(dias + 1)]
-    return inicio, fim, datas
+    return fer
+
+
+def is_feriado_nacional(d: date) -> bool:
+    if not PULAR_FERIADOS_NACIONAIS:
+        return False
+
+    if (not PULAR_FERIADOS_EM_FDS) and (d.weekday() in (5, 6)):
+        return False
+
+    ano = d.year
+    if ano not in _CACHE_FERIADOS:
+        _CACHE_FERIADOS[ano] = feriados_nacionais_br(ano)
+    return d in _CACHE_FERIADOS[ano]
 
 
 def formatar_periodo(inicio: date, fim: date) -> str:
@@ -121,6 +163,62 @@ def cor_percentual(p: float) -> str:
     elif p < 0.97:
         return "🟡"
     return "🟢"
+
+
+# ============================================================
+# 🗓️ Período inteligente + feriados nacionais
+# - Seg: considera Sex+Sáb+Dom (3 dias)
+# - Ter–Sex: considera Ontem (1 dia)
+# - Sáb/Dom: não roda
+# - Remove feriados nacionais da lista de datas
+# - Se ficar vazio, recua até achar dia(s) válido(s)
+# ============================================================
+def calcular_periodo_base() -> Optional[Tuple[date, date, List[date]]]:
+    hoje = datetime.now().date()
+    dia = hoje.weekday()  # 0=Seg, 1=Ter, ..., 5=Sáb, 6=Dom
+
+    if dia in (5, 6):
+        logging.warning("⛔ Hoje é sábado ou domingo. Execução cancelada.")
+        return None
+
+    span = 3 if dia == 0 else 1  # segunda: 3 dias; demais: 1 dia
+
+    # começa em ontem
+    fim = hoje - timedelta(days=1)
+
+    # loop: monta lista, remove feriados; se zerar, recua
+    tentativas = 0
+    while True:
+        inicio = fim - timedelta(days=span - 1)
+        datas = [inicio + timedelta(days=i) for i in range((fim - inicio).days + 1)]
+
+        if PULAR_FERIADOS_NACIONAIS:
+            feriados_removidos = [d for d in datas if is_feriado_nacional(d)]
+            datas_ok = [d for d in datas if not is_feriado_nacional(d)]
+            if feriados_removidos:
+                logging.info(
+                    "🗓️ Feriados nacionais ignorados: "
+                    + ", ".join([d.strftime("%Y-%m-%d") for d in feriados_removidos])
+                )
+        else:
+            datas_ok = datas
+
+        if datas_ok:
+            inicio_ok = min(datas_ok)
+            fim_ok = max(datas_ok)
+            return inicio_ok, fim_ok, datas_ok
+
+        # ficou vazio -> recua
+        tentativas += 1
+        if tentativas >= 15:
+            logging.warning("⚠️ Não foi possível encontrar datas válidas após recuar 15 dias. Cancelando.")
+            return None
+
+        logging.warning(
+            f"⚠️ Período ({formatar_periodo(inicio, fim)}) ficou vazio após remover feriados. "
+            f"Recuando 1 dia..."
+        )
+        fim = fim - timedelta(days=1)
 
 
 def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo: str) -> None:
@@ -167,9 +265,6 @@ def consolidar_planilhas(pasta_entrada: str) -> pl.DataFrame:
     return pl.concat(validos, how="vertical_relaxed")
 
 
-# ============================================================
-# ✅ Converte "26/12/2025  23:59:59" (espaço duplo) -> Date
-# ============================================================
 def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
     if coluna not in df.columns:
         raise KeyError(f"Coluna '{coluna}' não encontrada.")
@@ -211,11 +306,6 @@ def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
     raise TypeError(f"Tipo inválido para coluna '{coluna}': {tipo}")
 
 
-# ============================================================
-# ✅ NOVO: Fallback automático de período
-# Se o período calculado não tiver registros, recua para a última data disponível (<= fim).
-# Resolve: feriados (ex.: 01/01) ou dia sem operação.
-# ============================================================
 def ajustar_periodo_por_dados(
     df: pl.DataFrame,
     coluna_data: str,
@@ -226,16 +316,13 @@ def ajustar_periodo_por_dados(
     if df.is_empty() or coluna_data not in df.columns:
         return inicio, fim, datas
 
-    # 1) Se já tem registros, mantém
     try:
         qtd = df.filter(pl.col(coluna_data).is_in(datas)).height
         if qtd > 0:
             return inicio, fim, datas
     except Exception:
-        # se algo falhar aqui, tenta fallback do mesmo jeito
         pass
 
-    # 2) Busca a maior data <= fim
     max_le = None
     try:
         max_le = (
@@ -246,7 +333,6 @@ def ajustar_periodo_por_dados(
     except Exception:
         max_le = None
 
-    # 3) Se não existir <= fim, pega a maior data geral
     if max_le is None:
         try:
             max_le = (
@@ -263,7 +349,6 @@ def ajustar_periodo_por_dados(
     if isinstance(max_le, datetime):
         max_le = max_le.date()
 
-    # Mantém o mesmo "span" do período original (ex.: segunda -> 3 dias)
     span = (fim - inicio).days
     novo_fim = max_le
     novo_inicio = novo_fim - timedelta(days=span)
@@ -277,7 +362,7 @@ def ajustar_periodo_por_dados(
 
     logging.warning(
         f"⚠️ Nenhum registro para o período calculado ({formatar_periodo(inicio, fim)}). "
-        f"Aplicando fallback para última data disponível: {formatar_periodo(novo_inicio, novo_fim)}."
+        f"Fallback para última data disponível: {formatar_periodo(novo_inicio, novo_fim)}."
     )
 
     return novo_inicio, novo_fim, novo_datas
@@ -365,21 +450,25 @@ def enviar_card_feishu(
         logging.error(f"❌ Falha no envio para {coord}. Erro: {e}. Webhook: {webhook}")
         return False
 # =========================
-# BLOCO 4/4 — MAIN (v2.12)
+# BLOCO 4/4 — MAIN (v2.13 — feriados nacionais)
 # =========================
 
 if __name__ == "__main__":
-    logging.info("🚀 Iniciando processamento SLA (v2.12)...")
+    logging.info("🚀 Iniciando processamento SLA (v2.13 — feriados nacionais)...")
 
     try:
-        # 0) Período-base (calendário)
+        # 0) Período-base (agora já ignora feriados nacionais)
         periodo = calcular_periodo_base()
         if periodo is None:
             raise SystemExit(0)
 
         inicio, fim, datas = periodo
-        logging.info(f"📅 Período (calendário) inicial: {formatar_periodo(inicio, fim)}")
-        logging.info(f"🗓️ Dias (calendário) iniciais: {formatar_lista_dias(datas)}")
+        periodo_txt = formatar_periodo(inicio, fim)
+        dias_txt = formatar_lista_dias(datas)
+
+        logging.info(f"📅 Período (após feriados) usado para SLA: {periodo_txt}")
+        logging.info(f"🗓️ Dias considerados: {dias_txt}")
+        logging.info(f"📌 Datas (ISO): {', '.join([d.strftime('%Y-%m-%d') for d in datas])}")
 
         # 1) Ler planilhas
         df = consolidar_planilhas(PASTA_ENTRADA)
@@ -391,7 +480,7 @@ if __name__ == "__main__":
         # 3) Garantir conversão correta da data
         df = garantir_coluna_data(df, COL_DATA_BASE)
 
-        # 4) Fallback: se o período calculado vier vazio, ajusta para última data disponível (<= fim)
+        # 4) Fallback por dados (se mesmo assim vier 0)
         inicio, fim, datas = ajustar_periodo_por_dados(df, COL_DATA_BASE, inicio, fim, datas)
         periodo_txt = formatar_periodo(inicio, fim)
         dias_txt = formatar_lista_dias(datas)
@@ -425,7 +514,7 @@ if __name__ == "__main__":
             .alias("_ENTREGUE_PRAZO")
         )
 
-        # 7) Filtrar registros do período-base usando DATA PREVISTA DE ENTREGA (Date)
+        # 7) Filtrar registros do período-base
         df_periodo = df.filter(pl.col(COL_DATA_BASE).is_in(datas))
         logging.info(f"📊 Registros para {periodo_txt}: {df_periodo.height}")
 
@@ -447,7 +536,7 @@ if __name__ == "__main__":
         sem_coord = df_periodo.filter(pl.col("COORDENADOR").is_null()).height
         logging.info(f"🧩 Registros sem coordenador após join: {sem_coord}")
 
-        # 11) Resumo por base + coordenador (no período)
+        # 11) Resumo
         if df_periodo.is_empty():
             resumo_pd = pd.DataFrame(
                 columns=[
@@ -480,7 +569,7 @@ if __name__ == "__main__":
         with pd.ExcelWriter(ARQUIVO_SAIDA, engine="openpyxl") as w:
             resumo_pd.to_excel(w, index=False, sheet_name="Resumo SLA")
 
-        # 13) Enviar cards (SLA ponderado por volume)
+        # 13) Enviar cards
         for coord, webhook in COORDENADOR_WEBHOOKS.items():
             sub = resumo_pd[resumo_pd["COORDENADOR"] == coord]
 
@@ -494,7 +583,7 @@ if __name__ == "__main__":
 
             enviar_card_feishu(sub, webhook, coord, sla, periodo_txt, dias_txt)
 
-        logging.info("🏁 Processamento concluído (v2.12)")
+        logging.info("🏁 Processamento concluído (v2.13)")
 
     except Exception as e:
         logging.critical(f"❌ ERRO FATAL: {e}", exc_info=True)
