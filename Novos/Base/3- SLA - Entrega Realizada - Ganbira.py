@@ -1,3 +1,6 @@
+# =========================
+# BLOCO 1/4 — IMPORTS / CONFIG
+# =========================
 # -*- coding: utf-8 -*-
 
 import os
@@ -17,11 +20,11 @@ warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("sla_processor.log", encoding='utf-8'),
-        logging.StreamHandler()
-    ]
+        logging.FileHandler("sla_processor.log", encoding="utf-8"),
+        logging.StreamHandler(),
+    ],
 )
 
 os.environ["POLARS_MAX_THREADS"] = str(multiprocessing.cpu_count())
@@ -58,10 +61,11 @@ COORDENADOR_WEBHOOKS = {
 }
 
 EXTS = (".xlsx", ".xls", ".csv")
+COL_DATA_BASE = "DATA PREVISTA DE ENTREGA"
+# =========================
+# BLOCO 2/4 — FUNÇÕES (PERÍODO / LEITURA / DATA / FALLBACK)
+# =========================
 
-# ============================================================
-# 🔧 Normalização para garantir JOIN
-# ============================================================
 def normalizar(s) -> str:
     if s is None:
         return ""
@@ -71,6 +75,8 @@ def normalizar(s) -> str:
     while "  " in s:
         s = s.replace("  ", " ")
     return s
+
+
 # ============================================================
 # 🗓️ Período inteligente
 # - Seg: considera Sex+Sáb+Dom
@@ -104,15 +110,11 @@ def formatar_periodo(inicio: date, fim: date) -> str:
 
 
 def formatar_lista_dias(datas: List[date]) -> str:
-    # Ex.: "Sex 27/12, Sáb 28/12, Dom 29/12"
     dias_pt = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
     partes = [f"{dias_pt[d.weekday()]} {d.strftime('%d/%m')}" for d in datas]
     return ", ".join(partes)
 
 
-# ============================================================
-# Funções auxiliares
-# ============================================================
 def cor_percentual(p: float) -> str:
     if p < 0.95:
         return "🔴"
@@ -128,7 +130,7 @@ def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo: 
             try:
                 shutil.move(
                     os.path.join(pasta_origem, arquivo),
-                    os.path.join(pasta_destino, arquivo)
+                    os.path.join(pasta_destino, arquivo),
                 )
                 logging.info(f"📦 Arquivo antigo movido: {arquivo}")
             except Exception as e:
@@ -149,7 +151,7 @@ def consolidar_planilhas(pasta_entrada: str) -> pl.DataFrame:
     arquivos = [
         os.path.join(pasta_entrada, f)
         for f in os.listdir(pasta_entrada)
-        if f.endswith(EXTS) and not f.startswith("~$")
+        if f.lower().endswith(EXTS) and not f.startswith("~$")
     ]
 
     if not arquivos:
@@ -166,8 +168,7 @@ def consolidar_planilhas(pasta_entrada: str) -> pl.DataFrame:
 
 
 # ============================================================
-# ✅ CORREÇÃO AQUI:
-# Lida com "26/12/2025  23:59:59" (espaço duplo) e converte para Date
+# ✅ Converte "26/12/2025  23:59:59" (espaço duplo) -> Date
 # ============================================================
 def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
     if coluna not in df.columns:
@@ -182,7 +183,6 @@ def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
         return df.with_columns(pl.col(coluna).dt.date().alias(coluna))
 
     if tipo == pl.Utf8:
-        # normaliza espaços: qualquer sequência de whitespace vira 1 espaço
         s = (
             pl.col(coluna)
             .cast(pl.Utf8)
@@ -191,7 +191,7 @@ def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
         )
 
         formatos = [
-            "%d/%m/%Y %H:%M:%S",  # seu caso principal
+            "%d/%m/%Y %H:%M:%S",
             "%d/%m/%Y %H:%M",
             "%d/%m/%Y",
             "%Y-%m-%d",
@@ -206,20 +206,92 @@ def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
             tentativa = s.str.strptime(pl.Datetime, f, strict=False)
             expr = tentativa if expr is None else expr.fill_null(tentativa)
 
-        # Converte para Date (remove horas)
         return df.with_columns(expr.dt.date().alias(coluna))
 
     raise TypeError(f"Tipo inválido para coluna '{coluna}': {tipo}")
+
+
 # ============================================================
-# Envio do card via Feishu (com período + dias)
+# ✅ NOVO: Fallback automático de período
+# Se o período calculado não tiver registros, recua para a última data disponível (<= fim).
+# Resolve: feriados (ex.: 01/01) ou dia sem operação.
 # ============================================================
+def ajustar_periodo_por_dados(
+    df: pl.DataFrame,
+    coluna_data: str,
+    inicio: date,
+    fim: date,
+    datas: List[date],
+) -> Tuple[date, date, List[date]]:
+    if df.is_empty() or coluna_data not in df.columns:
+        return inicio, fim, datas
+
+    # 1) Se já tem registros, mantém
+    try:
+        qtd = df.filter(pl.col(coluna_data).is_in(datas)).height
+        if qtd > 0:
+            return inicio, fim, datas
+    except Exception:
+        # se algo falhar aqui, tenta fallback do mesmo jeito
+        pass
+
+    # 2) Busca a maior data <= fim
+    max_le = None
+    try:
+        max_le = (
+            df.filter(pl.col(coluna_data).is_not_null() & (pl.col(coluna_data) <= fim))
+            .select(pl.col(coluna_data).max())
+            .item()
+        )
+    except Exception:
+        max_le = None
+
+    # 3) Se não existir <= fim, pega a maior data geral
+    if max_le is None:
+        try:
+            max_le = (
+                df.filter(pl.col(coluna_data).is_not_null())
+                .select(pl.col(coluna_data).max())
+                .item()
+            )
+        except Exception:
+            max_le = None
+
+    if max_le is None:
+        return inicio, fim, datas
+
+    if isinstance(max_le, datetime):
+        max_le = max_le.date()
+
+    # Mantém o mesmo "span" do período original (ex.: segunda -> 3 dias)
+    span = (fim - inicio).days
+    novo_fim = max_le
+    novo_inicio = novo_fim - timedelta(days=span)
+    if novo_inicio > novo_fim:
+        novo_inicio = novo_fim
+
+    novo_datas = [
+        novo_inicio + timedelta(days=i)
+        for i in range((novo_fim - novo_inicio).days + 1)
+    ]
+
+    logging.warning(
+        f"⚠️ Nenhum registro para o período calculado ({formatar_periodo(inicio, fim)}). "
+        f"Aplicando fallback para última data disponível: {formatar_periodo(novo_inicio, novo_fim)}."
+    )
+
+    return novo_inicio, novo_fim, novo_datas
+# =========================
+# BLOCO 3/4 — FEISHU
+# =========================
+
 def enviar_card_feishu(
     resumo: pd.DataFrame,
     webhook: str,
     coord: str,
     sla: float,
     periodo_txt: str,
-    dias_txt: str
+    dias_txt: str,
 ) -> bool:
     try:
         if resumo.empty:
@@ -233,13 +305,13 @@ def enviar_card_feishu(
 
         linhas_piores = [
             f"{i}. {cor_percentual(l['% SLA Cumprido'])} **{l['Base De Entrega']}** — {l['% SLA Cumprido']:.2%}"
-            for i, l in enumerate(piores.to_dict('records'), 1)
+            for i, l in enumerate(piores.to_dict("records"), 1)
         ]
 
         medalhas = ["🥇", "🥈", "🥉"]
         linhas_melhores = [
             f"{medalhas[i-1]} {cor_percentual(l['% SLA Cumprido'])} **{l['Base De Entrega']}** — {l['% SLA Cumprido']:.2%}"
-            for i, l in enumerate(melhores.to_dict('records'), 1)
+            for i, l in enumerate(melhores.to_dict("records"), 1)
         ]
 
         conteudo = (
@@ -258,23 +330,32 @@ def enviar_card_feishu(
                 "config": {"wide_screen_mode": True},
                 "header": {
                     "template": "blue",
-                    "title": {"tag": "plain_text", "content": f"SLA - Entrega no Prazo — {coord}"}
+                    "title": {"tag": "plain_text", "content": f"SLA - Entrega no Prazo — {coord}"},
                 },
                 "elements": [
                     {"tag": "div", "text": {"tag": "lark_md", "content": conteudo}},
                     {"tag": "hr"},
-                    {"tag": "action", "actions": [
-                        {"tag": "button", "text": {"tag": "plain_text", "content": "📂 Abrir Pasta"},
-                         "url": LINK_PASTA, "type": "default"}
-                    ]}
-                ]
-            }
+                    {
+                        "tag": "action",
+                        "actions": [
+                            {
+                                "tag": "button",
+                                "text": {"tag": "plain_text", "content": "📂 Abrir Pasta"},
+                                "url": LINK_PASTA,
+                                "type": "default",
+                            }
+                        ],
+                    },
+                ],
+            },
         }
 
         r = requests.post(webhook, json=payload, timeout=15)
 
         if r.status_code != 200:
-            logging.error(f"❌ ERRO ao enviar card para {coord}. Status: {r.status_code}. Resposta: {r.text}")
+            logging.error(
+                f"❌ ERRO ao enviar card para {coord}. Status: {r.status_code}. Resposta: {r.text}"
+            )
             return False
 
         logging.info(f"📨 Card enviado para {coord}")
@@ -283,27 +364,22 @@ def enviar_card_feishu(
     except Exception as e:
         logging.error(f"❌ Falha no envio para {coord}. Erro: {e}. Webhook: {webhook}")
         return False
+# =========================
+# BLOCO 4/4 — MAIN (v2.12)
+# =========================
 
-
-# ============================================================
-# 🚀 Execução principal v2.11
-# ============================================================
 if __name__ == "__main__":
-    logging.info("🚀 Iniciando processamento SLA (v2.11)...")
+    logging.info("🚀 Iniciando processamento SLA (v2.12)...")
 
     try:
-        # 0) Período-base
+        # 0) Período-base (calendário)
         periodo = calcular_periodo_base()
         if periodo is None:
             raise SystemExit(0)
 
         inicio, fim, datas = periodo
-        periodo_txt = formatar_periodo(inicio, fim)
-        dias_txt = formatar_lista_dias(datas)
-
-        logging.info(f"📅 Período usado para cálculo SLA: {periodo_txt}")
-        logging.info(f"🗓️ Dias considerados: {dias_txt}")
-        logging.info(f"📌 Datas (ISO): {', '.join([d.strftime('%Y-%m-%d') for d in datas])}")
+        logging.info(f"📅 Período (calendário) inicial: {formatar_periodo(inicio, fim)}")
+        logging.info(f"🗓️ Dias (calendário) iniciais: {formatar_lista_dias(datas)}")
 
         # 1) Ler planilhas
         df = consolidar_planilhas(PASTA_ENTRADA)
@@ -312,10 +388,19 @@ if __name__ == "__main__":
         # 2) Padronizar nomes colunas
         df = df.rename({c: c.strip().upper() for c in df.columns})
 
-        # 3) Garantir conversão correta da data (formato "26/12/2025  23:59:59")
-        df = garantir_coluna_data(df, "DATA PREVISTA DE ENTREGA")
+        # 3) Garantir conversão correta da data
+        df = garantir_coluna_data(df, COL_DATA_BASE)
 
-        # 4) Detectar coluna ENTREGUE NO PRAZO
+        # 4) Fallback: se o período calculado vier vazio, ajusta para última data disponível (<= fim)
+        inicio, fim, datas = ajustar_periodo_por_dados(df, COL_DATA_BASE, inicio, fim, datas)
+        periodo_txt = formatar_periodo(inicio, fim)
+        dias_txt = formatar_lista_dias(datas)
+
+        logging.info(f"📅 Período FINAL usado para cálculo SLA: {periodo_txt}")
+        logging.info(f"🗓️ Dias considerados (FINAL): {dias_txt}")
+        logging.info(f"📌 Datas (ISO): {', '.join([d.strftime('%Y-%m-%d') for d in datas])}")
+
+        # 5) Detectar coluna ENTREGUE NO PRAZO
         colunas = list(df.columns)
         col_upper = [c.upper() for c in colunas]
 
@@ -332,64 +417,70 @@ if __name__ == "__main__":
 
         logging.info(f"📌 Coluna detectada: {col_entregue}")
 
-        # 5) Converter Y/N → 1/0
+        # 6) Converter Y/N → 1/0
         df = df.with_columns(
             pl.when(pl.col(col_entregue).cast(pl.Utf8).str.to_uppercase() == "Y")
-            .then(1).otherwise(0).alias("_ENTREGUE_PRAZO")
+            .then(1)
+            .otherwise(0)
+            .alias("_ENTREGUE_PRAZO")
         )
 
-        # 6) Filtrar registros do período-base usando DATA PREVISTA DE ENTREGA (já virou Date)
-        df_periodo = df.filter(pl.col("DATA PREVISTA DE ENTREGA").is_in(datas))
+        # 7) Filtrar registros do período-base usando DATA PREVISTA DE ENTREGA (Date)
+        df_periodo = df.filter(pl.col(COL_DATA_BASE).is_in(datas))
         logging.info(f"📊 Registros para {periodo_txt}: {df_periodo.height}")
 
-        # 7) Carregar Excel dos coordenadores
-        coord_df = pl.read_excel(PASTA_COORDENADOR).rename({
-            "Nome da base": "BASE DE ENTREGA",
-            "Coordenadores": "COORDENADOR"
-        })
+        # 8) Carregar Excel dos coordenadores
+        coord_df = pl.read_excel(PASTA_COORDENADOR).rename(
+            {"Nome da base": "BASE DE ENTREGA", "Coordenadores": "COORDENADOR"}
+        )
 
-        # 8) Normalizar nomes de base
+        # 9) Normalizar nomes de base
         df_periodo = df_periodo.with_columns(
             pl.col("BASE DE ENTREGA").map_elements(normalizar).alias("BASE_NORM")
         )
-
         coord_df = coord_df.with_columns(
             pl.col("BASE DE ENTREGA").map_elements(normalizar).alias("BASE_NORM")
         )
 
-        # 9) JOIN
+        # 10) JOIN
         df_periodo = df_periodo.join(coord_df, on="BASE_NORM", how="left")
-
         sem_coord = df_periodo.filter(pl.col("COORDENADOR").is_null()).height
         logging.info(f"🧩 Registros sem coordenador após join: {sem_coord}")
 
-        # 10) Resumo por base + coordenador (no período)
+        # 11) Resumo por base + coordenador (no período)
         if df_periodo.is_empty():
-            resumo_pd = pd.DataFrame(columns=[
-                "Base De Entrega", "COORDENADOR",
-                "Total", "Entregues no Prazo", "Fora do Prazo", "% SLA Cumprido"
-            ])
+            resumo_pd = pd.DataFrame(
+                columns=[
+                    "Base De Entrega",
+                    "COORDENADOR",
+                    "Total",
+                    "Entregues no Prazo",
+                    "Fora do Prazo",
+                    "% SLA Cumprido",
+                ]
+            )
         else:
             resumo = (
                 df_periodo.group_by(["BASE DE ENTREGA", "COORDENADOR"])
-                .agg([
-                    pl.len().alias("Total"),
-                    pl.col("_ENTREGUE_PRAZO").sum().alias("Entregues no Prazo"),
-                    (pl.len() - pl.col("_ENTREGUE_PRAZO").sum()).alias("Fora do Prazo"),
-                    (pl.col("_ENTREGUE_PRAZO").sum() / pl.len()).alias("% SLA Cumprido")
-                ])
+                .agg(
+                    [
+                        pl.len().alias("Total"),
+                        pl.col("_ENTREGUE_PRAZO").sum().alias("Entregues no Prazo"),
+                        (pl.len() - pl.col("_ENTREGUE_PRAZO").sum()).alias("Fora do Prazo"),
+                        (pl.col("_ENTREGUE_PRAZO").sum() / pl.len()).alias("% SLA Cumprido"),
+                    ]
+                )
                 .sort("% SLA Cumprido", descending=True)
             )
 
             resumo_pd = resumo.to_pandas().rename(columns={"BASE DE ENTREGA": "Base De Entrega"})
 
-        # 11) Exportar Excel
+        # 12) Exportar Excel
         arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, "Resumo_Consolidado_")
-
         with pd.ExcelWriter(ARQUIVO_SAIDA, engine="openpyxl") as w:
             resumo_pd.to_excel(w, index=False, sheet_name="Resumo SLA")
 
-        # 12) Enviar cards (SLA ponderado por volume)
+        # 13) Enviar cards (SLA ponderado por volume)
         for coord, webhook in COORDENADOR_WEBHOOKS.items():
             sub = resumo_pd[resumo_pd["COORDENADOR"] == coord]
 
@@ -403,7 +494,7 @@ if __name__ == "__main__":
 
             enviar_card_feishu(sub, webhook, coord, sla, periodo_txt, dias_txt)
 
-        logging.info("🏁 Processamento concluído (v2.11)")
+        logging.info("🏁 Processamento concluído (v2.12)")
 
     except Exception as e:
         logging.critical(f"❌ ERRO FATAL: {e}", exc_info=True)

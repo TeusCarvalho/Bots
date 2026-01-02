@@ -1457,3 +1457,124 @@ KeyError: "Coluna 'DATA PREVISTA DE ENTREGA' não encontrada."
 2025-12-30 08:20:04,385 - INFO - 📨 Card enviado para Marcos Caique
 2025-12-30 08:20:06,029 - INFO - 📨 Card enviado para Ana Cunha
 2025-12-30 08:20:06,031 - INFO - 🏁 Processamento concluído (v2.11)
+2025-12-31 08:16:33,791 - INFO - 🚀 Iniciando processamento SLA (v2.11)...
+2025-12-31 08:16:33,791 - INFO - 📅 Período usado para cálculo SLA: 30/12/2025
+2025-12-31 08:16:33,792 - INFO - 🗓️ Dias considerados: Ter 30/12
+2025-12-31 08:16:33,792 - INFO - 📌 Datas (ISO): 2025-12-30
+2025-12-31 08:16:36,784 - INFO - 📥 Registros carregados: 141777
+2025-12-31 08:16:36,786 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2025-12-31 08:16:36,791 - INFO - 📊 Registros para 30/12/2025: 141777
+2025-12-31 08:16:36,986 - INFO - 🧩 Registros sem coordenador após join: 4271
+2025-12-31 08:16:36,997 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251230.xlsx
+2025-12-31 08:16:39,287 - INFO - 📨 Card enviado para João Melo
+2025-12-31 08:16:40,855 - INFO - 📨 Card enviado para Johas Vieira
+2025-12-31 08:16:42,436 - INFO - 📨 Card enviado para Anderson Matheus
+2025-12-31 08:16:43,916 - INFO - 📨 Card enviado para Marcelo Medina
+2025-12-31 08:16:45,415 - INFO - 📨 Card enviado para Odária Fereira
+2025-12-31 08:16:46,872 - INFO - 📨 Card enviado para Rodrigo Castro
+2025-12-31 08:16:48,386 - INFO - 📨 Card enviado para Orlean Nascimento
+2025-12-31 08:16:49,866 - INFO - 📨 Card enviado para Jose Marlon
+2025-12-31 08:16:51,378 - INFO - 📨 Card enviado para Emerson Silva
+2025-12-31 08:16:52,863 - INFO - 📨 Card enviado para Marcos Caique
+2025-12-31 08:16:54,376 - INFO - 📨 Card enviado para Ana Cunha
+2025-12-31 08:16:54,377 - INFO - 🏁 Processamento concluído (v2.11)
+2026-01-02 08:11:09,655 - INFO - 🚀 Iniciando processamento SLA (v2.11)...
+2026-01-02 08:11:09,656 - INFO - 📅 Período usado para cálculo SLA: 01/01/2026
+2026-01-02 08:11:09,656 - INFO - 🗓️ Dias considerados: Qui 01/01
+2026-01-02 08:11:09,656 - INFO - 📌 Datas (ISO): 2026-01-01
+2026-01-02 08:11:09,843 - WARNING - Could not determine dtype for column 11, falling back to string
+2026-01-02 08:11:09,904 - INFO - 📥 Registros carregados: 9758
+2026-01-02 08:11:09,906 - CRITICAL - ❌ ERRO FATAL: "Coluna 'DATA PREVISTA DE ENTREGA' não encontrada."
+Traceback (most recent call last):
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada - Ganbira.py", line 316, in <module>
+    df = garantir_coluna_data(df, "DATA PREVISTA DE ENTREGA")
+  File "C:\Users\J&T-099\PycharmProjects\Bots\Novos\Base\3- SLA - Entrega Realizada - Ganbira.py", line 174, in garantir_coluna_data
+    raise KeyError(f"Coluna '{coluna}' não encontrada.")
+KeyError: "Coluna 'DATA PREVISTA DE ENTREGA' não encontrada."
+2026-01-02 08:15:16,032 - INFO - 🚀 Iniciando processamento SLA (v2.11)...
+2026-01-02 08:15:16,032 - INFO - 📅 Período usado para cálculo SLA: 01/01/2026
+2026-01-02 08:15:16,032 - INFO - 🗓️ Dias considerados: Qui 01/01
+2026-01-02 08:15:16,033 - INFO - 📌 Datas (ISO): 2026-01-01
+2026-01-02 08:15:19,541 - INFO - 📥 Registros carregados: 141153
+2026-01-02 08:15:19,543 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2026-01-02 08:15:19,549 - INFO - 📊 Registros para 01/01/2026: 0
+2026-01-02 08:15:19,558 - INFO - 🧩 Registros sem coordenador após join: 0
+2026-01-02 08:15:19,562 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20251231.xlsx
+2026-01-02 08:15:19,781 - WARNING - ⚠️ Nenhuma base encontrada para João Melo
+2026-01-02 08:15:19,781 - WARNING - ⚠️ Nenhuma base encontrada para Johas Vieira
+2026-01-02 08:15:19,781 - WARNING - ⚠️ Nenhuma base encontrada para Anderson Matheus
+2026-01-02 08:15:19,781 - WARNING - ⚠️ Nenhuma base encontrada para Marcelo Medina
+2026-01-02 08:15:19,782 - WARNING - ⚠️ Nenhuma base encontrada para Odária Fereira
+2026-01-02 08:15:19,782 - WARNING - ⚠️ Nenhuma base encontrada para Rodrigo Castro
+2026-01-02 08:15:19,782 - WARNING - ⚠️ Nenhuma base encontrada para Orlean Nascimento
+2026-01-02 08:15:19,782 - WARNING - ⚠️ Nenhuma base encontrada para Jose Marlon
+2026-01-02 08:15:19,782 - WARNING - ⚠️ Nenhuma base encontrada para Emerson Silva
+2026-01-02 08:15:19,783 - WARNING - ⚠️ Nenhuma base encontrada para Marcos Caique
+2026-01-02 08:15:19,783 - WARNING - ⚠️ Nenhuma base encontrada para Ana Cunha
+2026-01-02 08:15:19,783 - INFO - 🏁 Processamento concluído (v2.11)
+2026-01-02 08:16:58,877 - INFO - 🚀 Iniciando processamento SLA (v2.11)...
+2026-01-02 08:16:58,877 - INFO - 📅 Período usado para cálculo SLA: 01/01/2026
+2026-01-02 08:16:58,877 - INFO - 🗓️ Dias considerados: Qui 01/01
+2026-01-02 08:16:58,877 - INFO - 📌 Datas (ISO): 2026-01-01
+2026-01-02 08:17:01,922 - INFO - 📥 Registros carregados: 141153
+2026-01-02 08:17:01,924 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2026-01-02 08:17:01,927 - INFO - 📊 Registros para 01/01/2026: 0
+2026-01-02 08:17:01,936 - INFO - 🧩 Registros sem coordenador após join: 0
+2026-01-02 08:17:01,938 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20260102.xlsx
+2026-01-02 08:17:02,093 - WARNING - ⚠️ Nenhuma base encontrada para João Melo
+2026-01-02 08:17:02,093 - WARNING - ⚠️ Nenhuma base encontrada para Johas Vieira
+2026-01-02 08:17:02,093 - WARNING - ⚠️ Nenhuma base encontrada para Anderson Matheus
+2026-01-02 08:17:02,094 - WARNING - ⚠️ Nenhuma base encontrada para Marcelo Medina
+2026-01-02 08:17:02,094 - WARNING - ⚠️ Nenhuma base encontrada para Odária Fereira
+2026-01-02 08:17:02,094 - WARNING - ⚠️ Nenhuma base encontrada para Rodrigo Castro
+2026-01-02 08:17:02,094 - WARNING - ⚠️ Nenhuma base encontrada para Orlean Nascimento
+2026-01-02 08:17:02,094 - WARNING - ⚠️ Nenhuma base encontrada para Jose Marlon
+2026-01-02 08:17:02,095 - WARNING - ⚠️ Nenhuma base encontrada para Emerson Silva
+2026-01-02 08:17:02,095 - WARNING - ⚠️ Nenhuma base encontrada para Marcos Caique
+2026-01-02 08:17:02,095 - WARNING - ⚠️ Nenhuma base encontrada para Ana Cunha
+2026-01-02 08:17:02,095 - INFO - 🏁 Processamento concluído (v2.11)
+2026-01-02 08:17:32,399 - INFO - 🚀 Iniciando processamento SLA (v2.11)...
+2026-01-02 08:17:32,399 - INFO - 📅 Período usado para cálculo SLA: 01/01/2026
+2026-01-02 08:17:32,399 - INFO - 🗓️ Dias considerados: Qui 01/01
+2026-01-02 08:17:32,399 - INFO - 📌 Datas (ISO): 2026-01-01
+2026-01-02 08:17:35,308 - INFO - 📥 Registros carregados: 141153
+2026-01-02 08:17:35,310 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2026-01-02 08:17:35,313 - INFO - 📊 Registros para 01/01/2026: 0
+2026-01-02 08:17:35,319 - INFO - 🧩 Registros sem coordenador após join: 0
+2026-01-02 08:17:35,323 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20260102.xlsx
+2026-01-02 08:17:35,442 - WARNING - ⚠️ Nenhuma base encontrada para João Melo
+2026-01-02 08:17:35,442 - WARNING - ⚠️ Nenhuma base encontrada para Johas Vieira
+2026-01-02 08:17:35,442 - WARNING - ⚠️ Nenhuma base encontrada para Anderson Matheus
+2026-01-02 08:17:35,442 - WARNING - ⚠️ Nenhuma base encontrada para Marcelo Medina
+2026-01-02 08:17:35,443 - WARNING - ⚠️ Nenhuma base encontrada para Odária Fereira
+2026-01-02 08:17:35,443 - WARNING - ⚠️ Nenhuma base encontrada para Rodrigo Castro
+2026-01-02 08:17:35,443 - WARNING - ⚠️ Nenhuma base encontrada para Orlean Nascimento
+2026-01-02 08:17:35,443 - WARNING - ⚠️ Nenhuma base encontrada para Jose Marlon
+2026-01-02 08:17:35,443 - WARNING - ⚠️ Nenhuma base encontrada para Emerson Silva
+2026-01-02 08:17:35,444 - WARNING - ⚠️ Nenhuma base encontrada para Marcos Caique
+2026-01-02 08:17:35,444 - WARNING - ⚠️ Nenhuma base encontrada para Ana Cunha
+2026-01-02 08:17:35,444 - INFO - 🏁 Processamento concluído (v2.11)
+2026-01-02 08:22:14,871 - INFO - 🚀 Iniciando processamento SLA (v2.12)...
+2026-01-02 08:22:14,871 - INFO - 📅 Período (calendário) inicial: 01/01/2026
+2026-01-02 08:22:14,871 - INFO - 🗓️ Dias (calendário) iniciais: Qui 01/01
+2026-01-02 08:22:17,889 - INFO - 📥 Registros carregados: 141153
+2026-01-02 08:22:17,894 - WARNING - ⚠️ Nenhum registro para o período calculado (01/01/2026). Aplicando fallback para última data disponível: 31/12/2025.
+2026-01-02 08:22:17,894 - INFO - 📅 Período FINAL usado para cálculo SLA: 31/12/2025
+2026-01-02 08:22:17,894 - INFO - 🗓️ Dias considerados (FINAL): Qua 31/12
+2026-01-02 08:22:17,894 - INFO - 📌 Datas (ISO): 2025-12-31
+2026-01-02 08:22:17,895 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2026-01-02 08:22:17,897 - INFO - 📊 Registros para 31/12/2025: 141153
+2026-01-02 08:22:18,085 - INFO - 🧩 Registros sem coordenador após join: 5166
+2026-01-02 08:22:18,098 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20260102.xlsx
+2026-01-02 08:22:22,996 - INFO - 📨 Card enviado para João Melo
+2026-01-02 08:22:24,637 - INFO - 📨 Card enviado para Johas Vieira
+2026-01-02 08:22:26,248 - INFO - 📨 Card enviado para Anderson Matheus
+2026-01-02 08:22:27,798 - INFO - 📨 Card enviado para Marcelo Medina
+2026-01-02 08:22:29,399 - INFO - 📨 Card enviado para Odária Fereira
+2026-01-02 08:22:31,030 - INFO - 📨 Card enviado para Rodrigo Castro
+2026-01-02 08:22:32,598 - INFO - 📨 Card enviado para Orlean Nascimento
+2026-01-02 08:22:34,171 - INFO - 📨 Card enviado para Jose Marlon
+2026-01-02 08:22:35,717 - INFO - 📨 Card enviado para Emerson Silva
+2026-01-02 08:22:37,364 - INFO - 📨 Card enviado para Marcos Caique
+2026-01-02 08:22:38,955 - INFO - 📨 Card enviado para Ana Cunha
+2026-01-02 08:22:38,956 - INFO - 🏁 Processamento concluído (v2.12)
