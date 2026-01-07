@@ -1578,3 +1578,122 @@ KeyError: "Coluna 'DATA PREVISTA DE ENTREGA' não encontrada."
 2026-01-02 08:22:37,364 - INFO - 📨 Card enviado para Marcos Caique
 2026-01-02 08:22:38,955 - INFO - 📨 Card enviado para Ana Cunha
 2026-01-02 08:22:38,956 - INFO - 🏁 Processamento concluído (v2.12)
+2026-01-05 08:35:00,310 - INFO - 🚀 Iniciando processamento SLA (v2.13 — feriados nacionais)...
+2026-01-05 08:35:00,310 - INFO - 📅 Período (após feriados) usado para SLA: 02/01/2026 a 04/01/2026
+2026-01-05 08:35:00,310 - INFO - 🗓️ Dias considerados: Sex 02/01, Sáb 03/01, Dom 04/01
+2026-01-05 08:35:00,311 - INFO - 📌 Datas (ISO): 2026-01-02, 2026-01-03, 2026-01-04
+2026-01-05 08:35:01,861 - WARNING - Could not determine dtype for column 17, falling back to string
+2026-01-05 08:35:01,861 - WARNING - Could not determine dtype for column 18, falling back to string
+2026-01-05 08:35:02,092 - INFO - 📥 Registros carregados: 85674
+2026-01-05 08:35:02,098 - INFO - 📅 Período FINAL usado para cálculo SLA: 02/01/2026 a 04/01/2026
+2026-01-05 08:35:02,098 - INFO - 🗓️ Dias considerados (FINAL): Sex 02/01, Sáb 03/01, Dom 04/01
+2026-01-05 08:35:02,098 - INFO - 📌 Datas (ISO): 2026-01-02, 2026-01-03, 2026-01-04
+2026-01-05 08:35:02,098 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2026-01-05 08:35:02,103 - INFO - 📊 Registros para 02/01/2026 a 04/01/2026: 85674
+2026-01-05 08:35:02,231 - INFO - 🧩 Registros sem coordenador após join: 5023
+2026-01-05 08:35:02,248 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20260102.xlsx
+2026-01-05 08:35:04,054 - INFO - 📨 Card enviado para João Melo
+2026-01-05 08:35:05,663 - INFO - 📨 Card enviado para Johas Vieira
+2026-01-05 08:35:07,262 - INFO - 📨 Card enviado para Anderson Matheus
+2026-01-05 08:35:08,849 - INFO - 📨 Card enviado para Marcelo Medina
+2026-01-05 08:35:10,347 - INFO - 📨 Card enviado para Odária Fereira
+2026-01-05 08:35:11,940 - INFO - 📨 Card enviado para Rodrigo Castro
+2026-01-05 08:35:13,522 - INFO - 📨 Card enviado para Orlean Nascimento
+2026-01-05 08:35:15,086 - INFO - 📨 Card enviado para Jose Marlon
+2026-01-05 08:35:17,503 - INFO - 📨 Card enviado para Emerson Silva
+2026-01-05 08:35:19,793 - INFO - 📨 Card enviado para Marcos Caique
+2026-01-05 08:35:21,663 - INFO - 📨 Card enviado para Ana Cunha
+2026-01-05 08:35:21,664 - INFO - 🏁 Processamento concluído (v2.13)
+2026-01-05 08:42:06,860 - INFO - 🚀 Iniciando processamento SLA (v2.13 — feriados nacionais)...
+2026-01-05 08:42:06,860 - INFO - 📅 Período (após feriados) usado para SLA: 02/01/2026 a 04/01/2026
+2026-01-05 08:42:06,860 - INFO - 🗓️ Dias considerados: Sex 02/01, Sáb 03/01, Dom 04/01
+2026-01-05 08:42:06,860 - INFO - 📌 Datas (ISO): 2026-01-02, 2026-01-03, 2026-01-04
+2026-01-05 08:42:08,407 - WARNING - Could not determine dtype for column 17, falling back to string
+2026-01-05 08:42:08,407 - WARNING - Could not determine dtype for column 18, falling back to string
+2026-01-05 08:42:08,660 - INFO - 📥 Registros carregados: 85674
+2026-01-05 08:42:08,663 - INFO - 📅 Período FINAL usado para cálculo SLA: 02/01/2026 a 04/01/2026
+2026-01-05 08:42:08,664 - INFO - 🗓️ Dias considerados (FINAL): Sex 02/01, Sáb 03/01, Dom 04/01
+2026-01-05 08:42:08,664 - INFO - 📌 Datas (ISO): 2026-01-02, 2026-01-03, 2026-01-04
+2026-01-05 08:42:08,664 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2026-01-05 08:42:08,667 - INFO - 📊 Registros para 02/01/2026 a 04/01/2026: 85674
+2026-01-05 08:42:08,785 - INFO - 🧩 Registros sem coordenador após join: 5023
+2026-01-05 08:42:08,794 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20260105.xlsx
+2026-01-05 08:42:12,118 - INFO - 📨 Card enviado para João Melo
+2026-01-05 08:42:13,658 - INFO - 📨 Card enviado para Johas Vieira
+2026-01-05 08:42:15,088 - INFO - 📨 Card enviado para Anderson Matheus
+2026-01-06 08:27:30,036 - INFO - 🚀 Iniciando processamento SLA (v2.13 — feriados nacionais)...
+2026-01-06 08:27:30,036 - INFO - 📅 Período (após feriados) usado para SLA: 05/01/2026
+2026-01-06 08:27:30,036 - INFO - 🗓️ Dias considerados: Seg 05/01
+2026-01-06 08:27:30,036 - INFO - 📌 Datas (ISO): 2026-01-05
+2026-01-06 08:27:32,533 - INFO - 📥 Registros carregados: 116765
+2026-01-06 08:27:32,544 - INFO - 📅 Período FINAL usado para cálculo SLA: 05/01/2026
+2026-01-06 08:27:32,544 - INFO - 🗓️ Dias considerados (FINAL): Seg 05/01
+2026-01-06 08:27:32,544 - INFO - 📌 Datas (ISO): 2026-01-05
+2026-01-06 08:27:32,544 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2026-01-06 08:27:32,551 - INFO - 📊 Registros para 05/01/2026: 116765
+2026-01-06 08:27:32,725 - INFO - 🧩 Registros sem coordenador após join: 3839
+2026-01-06 08:27:32,756 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20260105.xlsx
+2026-01-06 08:27:35,298 - INFO - 📨 Card enviado para João Melo
+2026-01-06 08:27:36,813 - INFO - 📨 Card enviado para Johas Vieira
+2026-01-06 08:27:38,311 - INFO - 📨 Card enviado para Anderson Matheus
+2026-01-06 08:27:39,846 - INFO - 📨 Card enviado para Marcelo Medina
+2026-01-06 08:27:41,437 - INFO - 📨 Card enviado para Odária Fereira
+2026-01-06 08:27:42,992 - INFO - 📨 Card enviado para Rodrigo Castro
+2026-01-06 08:27:44,508 - INFO - 📨 Card enviado para Orlean Nascimento
+2026-01-06 08:27:46,228 - INFO - 📨 Card enviado para Jose Marlon
+2026-01-06 08:27:47,717 - INFO - 📨 Card enviado para Emerson Silva
+2026-01-06 08:27:49,225 - INFO - 📨 Card enviado para Marcos Caique
+2026-01-06 08:27:50,765 - INFO - 📨 Card enviado para Ana Cunha
+2026-01-06 08:27:50,766 - INFO - 🏁 Processamento concluído (v2.13)
+2026-01-07 08:20:53,119 - INFO - 🚀 Iniciando processamento SLA (v2.13 — feriados nacionais)...
+2026-01-07 08:20:53,120 - INFO - 📅 Período (após feriados) usado para SLA: 06/01/2026
+2026-01-07 08:20:53,120 - INFO - 🗓️ Dias considerados: Ter 06/01
+2026-01-07 08:20:53,120 - INFO - 📌 Datas (ISO): 2026-01-06
+2026-01-07 08:20:55,443 - WARNING - Could not determine dtype for column 17, falling back to string
+2026-01-07 08:20:55,443 - WARNING - Could not determine dtype for column 18, falling back to string
+2026-01-07 08:20:55,890 - INFO - 📥 Registros carregados: 115342
+2026-01-07 08:20:55,903 - INFO - 📅 Período FINAL usado para cálculo SLA: 06/01/2026
+2026-01-07 08:20:55,903 - INFO - 🗓️ Dias considerados (FINAL): Ter 06/01
+2026-01-07 08:20:55,903 - INFO - 📌 Datas (ISO): 2026-01-06
+2026-01-07 08:20:55,903 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2026-01-07 08:20:55,911 - INFO - 📊 Registros para 06/01/2026: 115342
+2026-01-07 08:20:56,107 - INFO - 🧩 Registros sem coordenador após join: 5951
+2026-01-07 08:20:56,137 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20260106.xlsx
+2026-01-07 08:20:59,365 - INFO - 📨 Card enviado para João Melo
+2026-01-07 08:21:01,095 - INFO - 📨 Card enviado para Johas Vieira
+2026-01-07 08:21:02,829 - INFO - 📨 Card enviado para Anderson Matheus
+2026-01-07 08:21:04,651 - INFO - 📨 Card enviado para Marcelo Medina
+2026-01-07 08:21:06,225 - INFO - 📨 Card enviado para Odária Fereira
+2026-01-07 08:21:07,995 - INFO - 📨 Card enviado para Rodrigo Castro
+2026-01-07 08:21:09,840 - INFO - 📨 Card enviado para Orlean Nascimento
+2026-01-07 08:21:11,583 - INFO - 📨 Card enviado para Jose Marlon
+2026-01-07 08:21:13,276 - INFO - 📨 Card enviado para Emerson Silva
+2026-01-07 08:21:15,049 - INFO - 📨 Card enviado para Marcos Caique
+2026-01-07 08:21:16,817 - INFO - 📨 Card enviado para Ana Cunha
+2026-01-07 08:21:16,819 - INFO - 🏁 Processamento concluído (v2.13)
+2026-01-07 17:05:40,145 - INFO - 🚀 Iniciando processamento SLA (v2.13 — feriados nacionais)...
+2026-01-07 17:05:40,146 - INFO - 📅 Período (após feriados) usado para SLA: 06/01/2026
+2026-01-07 17:05:40,146 - INFO - 🗓️ Dias considerados: Ter 06/01
+2026-01-07 17:05:40,146 - INFO - 📌 Datas (ISO): 2026-01-06
+2026-01-07 17:05:42,436 - WARNING - Could not determine dtype for column 17, falling back to string
+2026-01-07 17:05:42,437 - WARNING - Could not determine dtype for column 18, falling back to string
+2026-01-07 17:05:42,744 - INFO - 📥 Registros carregados: 115342
+2026-01-07 17:05:42,753 - INFO - 📅 Período FINAL usado para cálculo SLA: 06/01/2026
+2026-01-07 17:05:42,753 - INFO - 🗓️ Dias considerados (FINAL): Ter 06/01
+2026-01-07 17:05:42,753 - INFO - 📌 Datas (ISO): 2026-01-06
+2026-01-07 17:05:42,753 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2026-01-07 17:05:42,758 - INFO - 📊 Registros para 06/01/2026: 115342
+2026-01-07 17:05:42,922 - INFO - 🧩 Registros sem coordenador após join: 5951
+2026-01-07 17:05:42,940 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20260107.xlsx
+2026-01-07 17:05:45,492 - INFO - 📨 Card enviado para João Melo
+2026-01-07 17:05:46,939 - INFO - 📨 Card enviado para Johas Vieira
+2026-01-07 17:05:48,370 - INFO - 📨 Card enviado para Anderson Matheus
+2026-01-07 17:05:49,822 - INFO - 📨 Card enviado para Marcelo Medina
+2026-01-07 17:05:51,454 - INFO - 📨 Card enviado para Odária Fereira
+2026-01-07 17:05:52,982 - INFO - 📨 Card enviado para Rodrigo Castro
+2026-01-07 17:05:54,626 - INFO - 📨 Card enviado para Orlean Nascimento
+2026-01-07 17:05:56,085 - INFO - 📨 Card enviado para Jose Marlon
+2026-01-07 17:05:57,514 - INFO - 📨 Card enviado para Emerson Silva
+2026-01-07 17:05:58,962 - INFO - 📨 Card enviado para Marcos Caique
+2026-01-07 17:06:00,449 - INFO - 📨 Card enviado para Ana Cunha
+2026-01-07 17:06:00,450 - INFO - 🏁 Processamento concluído (v2.13)

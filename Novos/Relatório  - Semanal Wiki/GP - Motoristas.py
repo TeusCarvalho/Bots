@@ -41,6 +41,51 @@ COLUNAS = {
 }
 
 # ===========================================================
+# 🧠 Helpers de compatibilidade (Polars antigo)
+# ===========================================================
+def normalize_text_col(col_name: str) -> pl.Expr:
+    """
+    Normaliza texto de uma coluna:
+    - cast para Utf8
+    - strip (compat: strip_chars)
+    - upper
+    """
+    e = pl.col(col_name).cast(pl.Utf8, strict=False)
+
+    if hasattr(e.str, "strip_chars"):
+        e = e.str.strip_chars()
+    else:
+        e = e.str.strip()
+
+    if hasattr(e.str, "to_uppercase"):
+        e = e.str.to_uppercase()
+    elif hasattr(e.str, "uppercase"):
+        e = e.str.uppercase()
+
+    return e.alias(col_name)
+
+
+def resolve_col(columns, *candidates):
+    """
+    Resolve nome real da coluna por matching case-insensitive e strip.
+    Retorna o nome real ou None.
+    """
+    norm = {str(c).strip().lower(): c for c in columns}
+    for cand in candidates:
+        key = str(cand).strip().lower()
+        if key in norm:
+            return norm[key]
+    return None
+
+
+def first_existing(df: pl.DataFrame, candidates):
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
+
+
+# ===========================================================
 # 📂 Funções auxiliares
 # ===========================================================
 def encontrar_arquivos_por_prefixo(pasta, prefixo):
@@ -82,51 +127,76 @@ def ler_excel_polars(caminho):
 
 
 # ===========================================================
-# 📌 Função de Coordenadores – CORRIGIDA
+# 📌 Função de Coordenadores (robusta)
 # ===========================================================
 def adicionar_coordenador(df):
     caminho_ref = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
     if not os.path.exists(caminho_ref):
         logging.error("❌ Base de coordenadores não encontrada.")
+        # garante colunas existirem para não quebrar relatórios
+        if "UF" not in df.columns:
+            df = df.with_columns(pl.lit(None).alias("UF"))
+        if "Coordenador" not in df.columns:
+            df = df.with_columns(pl.lit(None).alias("Coordenador"))
         return df
 
     try:
         ref = pl.read_excel(caminho_ref)
+        ref = ref.rename({c: c.strip() for c in ref.columns})
 
-        # Normaliza base de referência
-        ref = ref.with_columns([
-            pl.col("Nome da base").cast(pl.Utf8).str.strip().str.to_uppercase().alias("base_ref"),
-            pl.col("UF").cast(pl.Utf8).alias("UF"),
-            pl.col("Coordenador").cast(pl.Utf8).alias("Coordenador")
-        ])
+        # resolve colunas na referência (tolerante)
+        col_base_ref = resolve_col(ref.columns, "Nome da base", "Nome da Base", "NOME DA BASE")
+        col_uf_ref = resolve_col(ref.columns, "UF", "Uf", "U F", "Estado", "ESTADO")
+        col_coord_ref = resolve_col(ref.columns, "Coordenador", "COORDENADOR")
 
-        if "Base de entrega" not in df.columns:
-            logging.warning("⚠️ 'Base de entrega' não encontrada no arquivo atual.")
+        if not col_base_ref:
+            logging.error("❌ Na Base_Atualizada.xlsx não encontrei a coluna 'Nome da base'.")
+            if "UF" not in df.columns:
+                df = df.with_columns(pl.lit(None).alias("UF"))
+            if "Coordenador" not in df.columns:
+                df = df.with_columns(pl.lit(None).alias("Coordenador"))
             return df
 
-        # Normaliza coluna de base do arquivo principal
-        df = df.with_columns([
-            pl.col("Base de entrega").cast(pl.Utf8).str.strip().str.to_uppercase().alias("Base de entrega")
+        # Normaliza base_ref
+        ref = ref.with_columns([
+            normalize_text_col(col_base_ref).alias("base_ref"),
+            (pl.col(col_uf_ref).cast(pl.Utf8, strict=False).alias("UF") if col_uf_ref else pl.lit(None).alias("UF")),
+            (pl.col(col_coord_ref).cast(pl.Utf8, strict=False).alias("Coordenador") if col_coord_ref else pl.lit(None).alias("Coordenador")),
         ])
+
+        if COLUNAS["base"] not in df.columns:
+            logging.warning(f"⚠️ '{COLUNAS['base']}' não encontrada no arquivo atual.")
+            if "UF" not in df.columns:
+                df = df.with_columns(pl.lit(None).alias("UF"))
+            if "Coordenador" not in df.columns:
+                df = df.with_columns(pl.lit(None).alias("Coordenador"))
+            return df
+
+        # Normaliza base no df
+        df = df.with_columns([normalize_text_col(COLUNAS["base"])])
 
         # Join seguro
         df = df.join(
             ref.select(["base_ref", "UF", "Coordenador"]),
-            left_on="Base de entrega",
+            left_on=COLUNAS["base"],
             right_on="base_ref",
             how="left"
-        )
+        ).drop("base_ref")
 
-        df = df.drop("base_ref")
         return df
 
     except Exception as e:
         logging.error(f"❌ Erro ao adicionar coordenador: {e}")
+        # garante colunas existirem para não quebrar relatórios
+        if "UF" not in df.columns:
+            df = df.with_columns(pl.lit(None).alias("UF"))
+        if "Coordenador" not in df.columns:
+            df = df.with_columns(pl.lit(None).alias("Coordenador"))
         return df
 
 
 # ===========================================================
-# 📦 Processamento dos arquivos – CORRIGIDO
+# 📦 Processamento dos arquivos
 # ===========================================================
 def processar_arquivos(lista_arquivos):
     dfs = []
@@ -137,19 +207,18 @@ def processar_arquivos(lista_arquivos):
         if df is None:
             continue
 
-        # Normaliza nomes das colunas
         df = df.rename({c: c.strip() for c in df.columns})
 
-        # Converte tudo para texto (impede erro de dtype)
         df = df.with_columns([
             pl.col(c).cast(pl.Utf8, strict=False).alias(c)
             for c in df.columns
         ])
 
-        # Atualiza o conjunto total de colunas
+        if COLUNAS["base"] in df.columns:
+            df = df.with_columns([normalize_text_col(COLUNAS["base"])])
+
         colunas_totais.update(df.columns)
 
-        # Conversões de data
         if COLUNAS["tempo_entrega"] in df.columns:
             df = df.with_columns(
                 pl.col(COLUNAS["tempo_entrega"]).str.strptime(pl.Datetime, strict=False).alias("tempo_entrega_dt")
@@ -160,7 +229,6 @@ def processar_arquivos(lista_arquivos):
                 pl.col(COLUNAS["horario_entrega"]).str.strptime(pl.Datetime, strict=False).alias("horario_entrega_dt")
             )
 
-        # Domingos válidos
         if {"tempo_entrega_dt", "horario_entrega_dt", COLUNAS["assinatura"]}.issubset(df.columns):
             df = df.with_columns([
                 (
@@ -176,7 +244,6 @@ def processar_arquivos(lista_arquivos):
     if not dfs:
         return None
 
-    # Padroniza colunas em todos os arquivos
     dfs_padronizados = []
     for df in dfs:
         faltantes = colunas_totais - set(df.columns)
@@ -185,19 +252,59 @@ def processar_arquivos(lista_arquivos):
 
         dfs_padronizados.append(df.select(sorted(colunas_totais)))
 
-    # Finalmente concatena SEM ERROS
     return pl.concat(dfs_padronizados, how="vertical")
 
 
 # ===========================================================
-# 📊 Geração do relatório final
+# 📌 Planilha final: quantidade por Base de entrega
+# ===========================================================
+def gerar_planilha_quantidade_por_base(df: pl.DataFrame, caminho_saida: str):
+    try:
+        if df is None or df.is_empty():
+            logging.error("❌ DataFrame vazio — não foi possível gerar 'Quantidade por Base'.")
+            return
+
+        if COLUNAS["base"] not in df.columns:
+            logging.error(f"❌ Coluna '{COLUNAS['base']}' não existe no DataFrame.")
+            return
+
+        qtd_por_base = (
+            df.with_columns([normalize_text_col(COLUNAS["base"])])
+            .group_by(COLUNAS["base"])
+            .agg(pl.count().alias("Quantidade"))
+            .sort("Quantidade", descending=True)
+        )
+
+        with pl.ExcelWriter(caminho_saida) as writer:
+            writer.write(qtd_por_base, sheet_name="Qtd por Base")
+
+        logging.info(f"💾 Planilha 'Quantidade por Base' salva em:\n📍 {caminho_saida}")
+
+    except Exception as e:
+        logging.error(f"❌ Erro ao gerar planilha por base: {e}")
+
+
+# ===========================================================
+# 📊 Geração do relatório final (SEM depender de UF fixo)
 # ===========================================================
 def gerar_relatorio(df, caminho_saida):
     try:
         total_pedidos = df.height
-        total_motoristas = df.select(pl.col(COLUNAS["motorista"]).n_unique()).item()
-        total_domingo = df.filter(pl.col("Entrega válida no domingo")).height if "Entrega válida no domingo" in df.columns else 0
-        total_bases = df.select(pl.col(COLUNAS["base"]).n_unique()).item()
+
+        total_motoristas = (
+            df.select(pl.col(COLUNAS["motorista"]).n_unique()).item()
+            if COLUNAS["motorista"] in df.columns else 0
+        )
+
+        total_domingo = (
+            df.filter(pl.col("Entrega válida no domingo")).height
+            if "Entrega válida no domingo" in df.columns else 0
+        )
+
+        total_bases = (
+            df.select(pl.col(COLUNAS["base"]).n_unique()).item()
+            if COLUNAS["base"] in df.columns else 0
+        )
 
         logging.info(f"""
 📊 RESUMO GERAL:
@@ -207,16 +314,29 @@ def gerar_relatorio(df, caminho_saida):
 • Bases distintas: {total_bases:,}
 """)
 
-        resumo_uf = (
-            df.group_by("UF")
-            .agg([
-                pl.count(COLUNAS["pedido"]).alias("Total de Pedidos Recebidos"),
-                pl.col(COLUNAS["motorista"]).n_unique().alias("Motoristas Únicos"),
-                pl.col(COLUNAS["base"]).n_unique().alias("Bases Distintas"),
-                pl.col("Entrega válida no domingo").sum().alias("Entregas válidas no domingo") if "Entrega válida no domingo" in df.columns else pl.lit(0)
-            ])
-            .sort("UF")
-        )
+        # ✅ UF: usa "UF" se existir, senão usa "UF Destino"
+        uf_col = first_existing(df, ["UF", "UF Destino"])
+        if not uf_col:
+            logging.warning("⚠️ Nenhuma coluna de UF encontrada (nem 'UF' nem 'UF Destino'). Resumo por UF ficará vazio.")
+            resumo_uf = pl.DataFrame({
+                "UF": [],
+                "Total de Pedidos Recebidos": [],
+                "Motoristas Únicos": [],
+                "Bases Distintas": [],
+                "Entregas válidas no domingo": []
+            })
+        else:
+            resumo_uf = (
+                df.group_by(uf_col)
+                .agg([
+                    pl.count().alias("Total de Pedidos Recebidos"),
+                    (pl.col(COLUNAS["motorista"]).n_unique().alias("Motoristas Únicos") if COLUNAS["motorista"] in df.columns else pl.lit(0).alias("Motoristas Únicos")),
+                    (pl.col(COLUNAS["base"]).n_unique().alias("Bases Distintas") if COLUNAS["base"] in df.columns else pl.lit(0).alias("Bases Distintas")),
+                    (pl.col("Entrega válida no domingo").sum().alias("Entregas válidas no domingo") if "Entrega válida no domingo" in df.columns else pl.lit(0).alias("Entregas válidas no domingo")),
+                ])
+                .rename({uf_col: "UF"})
+                .sort("UF")
+            )
 
         resumo_geral = pl.DataFrame({
             "Métrica": [
@@ -230,24 +350,24 @@ def gerar_relatorio(df, caminho_saida):
 
         lista_motoristas = (
             df.group_by(COLUNAS["motorista"])
-            .agg(pl.count(COLUNAS["pedido"]).alias("Total de Pedidos"))
+            .agg(pl.count().alias("Total de Pedidos"))
             .rename({COLUNAS["motorista"]: "Motorista"})
             .sort("Total de Pedidos", descending=True)
-        )
+        ) if COLUNAS["motorista"] in df.columns else pl.DataFrame({"Motorista": [], "Total de Pedidos": []})
 
-        lista_bases = (
+        qtd_por_base = (
             df.group_by(COLUNAS["base"])
-            .agg(pl.count(COLUNAS["pedido"]).alias("Total de Pedidos"))
+            .agg(pl.count().alias("Quantidade"))
             .rename({COLUNAS["base"]: "Base de Entrega"})
-            .sort("Total de Pedidos", descending=True)
-        )
+            .sort("Quantidade", descending=True)
+        ) if COLUNAS["base"] in df.columns else pl.DataFrame({"Base de Entrega": [], "Quantidade": []})
 
         with pl.ExcelWriter(caminho_saida) as writer:
             writer.write(df, sheet_name="Detalhes")
             writer.write(resumo_uf, sheet_name="Resumo por UF")
             writer.write(resumo_geral, sheet_name="Resumo Geral")
             writer.write(lista_motoristas, sheet_name="Motoristas")
-            writer.write(lista_bases, sheet_name="Bases")
+            writer.write(qtd_por_base, sheet_name="Qtd por Base")
 
         logging.info(f"💾 Arquivo salvo com sucesso em:\n📍 {caminho_saida}")
 
@@ -271,8 +391,13 @@ if __name__ == "__main__":
         df = processar_arquivos(arquivos)
         if df is not None:
             agora = datetime.now().strftime("%Y%m%d_%H%M%S")
+
             caminho_saida = os.path.join(PASTA, f"Analise_Consolidada_{agora}.xlsx")
             gerar_relatorio(df, caminho_saida)
+
+            caminho_saida_base = os.path.join(PASTA, f"Quantidade_por_Base_{agora}.xlsx")
+            gerar_planilha_quantidade_por_base(df, caminho_saida_base)
+
         else:
             logging.error("❌ Nenhum dado processado.")
 
