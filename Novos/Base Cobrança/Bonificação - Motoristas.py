@@ -10,7 +10,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 # ==========================================================
 # CONFIG
 # ==========================================================
-PASTA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Nova pasta\Entrega Realizada"
+PASTA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\17- Motoristas\Entregas"
 ARQUIVO_SAIDA = os.path.join(
     r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Nova pasta",
     "resumo_entregadores.xlsx"
