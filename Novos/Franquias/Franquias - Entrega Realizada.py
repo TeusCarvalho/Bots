@@ -42,7 +42,7 @@ os.makedirs(PASTA_ARQUIVO, exist_ok=True)
 DATA_HOJE = datetime.now().strftime("%Y%m%d")
 ARQUIVO_SAIDA = os.path.join(PASTA_SAIDA, f"Resumo_Consolidado_{DATA_HOJE}.xlsx")
 
-WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/92a82aea-9b5c-4e3d-9169-8d4753ecef38"
+WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b"
 
 LINK_PASTA = (
     "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/"
@@ -62,9 +62,16 @@ BASES_VALIDAS = [
     "F POS-GO", "F PVH 02-RO", "F PVH-RO", "F PVL-MT", "F RDC -PA", "F RVD - GO",
     "F SEN-GO", "F SFX-PA", "F TGA-MT", "F TGT-DF", "F TLA-PA", "F TRD-GO",
     "F TUR-PA", "F VHL-RO", "F VLP-GO", "F XIG-PA", "F TRM-AM", "F STM-PA",
-    "F JPN 02-RO", "F CAC-RO"
+    "F JPN 02-RO", "F CAC-RO", "F SVC-RR", "F SNP-MT", "F SJA-GO", "F SBS-DF", "F SBN-DF", "F SAM-DF",
+    "F ROO-MT", "F RFI-DF", "F RBR-AC", "F RBR 02-AC", "F PVL 02-MT", "F PVH 03-RO",
+    "F PTD-MT", "F PPA-MS", "F PNA-TO", "F PLA-GO", "F PDT-TO", "F PDP-PA",
+    "F PAZ-AM", "F NMB-PA", "F NDI-MS", "F MTB-PA", "F MRL-AM", "F MDR-PA",
+    "F MDO-RO", "F MAC-AP", "F JRG-GO", "F JPN-RO", "F JAU-RO", "F IPX-PA",
+    "F HMT-AM", "F GYN 04-GO", "F GUA-DF", "F GNS-PA", "F GFN-PA", "F EMA-DF",
+    "F CTL-GO", "F CRX-GO", "F CRH-PA", "F CGR 04-MS", "F CGR 03-MS", "F CDN 02-AM",
+    "F CCR-MT", "F BVB-RR", "F BTS-RO", "F ARQ 02-RO", "F ANA-PA", "F AGB-MT",
+    "F AGB 02-MT",
 ]
-
 
 # ----------------------------------------------------------
 # 🟢 COR DO PERCENTUAL PARA O CARD

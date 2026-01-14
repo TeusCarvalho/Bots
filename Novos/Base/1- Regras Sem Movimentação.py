@@ -57,10 +57,25 @@ INCOMPLETOS_KEY_PARTE_1 = "Mercadorias.que.chegam.incompletos"
 INCOMPLETOS_KEY_PARTE_2 = "货未到齐"
 
 # --- 6. Listas para Regras de Negócio ---
-FRANQUIAS = ["F AGL-GO", "F ALV-AM", "F APG - GO", "F ARQ - RO", "F BSB-DF", "F CDN-AM", "F CGR - MS", "F FMA-GO",
-             "F GYN - GO", "F ITI-PA", "F RVD - GO", "F TRD-GO", "F CGR 02-MS", "F GYN 02-GO", "F OCD-GO", "F PVH-RO",
-             "F TGT-DF", "F DOM -PA", "F JCD-PA", "F MCP-AP", "F ORL-PA", "F PCA-PA", "F RDC -PA", "F SFX-PA",
-             "F TLA-PA"]
+FRANQUIAS = ["F AGL-GO", "F ALV-AM", "F ALX-AM", "F AMB-MS", "F ANP-GO", "F APG - GO",
+    "F ARQ - RO", "F BAO-PA", "F BSB - DF", "F BSB-DF", "F BSL-AC", "F CDN-AM",
+    "F CEI-DF", "F CGR - MS", "F CGR 02-MS", "F CHR-AM", "F CMV-MT", "F CNC-PA",
+    "F CNF-MT", "F DOM -PA", "F DOU-MS", "F ELD-PA", "F FMA-GO", "F GAI-TO",
+    "F GRP-TO", "F GYN - GO", "F GYN 02-GO", "F GYN 03-GO", "F IGA-PA", "F ITI -PA",
+    "F ITI-PA", "F JCD-PA", "F MCP 02-AP", "F MCP-AP", "F OCD - GO", "F OCD-GO",
+    "F ORL-PA", "F PCA-PA", "F PDR-GO", "F PGM-PA", "F PLN-DF", "F PON-GO",
+    "F POS-GO", "F PVH 02-RO", "F PVH-RO", "F PVL-MT", "F RDC -PA", "F RVD - GO",
+    "F SEN-GO", "F SFX-PA", "F TGA-MT", "F TGT-DF", "F TLA-PA", "F TRD-GO",
+    "F TUR-PA", "F VHL-RO", "F VLP-GO", "F XIG-PA", "F TRM-AM", "F STM-PA",
+    "F JPN 02-RO", "F CAC-RO", "F SVC-RR", "F SNP-MT", "F SJA-GO", "F SBS-DF", "F SBN-DF", "F SAM-DF",
+    "F ROO-MT", "F RFI-DF", "F RBR-AC", "F RBR 02-AC", "F PVL 02-MT", "F PVH 03-RO",
+    "F PTD-MT", "F PPA-MS", "F PNA-TO", "F PLA-GO", "F PDT-TO", "F PDP-PA",
+    "F PAZ-AM", "F NMB-PA", "F NDI-MS", "F MTB-PA", "F MRL-AM", "F MDR-PA",
+    "F MDO-RO", "F MAC-AP", "F JRG-GO", "F JPN-RO", "F JAU-RO", "F IPX-PA",
+    "F HMT-AM", "F GYN 04-GO", "F GUA-DF", "F GNS-PA", "F GFN-PA", "F EMA-DF",
+    "F CTL-GO", "F CRX-GO", "F CRH-PA", "F CGR 04-MS", "F CGR 03-MS", "F CDN 02-AM",
+    "F CCR-MT", "F BVB-RR", "F BTS-RO", "F ARQ 02-RO", "F ANA-PA", "F AGB-MT",
+    "F AGB 02-MT"]
 
 UNIDADES_SC_DC = ["DC AGB-MT", "DC CGR-MS", "DC GYN-GO", "DC JUI-MT", "DC PVH-RO", "DC RBR-AC", "DF BSB", "GYN -GO",
                   "MT CGB"]

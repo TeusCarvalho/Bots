@@ -1,204 +1,197 @@
-# compare_jms_excel.py
 # -*- coding: utf-8 -*-
-
-import argparse
 import os
-from typing import Tuple, Optional
+import re
+from pathlib import Path
+from typing import Optional, List
 
-import pandas as pd
+import polars as pl
 
 
-# =========================
-# UI: seleção de arquivos
-# =========================
-def pick_excel_file(title: str) -> str:
-    """
-    Abre uma janela para selecionar um arquivo Excel.
-    Retorna o caminho selecionado. Lança erro se cancelar.
-    """
+# ======================================================
+# CONFIG
+# ======================================================
+PASTA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Dez"
+SAIDA_XLSX = os.path.join(PASTA, "Codigo_Base_Entregador_Dezembro_2025.xlsx")
+
+# Colunas da sua base
+COL_BASE = "Base de entrega"
+COL_ENTREGADOR = "Responsável pela entrega"
+COL_TEMPO = "Tempo de entrega"
+COL_CODIGO = "Código entregador"
+
+# Filtro por mês/ano (se quiser pegar tudo, coloque APLICAR_FILTRO_MES = False)
+APLICAR_FILTRO_MES = True
+ANO_ALVO = 2025
+MES_ALVO = 12
+
+
+# ======================================================
+# HELPERS
+# ======================================================
+def listar_excels(pasta: str) -> List[str]:
+    """Lista .xlsx válidos na pasta (ignora temporários ~$ e o arquivo de saída)."""
+    pasta_path = Path(pasta)
+    arquivos = []
+    for p in pasta_path.glob("*.xlsx"):
+        nome = p.name.lower()
+        if nome.startswith("~$"):
+            continue
+        if p.name == Path(SAIDA_XLSX).name.lower():
+            continue
+        if p.name.lower() == Path(SAIDA_XLSX).name.lower():
+            continue
+        arquivos.append(str(p))
+    return arquivos
+
+
+def detectar_coluna(df: pl.DataFrame, nome_exato: str) -> Optional[str]:
+    """Casa o nome exato; se não achar, tenta por normalização (espaços)."""
+    if nome_exato in df.columns:
+        return nome_exato
+
+    def norm(s: str) -> str:
+        s = str(s).strip().lower()
+        s = re.sub(r"\s+", " ", s)
+        return s
+
+    alvo = norm(nome_exato)
+    for c in df.columns:
+        if norm(c) == alvo:
+            return c
+    return None
+
+
+def ler_excel(path: str) -> pl.DataFrame:
+    """Lê Excel com Polars; fallback para pandas."""
     try:
-        import tkinter as tk
-        from tkinter import filedialog
-    except Exception as e:
-        raise RuntimeError(
-            "Não foi possível carregar tkinter para abrir a janela. "
-            "Rode via terminal passando --file-a e --file-b."
-        ) from e
+        return pl.read_excel(path)
+    except Exception:
+        import pandas as pd
+        pdf = pd.read_excel(path)
+        return pl.from_pandas(pdf)
 
-    root = tk.Tk()
-    root.withdraw()  # oculta janela principal
-    root.attributes("-topmost", True)
 
-    file_path = filedialog.askopenfilename(
-        title=title,
-        filetypes=[
-            ("Excel files", "*.xlsx *.xlsm *.xls"),
-            ("All files", "*.*"),
-        ],
+def parse_datetime_flex(col_expr: pl.Expr) -> pl.Expr:
+    """Converte 'YYYY-MM-DD HH:MM:SS' (e variações) para Datetime."""
+    dt1 = col_expr.cast(pl.Utf8, strict=False).str.strptime(
+        pl.Datetime,
+        format="%Y-%m-%d %H:%M:%S",
+        strict=False,
+    )
+    dt2 = col_expr.cast(pl.Utf8, strict=False).str.to_datetime(strict=False)
+    return pl.coalesce([dt1, dt2])
+
+
+def limpar_texto(col_expr: pl.Expr) -> pl.Expr:
+    """Apenas limpa espaços e nulos, sem 'normalizar' nomes."""
+    return (
+        col_expr
+        .cast(pl.Utf8, strict=False)
+        .fill_null("")
+        .str.strip_chars()
+        .str.replace_all(r"\s+", " ")
     )
 
-    root.destroy()
 
-    if not file_path:
-        raise RuntimeError("Seleção cancelada. Nenhum arquivo foi escolhido.")
-    return file_path
-
-
-def _norm_col_name(s: str) -> str:
-    return str(s).strip().casefold()
-
-
-def _find_column(df: pd.DataFrame, target: str) -> str:
+def limpar_codigo(col_expr: pl.Expr) -> pl.Expr:
     """
-    Encontra a coluna no df por comparação case-insensitive e ignorando espaços.
+    Converte para texto e remove sufixos comuns de float (ex.: '1234.0').
+    Observação: se o Excel tiver salvo o código como número, zeros à esquerda já foram perdidos no arquivo.
     """
-    target_n = _norm_col_name(target)
-    mapping = {_norm_col_name(c): c for c in df.columns}
-    if target_n in mapping:
-        return mapping[target_n]
-
-    def squeeze_spaces(x: str) -> str:
-        return " ".join(str(x).strip().split()).casefold()
-
-    target_s = squeeze_spaces(target)
-    mapping2 = {squeeze_spaces(c): c for c in df.columns}
-    if target_s in mapping2:
-        return mapping2[target_s]
-
-    cols = ", ".join([str(c) for c in df.columns])
-    raise KeyError(f'Coluna "{target}" não encontrada. Colunas disponíveis: {cols}')
+    s = col_expr.cast(pl.Utf8, strict=False).fill_null("").str.strip_chars()
+    # remove ".0" no fim
+    s = s.str.replace(r"\.0$", "")
+    # remove espaços duplicados
+    s = s.str.replace_all(r"\s+", " ")
+    return s
 
 
-def _normalize_jms_series(s: pd.Series) -> pd.Series:
-    """
-    Normaliza valores do JMS para comparação:
-    - converte para string
-    - remove espaços
-    - trata vazios como NA
-    - corrige "123.0" -> "123" (caso Excel tenha virado float)
-    """
-    s2 = s.astype("string").str.strip()
-    s2 = s2.replace("", pd.NA)
-    s2 = s2.str.replace(r"^(\d+)\.0$", r"\1", regex=True)
-    return s2
-
-
-def read_excel_safe(path: str, sheet: Optional[str]) -> pd.DataFrame:
-    if sheet is None:
-        return pd.read_excel(path, engine="openpyxl")
-    return pd.read_excel(path, sheet_name=sheet, engine="openpyxl")
-
-
-def compare_excels(
-    file_a: str,
-    file_b: str,
-    col_target: str,
-    sheet_a: Optional[str],
-    sheet_b: Optional[str],
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    df_a = read_excel_safe(file_a, sheet_a)
-    df_b = read_excel_safe(file_b, sheet_b)
-
-    col_a = _find_column(df_a, col_target)
-    col_b = _find_column(df_b, col_target)
-
-    jms_a = _normalize_jms_series(df_a[col_a])
-    jms_b = _normalize_jms_series(df_b[col_b])
-
-    set_a = set(jms_a.dropna().unique().tolist())
-    set_b = set(jms_b.dropna().unique().tolist())
-
-    comuns = sorted(set_a & set_b)
-    so_a = sorted(set_a - set_b)
-    so_b = sorted(set_b - set_a)
-
-    a_status = jms_a.apply(
-        lambda x: "EXISTE_EM_B" if pd.notna(x) and x in set_b else "NAO_EXISTE_EM_B"
-    )
-    b_status = jms_b.apply(
-        lambda x: "EXISTE_EM_A" if pd.notna(x) and x in set_a else "NAO_EXISTE_EM_A"
-    )
-
-    df_a_out = df_a.copy()
-    df_b_out = df_b.copy()
-
-    df_a_out["JMS_NORMALIZADO"] = jms_a
-    df_a_out["STATUS_COMPARACAO"] = a_status
-
-    df_b_out["JMS_NORMALIZADO"] = jms_b
-    df_b_out["STATUS_COMPARACAO"] = b_status
-
-    df_comuns = pd.DataFrame({col_target: comuns})
-    df_so_a = pd.DataFrame({col_target: so_a})
-    df_so_b = pd.DataFrame({col_target: so_b})
-
-    return df_a_out, df_b_out, df_comuns, df_so_a, df_so_b
-
-
+# ======================================================
+# MAIN
+# ======================================================
 def main():
-    parser = argparse.ArgumentParser(
-        description='Compara dois Excels pelo campo "Número de pedido JMS" e gera outputs.'
+    arquivos = listar_excels(PASTA)
+    if not arquivos:
+        raise FileNotFoundError(f"Nenhum .xlsx encontrado em: {PASTA}")
+
+    print(f"[INFO] Arquivos encontrados: {len(arquivos)}")
+
+    dfs = []
+    for arq in arquivos:
+        try:
+            df = ler_excel(arq)
+
+            col_base = detectar_coluna(df, COL_BASE)
+            col_ent = detectar_coluna(df, COL_ENTREGADOR)
+            col_tempo = detectar_coluna(df, COL_TEMPO)
+            col_cod = detectar_coluna(df, COL_CODIGO)
+
+            faltando = [n for n, c in [
+                (COL_CODIGO, col_cod),
+                (COL_BASE, col_base),
+                (COL_ENTREGADOR, col_ent),
+                (COL_TEMPO, col_tempo),
+            ] if c is None]
+
+            if faltando:
+                print(f"[WARN] Pulando (colunas faltando {faltando}): {Path(arq).name}")
+                continue
+
+            temp = df.select([
+                limpar_codigo(pl.col(col_cod)).alias("Codigo"),
+                limpar_texto(pl.col(col_base)).alias("Base"),
+                limpar_texto(pl.col(col_ent)).alias("Entregador"),
+                parse_datetime_flex(pl.col(col_tempo)).alias("_tempo_entrega"),
+            ])
+
+            if APLICAR_FILTRO_MES:
+                temp = (
+                    temp
+                    .filter(pl.col("_tempo_entrega").is_not_null())
+                    .filter(pl.col("_tempo_entrega").dt.year() == ANO_ALVO)
+                    .filter(pl.col("_tempo_entrega").dt.month() == MES_ALVO)
+                )
+
+            dfs.append(temp)
+            print(f"[OK] {Path(arq).name} | linhas: {temp.height}")
+
+        except Exception as e:
+            print(f"[ERRO] {Path(arq).name}: {e}")
+
+    if not dfs:
+        raise ValueError("Nenhum arquivo válido foi processado (verifique colunas/arquivos).")
+
+    df_all = pl.concat(dfs, how="vertical_relaxed")
+
+    # Remove vazios
+    df_all = df_all.filter(
+        (pl.col("Codigo") != "") & (pl.col("Base") != "") & (pl.col("Entregador") != "")
     )
-    parser.add_argument("--file-a", default="", help="Caminho do Excel A")
-    parser.add_argument("--file-b", default="", help="Caminho do Excel B")
-    parser.add_argument(
-        "--col",
-        default="Número de pedido JMS",
-        help='Nome da coluna alvo (default: "Número de pedido JMS")',
-    )
-    parser.add_argument("--sheet-a", default=None, help="Aba do Excel A (default: primeira)")
-    parser.add_argument("--sheet-b", default=None, help="Aba do Excel B (default: primeira)")
-    parser.add_argument("--outdir", default="output_comparacao", help="Pasta de saída")
 
-    args = parser.parse_args()
-
-    file_a = args.file_a.strip()
-    file_b = args.file_b.strip()
-
-    # Se não passou os caminhos, abre a janela para escolher
-    if not file_a:
-        file_a = pick_excel_file("Selecione o Excel A")
-    if not file_b:
-        file_b = pick_excel_file("Selecione o Excel B")
-
-    os.makedirs(args.outdir, exist_ok=True)
-
-    a_out, b_out, comuns, so_a, so_b = compare_excels(
-        file_a=file_a,
-        file_b=file_b,
-        col_target=args.col,
-        sheet_a=args.sheet_a,
-        sheet_b=args.sheet_b,
+    # Remove duplicados (exatamente o que você pediu: sem nomes/códigos repetidos)
+    df_out = (
+        df_all
+        .select(["Codigo", "Base", "Entregador"])
+        .unique(subset=["Codigo", "Base", "Entregador"], keep="first")
+        .sort(["Codigo", "Base", "Entregador"])
     )
 
-    total_a = a_out["JMS_NORMALIZADO"].dropna().nunique()
-    total_b = b_out["JMS_NORMALIZADO"].dropna().nunique()
+    print(f"[INFO] Linhas finais (sem duplicados): {df_out.height}")
+    print("\n=== AMOSTRA (TOP 10) ===")
+    print(df_out.head(10))
 
-    print("=== RESUMO ===")
-    print(f"A (únicos): {total_a}")
-    print(f"B (únicos): {total_b}")
-    print(f"Comuns: {len(comuns)}")
-    print(f"Só A: {len(so_a)}")
-    print(f"Só B: {len(so_b)}")
+    out = Path(SAIDA_XLSX)
+    out.parent.mkdir(parents=True, exist_ok=True)
 
-    path_a = os.path.join(args.outdir, "A_com_status.xlsx")
-    path_b = os.path.join(args.outdir, "B_com_status.xlsx")
-    path_comuns = os.path.join(args.outdir, "JMS_comuns.xlsx")
-    path_so_a = os.path.join(args.outdir, "JMS_so_na_A.xlsx")
-    path_so_b = os.path.join(args.outdir, "JMS_so_na_B.xlsx")
-
-    a_out.to_excel(path_a, index=False)
-    b_out.to_excel(path_b, index=False)
-    comuns.to_excel(path_comuns, index=False)
-    so_a.to_excel(path_so_a, index=False)
-    so_b.to_excel(path_so_b, index=False)
-
-    print("\nArquivos gerados em:", os.path.abspath(args.outdir))
-    print("-", path_a)
-    print("-", path_b)
-    print("-", path_comuns)
-    print("-", path_so_a)
-    print("-", path_so_b)
+    try:
+        with pl.ExcelWriter(str(out)) as writer:
+            df_out.write_excel(writer, worksheet="Mapa_Codigo_Base_Entregador")
+        print(f"\n[OK] Gerado: {out}")
+    except Exception:
+        # fallback CSV
+        csv_out = out.with_suffix(".csv")
+        df_out.write_csv(str(csv_out))
+        print(f"\n[WARN] Não consegui salvar Excel; gerei CSV: {csv_out}")
 
 
 if __name__ == "__main__":
