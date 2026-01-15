@@ -1843,3 +1843,27 @@ KeyError: "Coluna 'DATA PREVISTA DE ENTREGA' não encontrada."
 2026-01-14 14:07:39,003 - INFO - 📨 Card enviado para Marcos Caique
 2026-01-14 14:07:40,374 - INFO - 📨 Card enviado para Ana Cunha
 2026-01-14 14:07:40,375 - INFO - 🏁 Processamento concluído (v2.13)
+2026-01-15 08:15:31,235 - INFO - 🚀 Iniciando processamento SLA (v2.13 — feriados nacionais)...
+2026-01-15 08:15:31,235 - INFO - 📅 Período (após feriados) usado para SLA: 14/01/2026
+2026-01-15 08:15:31,235 - INFO - 🗓️ Dias considerados: Qua 14/01
+2026-01-15 08:15:31,235 - INFO - 📌 Datas (ISO): 2026-01-14
+2026-01-15 08:15:35,444 - INFO - 📥 Registros carregados: 173057
+2026-01-15 08:15:35,457 - INFO - 📅 Período FINAL usado para cálculo SLA: 14/01/2026
+2026-01-15 08:15:35,457 - INFO - 🗓️ Dias considerados (FINAL): Qua 14/01
+2026-01-15 08:15:35,457 - INFO - 📌 Datas (ISO): 2026-01-14
+2026-01-15 08:15:35,457 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2026-01-15 08:15:35,465 - INFO - 📊 Registros para 14/01/2026: 173057
+2026-01-15 08:15:35,803 - INFO - 🧩 Registros sem coordenador após join: 53
+2026-01-15 08:15:35,849 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20260114.xlsx
+2026-01-15 08:15:39,661 - INFO - 📨 Card enviado para João Melo
+2026-01-15 08:15:41,451 - INFO - 📨 Card enviado para Johas Vieira
+2026-01-15 08:15:43,206 - INFO - 📨 Card enviado para Anderson Matheus
+2026-01-15 08:15:44,805 - INFO - 📨 Card enviado para Marcelo Medina
+2026-01-15 08:15:46,473 - INFO - 📨 Card enviado para Odária Fereira
+2026-01-15 08:15:48,148 - INFO - 📨 Card enviado para Rodrigo Castro
+2026-01-15 08:15:49,827 - INFO - 📨 Card enviado para Orlean Nascimento
+2026-01-15 08:15:51,556 - INFO - 📨 Card enviado para Jose Marlon
+2026-01-15 08:15:53,881 - INFO - 📨 Card enviado para Emerson Silva
+2026-01-15 08:15:55,368 - INFO - 📨 Card enviado para Marcos Caique
+2026-01-15 08:15:57,055 - INFO - 📨 Card enviado para Ana Cunha
+2026-01-15 08:15:57,056 - INFO - 🏁 Processamento concluído (v2.13)

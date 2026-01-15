@@ -1,194 +1,164 @@
 # -*- coding: utf-8 -*-
-"""
-======================================================
-📦 Consulta Automática de CEPs via API ViaCEP
-Versão: 3.0 (2025-10-16)
-Autor: bb-assistente 😎
-------------------------------------------------------
-✅ Localiza o arquivo Excel automaticamente
-✅ Normaliza e valida CEPs
-✅ Consulta API ViaCEP com cache + tentativas
-✅ Gera planilha formatada + resumo por UF
-✅ Cria log detalhado com tempo total e erros
-======================================================
-"""
+from __future__ import annotations
 
 import os
-import time
-import random
-import logging
-import pandas as pd
+import unicodedata
+from pathlib import Path
 import requests
-from tqdm import tqdm
-from openpyxl import load_workbook
-from openpyxl.styles import PatternFill, Font
+import pandas as pd
 
-# ======================================================
-# ⚙️ CONFIGURAÇÕES
-# ======================================================
+PASTA_SAIDA = Path(r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Dez")
+ARQ_XLSX = PASTA_SAIDA / "enderecos_por_cidade.xlsx"
 
-PASTA_ENTRADA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Local de Teste\CEP"
-ARQUIVO_SAIDA = os.path.join(PASTA_ENTRADA, "CEPs_Resultados.xlsx")
-ARQUIVO_LOG = os.path.join(PASTA_ENTRADA, f"log_{time.strftime('%Y%m%d')}.txt")
+BASE = "https://api.correios.com.br/cep"
+URL_LOCALIDADES = f"{BASE}/v1/localidades"
+URL_BAIRROS = f"{BASE}/v1/bairros"
+URL_ENDERECOS = f"{BASE}/v2/enderecos"
 
-# Configuração de logs
-logging.basicConfig(
-    filename=ARQUIVO_LOG,
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    encoding="utf-8"
-)
+def _norm(s: str) -> str:
+    s = (s or "").strip().lower()
+    s = unicodedata.normalize("NFKD", s)
+    return "".join(ch for ch in s if not unicodedata.combining(ch))
 
-# ======================================================
-# 🔍 FUNÇÃO PARA LOCALIZAR O ARQUIVO
-# ======================================================
-
-def encontrar_excel(pasta: str) -> str | None:
-    """Procura automaticamente o primeiro arquivo .xlsx na pasta."""
-    print(f"🔎 Procurando arquivo Excel em:\n{pasta}\n")
-
-    if not os.path.exists(pasta):
-        print("❌ A pasta informada não existe.")
-        return None
-
-    arquivos = [f for f in os.listdir(pasta) if f.lower().endswith(".xlsx")]
-    if not arquivos:
-        print("⚠️ Nenhum arquivo .xlsx encontrado.")
-        return None
-
-    if len(arquivos) > 1:
-        print("📁 Vários arquivos encontrados:")
-        for i, nome in enumerate(arquivos, 1):
-            print(f"  {i}. {nome}")
-        try:
-            escolha = int(input("\nDigite o número do arquivo desejado: "))
-            caminho = os.path.join(pasta, arquivos[escolha - 1])
-        except (ValueError, IndexError):
-            print("⚠️ Escolha inválida. Usando o primeiro arquivo.")
-            caminho = os.path.join(pasta, arquivos[0])
-    else:
-        caminho = os.path.join(pasta, arquivos[0])
-
-    print(f"✅ Arquivo selecionado: {os.path.basename(caminho)}\n")
-    return caminho
-
-# ======================================================
-# 🌐 CONSULTA API VIACEP
-# ======================================================
-
-def consulta_viacep(cep: str):
-    """Consulta cidade e UF usando a API ViaCEP (com retry e backoff)."""
-    url = f"https://viacep.com.br/ws/{cep}/json/"
-    for tentativa in range(3):
-        try:
-            r = requests.get(url, timeout=10)
-            r.raise_for_status()
-            data = r.json()
-            if data.get("erro"):
-                return None, None, "CEP não encontrado"
-            return data.get("localidade"), data.get("uf"), "OK"
-        except Exception as e:
-            time.sleep(random.uniform(0.6, 1.2))
-    return None, None, "Erro permanente"
-
-# ======================================================
-# 🎨 FORMATAÇÃO DO EXCEL
-# ======================================================
-
-def formatar_excel(caminho: str):
-    """Aplica formatação visual no Excel."""
-    wb = load_workbook(caminho)
-    ws = wb["CEPs Detalhados"]
-
-    verde = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-    vermelho = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-    negrito = Font(bold=True)
-
-    for cell in ws["D"][1:]:
-        if cell.value == "OK":
-            for c in ws[cell.row]:
-                c.fill = verde
-        elif cell.value != "OK":
-            for c in ws[cell.row]:
-                c.fill = vermelho
-
-    for cell in ws[1]:
-        cell.font = negrito
-
-    wb.save(caminho)
-
-# ======================================================
-# 🧠 FUNÇÃO PRINCIPAL
-# ======================================================
+def pick_content(payload):
+    # A API costuma devolver paginação com "content"; mas deixo robusto.
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        if "content" in payload and isinstance(payload["content"], list):
+            return payload["content"]
+        if "items" in payload and isinstance(payload["items"], list):
+            return payload["items"]
+    return []
 
 def main():
-    inicio = time.time()
-    caminho = encontrar_excel(PASTA_ENTRADA)
-    if not caminho:
-        return
+    PASTA_SAIDA.mkdir(parents=True, exist_ok=True)
 
-    print("📂 Lendo planilha...\n")
-    df = pd.read_excel(caminho, dtype={"CEP": str})
+    token = (os.getenv("CORREIOS_TOKEN") or "").strip()
+    if not token:
+        raise SystemExit(
+            "Defina a variável de ambiente CORREIOS_TOKEN com seu Bearer Token dos Correios."
+        )
 
-    if "CEP" not in df.columns:
-        print("❌ Erro: a planilha não contém uma coluna chamada 'CEP'.")
-        return
+    uf = input("UF (ex: GO): ").strip().upper()
+    cidade = input("Cidade (ex: Goiânia): ").strip()
 
-    # Normaliza os CEPs
-    df["CEP"] = df["CEP"].astype(str).str.replace(r'\D', '', regex=True).str.zfill(8)
-
-    cidades, ufs, status = [], [], []
-    cache_cep = {}
-
-    print(f"🔎 Consultando {len(df)} CEPs no ViaCEP...\n")
-    for cep in tqdm(df["CEP"], desc="Consultando CEPs", ncols=80):
-        if not cep.isdigit() or len(cep) != 8:
-            cidades.append("")
-            ufs.append("")
-            status.append("CEP inválido")
-            continue
-
-        if cep in cache_cep:
-            cidade, uf, st = cache_cep[cep]
-        else:
-            cidade, uf, st = consulta_viacep(cep)
-            cache_cep[cep] = (cidade, uf, st)
-
-        cidades.append(cidade or "")
-        ufs.append(uf or "")
-        status.append(st)
-
-    resultado = pd.DataFrame({
-        "CEP": df["CEP"],
-        "Cidade": cidades,
-        "UF": ufs,
-        "Status da consulta": status
+    session = requests.Session()
+    session.headers.update({
+        "accept": "application/json",
+        "Authorization": f"Bearer {token}",
     })
 
-    # Cria resumo por UF
-    resumo = resultado.groupby("UF", dropna=True).size().reset_index(name="Qtd_CEPs")
+    # 1) Descobrir a grafia/padrão exato da localidade
+    r = session.get(URL_LOCALIDADES, params={"uf": uf, "localidade": cidade, "page": 0, "size": 50}, timeout=30)
+    r.raise_for_status()
+    locs = pick_content(r.json())
 
-    with pd.ExcelWriter(ARQUIVO_SAIDA, engine='openpyxl') as writer:
-        resultado.to_excel(writer, index=False, sheet_name="CEPs Detalhados")
-        resumo.to_excel(writer, index=False, sheet_name="Resumo por UF")
+    if not locs:
+        raise SystemExit(f"Nenhuma localidade encontrada para UF={uf} e cidade={cidade}.")
 
-    formatar_excel(ARQUIVO_SAIDA)
+    cidade_norm = _norm(cidade)
+    best = None
+    for item in locs:
+        nome = item.get("localidade") or item.get("nome") or ""
+        if _norm(nome) == cidade_norm:
+            best = item
+            break
+    if best is None:
+        best = locs[0]
 
-    tempo_total = round(time.time() - inicio, 2)
-    total_erros = (resultado["Status da consulta"] != "OK").sum()
+    localidade_padrao = best.get("localidade") or best.get("nome") or cidade
+    print(f"Localidade usada (padrão Correios): {localidade_padrao}")
 
-    print(f"\n✅ Planilha gerada com sucesso: {ARQUIVO_SAIDA}")
-    print(f"📊 CEPs únicos: {resultado['CEP'].nunique()} / Totais: {len(resultado)}")
-    print(f"❌ CEPs inválidos/erro: {total_erros}")
-    print(f"⏱️ Tempo total: {tempo_total}s\n")
+    # 2) Listar bairros da localidade
+    # Endpoint: /v1/bairros/{uf}/localidades/{localidade}
+    r = session.get(f"{URL_BAIRROS}/{uf}/localidades/{localidade_padrao}", params={"page": 0, "size": 500}, timeout=30)
+    r.raise_for_status()
+    bairros_payload = r.json()
+    bairros = pick_content(bairros_payload)
+    if not bairros:
+        # alguns retornos podem vir como lista direta
+        if isinstance(bairros_payload, list):
+            bairros = bairros_payload
 
-    logging.info(f"Arquivo processado: {os.path.basename(caminho)}")
-    logging.info(f"Total de CEPs: {len(resultado)} | Erros: {total_erros}")
-    logging.info(f"Tempo total: {tempo_total}s")
+    # Extrai nomes
+    nomes_bairros = []
+    for b in bairros:
+        nome = b.get("bairro") or b.get("nome") or ""
+        if nome:
+            nomes_bairros.append(nome)
 
+    # Se não vier bairro, ainda dá para tentar buscar endereços só por cidade (pode ser pesado)
+    if not nomes_bairros:
+        print("Aviso: não consegui listar bairros. Vou buscar endereços apenas por UF+localidade (paginado).")
+        nomes_bairros = [""]  # busca sem filtro de bairro
 
-# ======================================================
-# 🚀 EXECUÇÃO
-# ======================================================
+    # 3) Para cada bairro, pagina /v2/enderecos
+    all_rows = []
+    for bairro in sorted(set(nomes_bairros)):
+        page = 0
+        while True:
+            params = {"uf": uf, "localidade": localidade_padrao, "page": page, "size": 200, "sort": "cep,asc"}
+            if bairro:
+                params["bairro"] = bairro
+
+            r = session.get(URL_ENDERECOS, params=params, timeout=30)
+            r.raise_for_status()
+            payload = r.json()
+
+            content = pick_content(payload)
+            for it in content:
+                all_rows.append({
+                    "UF": it.get("uf", uf),
+                    "Cidade": it.get("localidade", localidade_padrao),
+                    "Bairro": it.get("bairro", bairro),
+                    "Logradouro": it.get("logradouro", ""),
+                    "Complemento": it.get("complemento", ""),
+                    "CEP": it.get("cep", ""),
+                    "TipoCEP": it.get("tipoCEP", ""),
+                    "TipoLogradouro": it.get("tipoLogradouro", ""),
+                    "Abreviatura": it.get("abreviatura", ""),
+                })
+
+            page_info = payload.get("page") if isinstance(payload, dict) else None
+            if not page_info:
+                # sem paginação explícita, quebra quando não vier mais conteúdo
+                if not content:
+                    break
+                page += 1
+                continue
+
+            total_pages = int(page_info.get("totalPages", 1))
+            page += 1
+            if page >= total_pages:
+                break
+
+    if not all_rows:
+        raise SystemExit("Não retornou nenhum endereço para essa cidade (ou sua conta não tem permissão/dados).")
+
+    df = pd.DataFrame(all_rows)
+
+    # Aba de bairros (se houver)
+    df_bairros = (
+        df[["UF", "Cidade", "Bairro"]]
+        .drop_duplicates()
+        .sort_values(["UF", "Cidade", "Bairro"], kind="stable")
+        .reset_index(drop=True)
+    )
+
+    # Aba resumo
+    df_resumo = (
+        df.groupby(["UF", "Cidade"], as_index=False)
+          .agg(Qtd_Enderecos=("CEP", "size"), Qtd_Bairros=("Bairro", "nunique"))
+          .sort_values(["UF", "Cidade"], kind="stable")
+    )
+
+    with pd.ExcelWriter(ARQ_XLSX, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Enderecos")
+        df_bairros.to_excel(writer, index=False, sheet_name="Bairros")
+        df_resumo.to_excel(writer, index=False, sheet_name="Resumo")
+
+    print(f"OK: arquivo gerado em {ARQ_XLSX}")
+
 if __name__ == "__main__":
     main()
