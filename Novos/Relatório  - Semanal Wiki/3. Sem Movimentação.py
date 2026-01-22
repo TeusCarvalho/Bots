@@ -103,9 +103,29 @@ def _safe_pct(num: float, den: float) -> float:
     except Exception:
         return 0.0
 
+def _normalize_base_value(base: str) -> str:
+    """
+    Mantém o nome da BASE COMPLETO, só normalizando espaços.
+    Ex.: 'F CDN-AM' / 'F  CDN - AM' -> 'F CDN -AM'
+    """
+    if base is None:
+        return "N/D"
+
+    s = str(base)
+    s = s.replace("\u3000", " ").replace("\xa0", " ")
+    s = re.sub(r"\s+", " ", s).strip().upper()
+
+    if not s:
+        return "N/D"
+
+    # padroniza sufixo "-UF" com espaço antes do hífen e sem espaço depois: " -AM"
+    s = re.sub(r"\s*-\s*([A-Z]{2})$", r" -\1", s)
+
+    return s
+
 
 # ======================================================
-# 🧠 CORREÇÃO SC/DC — VERSÃO FINAL
+# 🧠 CORREÇÃO SC/DC — VERSÃO FINAL (mantém como apoio)
 # ======================================================
 def _extract_sc_from_base(base: str) -> str:
     """
@@ -150,8 +170,8 @@ def _extract_sc_from_base(base: str) -> str:
 # ======================================================
 def _build_top10_enriquecido(df_sorted: pd.DataFrame, df_raw: pd.DataFrame, col_problema: str) -> pd.DataFrame:
     """
-    df_sorted: agregado por base (tem colunas 6/7/10/14/30/Total e SC)
-    df_raw   : granularidade pacote (já filtrado por regional+aging) e com SC
+    df_sorted: agregado por Base (tem colunas 6/7/10/14/30/Total e SC)
+    df_raw   : granularidade pacote (já filtrado por regional+aging) e com Base/SC
     col_problema: coluna do "nome de pacote problemático"
     """
     aging_cols = [c for c in ["6 dias", "7 dias", "10 dias", "14 dias", "30 dias"] if c in df_sorted.columns]
@@ -160,11 +180,11 @@ def _build_top10_enriquecido(df_sorted: pd.DataFrame, df_raw: pd.DataFrame, col_
     if top10.empty:
         return top10
 
-    # total por SC na base bruta (para % problemático)
-    if "SC" in df_raw.columns:
-        total_sc = df_raw.groupby("SC").size().to_dict()
+    # total por BASE na base bruta (para % problemático)
+    if "Base" in df_raw.columns:
+        total_base = df_raw.groupby("Base").size().to_dict()
     else:
-        total_sc = {}
+        total_base = {}
 
     # problemáticos na base bruta
     df_prob = pd.DataFrame()
@@ -182,6 +202,7 @@ def _build_top10_enriquecido(df_sorted: pd.DataFrame, df_raw: pd.DataFrame, col_
 
     rows = []
     for _, r in top10.iterrows():
+        base_full = r.get("Base", "N/D")
         sc = r.get("SC", "N/D")
         total = int(r.get("Total", 0))
 
@@ -190,27 +211,26 @@ def _build_top10_enriquecido(df_sorted: pd.DataFrame, df_raw: pd.DataFrame, col_
         bucket_qtd = 0
         bucket_pct = 0.0
         if aging_cols:
-            # pega coluna com maior valor
             vals = {c: int(r.get(c, 0)) for c in aging_cols}
             bucket_pior = max(vals, key=vals.get) if vals else "N/D"
             bucket_qtd = int(vals.get(bucket_pior, 0))
             bucket_pct = _safe_pct(bucket_qtd, total)
 
-        # problemáticos por SC
+        # problemáticos por BASE
         prob_qtd = 0
         prob_pct = 0.0
         top_motivo = ""
         top_motivo_qtd = 0
         top_motivo_pct = 0.0
 
-        if has_prob_col and not df_prob.empty and sc != "N/D":
-            df_sc_prob = df_prob[df_prob["SC"] == sc].copy()
-            prob_qtd = int(len(df_sc_prob))
-            prob_pct = _safe_pct(prob_qtd, total_sc.get(sc, total))
+        if has_prob_col and not df_prob.empty and base_full != "N/D":
+            df_base_prob = df_prob[df_prob["Base"] == base_full].copy()
+            prob_qtd = int(len(df_base_prob))
+            prob_pct = _safe_pct(prob_qtd, total_base.get(base_full, total))
 
             if prob_qtd:
                 vc = (
-                    df_sc_prob[col_problema]
+                    df_base_prob[col_problema]
                     .fillna("")
                     .astype(str)
                     .str.strip()
@@ -223,6 +243,7 @@ def _build_top10_enriquecido(df_sorted: pd.DataFrame, df_raw: pd.DataFrame, col_
                     top_motivo_pct = _safe_pct(top_motivo_qtd, prob_qtd)
 
         rows.append({
+            "Base": base_full,
             "SC": sc,
             "Total": total,
             "Pior Aging": bucket_pior,
@@ -249,16 +270,16 @@ def gerar_relatorio_terminal_e_excel(
     output_excel_path: str
 ):
     """
-    df_final = agregado por base (com colunas 6/7/10/14/30/Total/SC)
+    df_final = agregado por Base (com colunas 6/7/10/14/30/Total/SC)
     df_raw   = base filtrada (regional + aging), na granularidade pacote
     """
 
     # Ordenar do pior para o melhor
     df_sorted = df_final.sort_values("Total", ascending=False).reset_index(drop=True)
 
-    # Top 2 reais
-    base1 = df_sorted.loc[0, "SC"] if len(df_sorted) > 0 else "N/D"
-    base2 = df_sorted.loc[1, "SC"] if len(df_sorted) > 1 else "N/D"
+    # Top 2 reais (BASE COMPLETA)
+    base1 = df_sorted.loc[0, "Base"] if len(df_sorted) > 0 else "N/D"
+    base2 = df_sorted.loc[1, "Base"] if len(df_sorted) > 1 else "N/D"
     base1_total = int(df_sorted.loc[0, "Total"]) if len(df_sorted) > 0 else 0
     base2_total = int(df_sorted.loc[1, "Total"]) if len(df_sorted) > 1 else 0
 
@@ -318,23 +339,33 @@ Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) s�
 
     # ========= TABELA TOP 5 =========
     top5 = df_sorted.head(5)
-    cols_order = ["SC", "6 dias", "7 dias", "10 dias", "14 dias", "30 dias", "Total"]
+
+    cols_order = ["Base", "SC", "6 dias", "7 dias", "10 dias", "14 dias", "30 dias", "Total"]
+    cols_order = [c for c in cols_order if c in top5.columns]  # segurança
 
     if HAS_RICH:
         table = Table(title="Top 5 — Piores Bases", title_style="bold", box=box.SIMPLE_HEAVY)
         for c in cols_order:
-            table.add_column(c, justify="right", style="cyan" if c == "SC" else "")
+            if c == "Base":
+                table.add_column(c, justify="left", style="cyan")
+            elif c == "SC":
+                table.add_column(c, justify="left")
+            else:
+                table.add_column(c, justify="right")
         for _, r in top5.iterrows():
-            table.add_row(
-                r.get("SC", "N/D"),
-                *(str(int(r.get(c, 0))) for c in cols_order[1:])
-            )
+            row_vals = []
+            for c in cols_order:
+                if c in ["Base", "SC"]:
+                    row_vals.append(str(r.get(c, "N/D")))
+                else:
+                    row_vals.append(str(int(r.get(c, 0))))
+            table.add_row(*row_vals)
         console.print(table)
     else:
         print(top5[cols_order].to_string(index=False))
 
     # ======================================================
-    # ✅ NOVO: TOP 10 PIORES BASES + MOTIVO (ENRIQUECIDO)
+    # ✅ TOP 10 PIORES BASES + MOTIVO (ENRIQUECIDO)
     # ======================================================
     top10_enriq = _build_top10_enriquecido(df_sorted, df_raw, col_problema)
 
@@ -342,7 +373,8 @@ Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) s�
         if HAS_RICH:
             console.rule("[bold]🚨 Top 10 — Piores Bases + Motivo")
             t10 = Table(title="Top 10 — Piores Bases + Motivo", box=box.SIMPLE)
-            t10.add_column("SC", justify="left", style="cyan")
+            t10.add_column("Base", justify="left", style="cyan")
+            t10.add_column("SC", justify="left")
             t10.add_column("Total", justify="right")
             t10.add_column("Pior Aging", justify="right")
             t10.add_column("Qtd", justify="right")
@@ -352,6 +384,7 @@ Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) s�
 
             for _, r in top10_enriq.iterrows():
                 t10.add_row(
+                    str(r["Base"]),
                     str(r["SC"]),
                     f"{int(r['Total']):,}",
                     str(r["Pior Aging"]),
@@ -367,7 +400,7 @@ Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) s�
             print("-" * 70)
             for i, r in enumerate(top10_enriq.to_dict("records"), 1):
                 print(
-                    f"{i:02d}. {r['SC']} | Total={r['Total']:,} | "
+                    f"{i:02d}. {r['Base']} | SC={r['SC']} | Total={r['Total']:,} | "
                     f"Pior={r['Pior Aging']} ({r['Qtd Pior Aging']:,}, {r['% Pior Aging']:.1f}%) | "
                     f"Prob={r['% Problemáticos']:.1f}% | Motivo={r['Top Motivo (Problemático)'] or '-'}"
                 )
@@ -376,8 +409,11 @@ Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) s�
     # ========= MOTIVOS PROBLEMÁTICOS (GERAL): Qtd + % =========
     vc_geral = None
     if not df_prob.empty:
+        # garante Base/SC
+        if "Base" not in df_prob.columns:
+            df_prob["Base"] = df_prob[col_base].apply(_normalize_base_value)
         if "SC" not in df_prob.columns:
-            df_prob["SC"] = df_prob[col_base].apply(_extract_sc_from_base)
+            df_prob["SC"] = df_prob["Base"].apply(_extract_sc_from_base)
 
         motivos_geral = (
             df_prob[col_problema]
@@ -413,7 +449,7 @@ Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) s�
 
     # ========= DETALHAMENTO PROBLEMÁTICOS POR BASE (TOP 5): Qtd + % =========
     if not df_prob.empty:
-        bases_top5 = top5["SC"].tolist()
+        bases_top5 = top5["Base"].tolist() if "Base" in top5.columns else []
 
         if HAS_RICH:
             console.rule("[bold]🧩 Detalhamento dos problemáticos (Top 5 Bases)")
@@ -422,41 +458,41 @@ Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) s�
             print("🧩 DETALHAMENTO DOS PROBLEMÁTICOS (TOP 5 BASES)")
             print("-" * 70)
 
-        for sc in bases_top5:
-            df_sc = df_prob[df_prob["SC"] == sc].copy()
-            if df_sc.empty:
+        for base_full in bases_top5:
+            df_base = df_prob[df_prob["Base"] == base_full].copy()
+            if df_base.empty:
                 if HAS_RICH:
-                    console.print(f"[yellow]• {sc}: sem problemáticos nessa semana.")
+                    console.print(f"[yellow]• {base_full}: sem problemáticos nessa semana.")
                 else:
-                    print(f"• {sc}: sem problemáticos nessa semana.")
+                    print(f"• {base_full}: sem problemáticos nessa semana.")
                 continue
 
             motivos = (
-                df_sc[col_problema]
+                df_base[col_problema]
                 .fillna("")
                 .astype(str)
                 .str.strip()
             )
             motivos = motivos[motivos.ne("")]
-            vc_sc = motivos.value_counts().sort_values(ascending=False)
+            vc_base = motivos.value_counts().sort_values(ascending=False)
 
-            total_sc = int(vc_sc.sum()) if len(vc_sc) else 0
+            total_base_prob = int(vc_base.sum()) if len(vc_base) else 0
 
             if HAS_RICH:
-                t = Table(title=f"{sc} — Motivos Problemáticos", box=box.SIMPLE)
+                t = Table(title=f"{base_full} — Motivos Problemáticos", box=box.SIMPLE)
                 t.add_column("Motivo", justify="left")
                 t.add_column("Qtd", justify="right")
                 t.add_column("%", justify="right")
 
-                for motivo, qtd in vc_sc.items():
-                    pct = (qtd / total_sc * 100) if total_sc else 0.0
+                for motivo, qtd in vc_base.items():
+                    pct = (qtd / total_base_prob * 100) if total_base_prob else 0.0
                     t.add_row(str(motivo), f"{int(qtd):,}", f"{pct:.1f}%")
 
                 console.print(t)
             else:
-                print(f"\n{sc} — Motivos Problemáticos (Total: {total_sc:,})")
-                for motivo, qtd in vc_sc.items():
-                    pct = (qtd / total_sc * 100) if total_sc else 0.0
+                print(f"\n{base_full} — Motivos Problemáticos (Total: {total_base_prob:,})")
+                for motivo, qtd in vc_base.items():
+                    pct = (qtd / total_base_prob * 100) if total_base_prob else 0.0
                     print(f"- {motivo}: {int(qtd):,} ({pct:.1f}%)")
     else:
         if col_problema not in df_raw.columns:
@@ -471,7 +507,7 @@ Desses, [bold]{qtd_expedido:,}[/bold] pacotes ([bold]{perc_expedido}%[/bold]) s�
                 print("Nenhum pacote problemático encontrado para detalhamento.")
 
     # ======================================================
-    # ✅ ALTERAÇÃO: GERAR EXCEL COM ABAS (mantém o mesmo arquivo)
+    # ✅ GERAR EXCEL COM ABAS
     # ======================================================
     if not SAVE_EXCEL:
         if HAS_RICH:
@@ -598,6 +634,10 @@ def main():
     else:
         print(f"Após filtro Regional {REGIONAL_ALVO}: {len(df):,}")
 
+    # Normaliza BASE COMPLETA (sem encurtar)
+    df[col_base] = df[col_base].apply(_normalize_base_value)
+    df["Base"] = df[col_base]
+
     # Aging
     aging_map = {
         "Exceed 6 days with no track": "6 dias",
@@ -610,16 +650,16 @@ def main():
     df["AgingLabel"] = df[col_aging].map(aging_map)
     df = df[df["AgingLabel"].notna()]
 
-    # garante SC na base bruta para detalhamento
-    df["SC"] = df[col_base].apply(_extract_sc_from_base)
+    # SC como apoio (não como nome principal)
+    df["SC"] = df["Base"].apply(_extract_sc_from_base)
 
     # POLARS
     if HAS_PL:
-        pl_df = pl.from_pandas(df[[col_base, col_problema, "AgingLabel"]])
+        pl_df = pl.from_pandas(df[["Base", col_problema, "AgingLabel"]])
         base_counts = (
-            pl_df.group_by([col_base, "AgingLabel"])
+            pl_df.group_by(["Base", "AgingLabel"])
             .len()
-            .pivot(values="len", index=col_base, columns="AgingLabel")
+            .pivot(values="len", index="Base", columns="AgingLabel")
             .fill_null(0)
         )
 
@@ -631,14 +671,14 @@ def main():
             pl.sum_horizontal(list(aging_map.values())).alias("Total")
         ).sort("Total", descending=True)
 
-        sc_series = [_extract_sc_from_base(b) for b in base_counts[col_base].to_list()]
+        sc_series = [_extract_sc_from_base(b) for b in base_counts["Base"].to_list()]
         base_counts = base_counts.with_columns(pl.Series("SC", sc_series))
 
         df_final = base_counts.to_pandas()
 
     # PANDAS
     else:
-        resumo = df.groupby([col_base, "AgingLabel"]).size().unstack(fill_value=0)
+        resumo = df.groupby(["Base", "AgingLabel"]).size().unstack(fill_value=0)
         for l in aging_map.values():
             if l not in resumo.columns:
                 resumo[l] = 0
@@ -647,7 +687,7 @@ def main():
         resumo.reset_index(inplace=True)
 
         df_final = resumo.sort_values("Total", ascending=False)
-        df_final["SC"] = df_final[col_base].apply(_extract_sc_from_base)
+        df_final["SC"] = df_final["Base"].apply(_extract_sc_from_base)
 
     # ===========================
     # GERAR RELATÓRIO FINAL
@@ -657,7 +697,7 @@ def main():
     gerar_relatorio_terminal_e_excel(
         df_final=df_final,
         df_raw=df,
-        col_base=col_base,
+        col_base="Base",
         col_problema=col_problema,
         output_excel_path=output_excel
     )

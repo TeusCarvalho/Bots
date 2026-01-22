@@ -6,9 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="git commit">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Antigos/Consulta CEPs.py" beforeDir="false" afterPath="$PROJECT_DIR$/Antigos/Consulta CEPs.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Novos/Base/sla_processor.log" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Base/sla_processor.log" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/Franquias/1- Entrega Realizada - Novo Modelo.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Franquias/1- Entrega Realizada - Novo Modelo.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Novos/Relatório  - Semanal Wiki/3. Sem Movimentação.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Relatório  - Semanal Wiki/3. Sem Movimentação.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Novos/teste.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/teste.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -215,8 +214,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-PY-253.29346.142" />
-        <option value="bundled-python-sdk-f2b7a9f6281b-6e1f45a539f7-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.29346.142" />
+        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-PY-253.29346.308" />
+        <option value="bundled-python-sdk-ca5e2b39c7df-6e1f45a539f7-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.29346.308" />
       </set>
     </attachedChunks>
   </component>
@@ -479,15 +478,30 @@
       <workItem from="1768420133585" duration="726000" />
       <workItem from="1768422287513" duration="1581000" />
       <workItem from="1768475627870" duration="471000" />
-      <workItem from="1768476124222" duration="12000" />
-    </task>
-    <task id="LOCAL-00045" summary="git commit">
-      <option name="closed" value="true" />
-      <created>1762254743674</created>
-      <option name="number" value="00045" />
-      <option name="presentableId" value="LOCAL-00045" />
-      <option name="project" value="LOCAL" />
-      <updated>1762254743674</updated>
+      <workItem from="1768476124222" duration="1046000" />
+      <workItem from="1768482702980" duration="5000" />
+      <workItem from="1768494998565" duration="595000" />
+      <workItem from="1768500771863" duration="1846000" />
+      <workItem from="1768566738234" duration="2063000" />
+      <workItem from="1768823835553" duration="8422000" />
+      <workItem from="1768843915778" duration="92000" />
+      <workItem from="1768846202166" duration="647000" />
+      <workItem from="1768853376381" duration="1586000" />
+      <workItem from="1768907894166" duration="540000" />
+      <workItem from="1768908458771" duration="881000" />
+      <workItem from="1768911353407" duration="8000" />
+      <workItem from="1768912733715" duration="1124000" />
+      <workItem from="1768921338406" duration="1511000" />
+      <workItem from="1768928777757" duration="3308000" />
+      <workItem from="1768935502839" duration="5792000" />
+      <workItem from="1768993833695" duration="471000" />
+      <workItem from="1768995342161" duration="46000" />
+      <workItem from="1768995543607" duration="109000" />
+      <workItem from="1768998789671" duration="632000" />
+      <workItem from="1769008010405" duration="635000" />
+      <workItem from="1769016490146" duration="7499000" />
+      <workItem from="1769026377778" duration="2147000" />
+      <workItem from="1769082938461" duration="1373000" />
     </task>
     <task id="LOCAL-00046" summary="git commit">
       <option name="closed" value="true" />
@@ -873,7 +887,15 @@
       <option name="project" value="LOCAL" />
       <updated>1768412881299</updated>
     </task>
-    <option name="localTasksCounter" value="94" />
+    <task id="LOCAL-00094" summary="git commit">
+      <option name="closed" value="true" />
+      <created>1768476405671</created>
+      <option name="number" value="00094" />
+      <option name="presentableId" value="LOCAL-00094" />
+      <option name="project" value="LOCAL" />
+      <updated>1768476405671</updated>
+    </task>
+    <option name="localTasksCounter" value="95" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -895,8 +917,8 @@
     <option name="LAST_COMMIT_MESSAGE" value="git commit" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/Bots$1_1_3__Sem_Movimentação.coverage" NAME="1.1.3- Sem Movimentação Coverage Results" MODIFIED="1758808199795" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bots$teste_conexao.coverage" NAME="teste_conexao Coverage Results" MODIFIED="1765556310861" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/StreamLit" />
+    <SUITE FILE_PATH="coverage/Bots$1_1_3__Sem_Movimentação.coverage" NAME="1.1.3- Sem Movimentação Coverage Results" MODIFIED="1758808199795" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bots$StreamLit_Teste.coverage" NAME="StreamLit_Teste Coverage Results" MODIFIED="1765374530115" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/StreamLit" />
     <SUITE FILE_PATH="coverage/Bots$1_2___Custo.coverage" NAME="1.2 - Custo Coverage Results" MODIFIED="1759924223775" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$Local_Para_Teste_2.coverage" NAME="Local_Para_Teste_2 Coverage Results" MODIFIED="1759416244740" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
@@ -906,13 +928,13 @@
     <SUITE FILE_PATH="coverage/Bots$1_3__Custos_e_Arbitragem.coverage" NAME="1-3. Custos e Arbitragem Coverage Results" MODIFIED="1758712278532" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bots$1_3__Bot_Sem_Movimentação.coverage" NAME="1.3- Bot Sem Movimentação Coverage Results" MODIFIED="1759924433183" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$Retidos.coverage" NAME="Retidos Coverage Results" MODIFIED="1767113555232" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Politicas" />
-    <SUITE FILE_PATH="coverage/Bots$Atualização_Hash_S_Movi.coverage" NAME="Atualização_Hash_S-Movi Coverage Results" MODIFIED="1768409957488" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
+    <SUITE FILE_PATH="coverage/Bots$Atualização_Hash_S_Movi.coverage" NAME="Atualização_Hash_S-Movi Coverage Results" MODIFIED="1769019041885" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
     <SUITE FILE_PATH="coverage/Bots$4__Franquias___T0.coverage" NAME="4- Franquias - T0 Coverage Results" MODIFIED="1760539038895" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
     <SUITE FILE_PATH="coverage/Bots$geração_JSON.coverage" NAME="geração_JSON Coverage Results" MODIFIED="1758289590115" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bots$Novo___Custo.coverage" NAME="Novo - Custo Coverage Results" MODIFIED="1758807872607" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bots$Franquias___Entrega_Realizada.coverage" NAME="Franquias - Entrega Realizada Coverage Results" MODIFIED="1768408065961" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
-    <SUITE FILE_PATH="coverage/Bots$1__Regras_Sem_Movimentação.coverage" NAME="1- Regras Sem Movimentação Coverage Results" MODIFIED="1768409433378" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
-    <SUITE FILE_PATH="coverage/Bots$1__Entrega_Realizada___Novo_Modelo.coverage" NAME="1- Entrega Realizada - Novo Modelo Coverage Results" MODIFIED="1768476024200" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
+    <SUITE FILE_PATH="coverage/Bots$1__Regras_Sem_Movimentação.coverage" NAME="1- Regras Sem Movimentação Coverage Results" MODIFIED="1769018095534" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
+    <SUITE FILE_PATH="coverage/Bots$1__Entrega_Realizada___Novo_Modelo.coverage" NAME="1- Entrega Realizada - Novo Modelo Coverage Results" MODIFIED="1769083058310" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
     <SUITE FILE_PATH="coverage/Bots$Franquias.coverage" NAME="Franquias Coverage Results" MODIFIED="1759767240118" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$1_3_1___Regras_Sem_Movimentação.coverage" NAME="1.3.1 - Regras_Sem Movimentação Coverage Results" MODIFIED="1759923697842" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$Teste.coverage" NAME="Teste Coverage Results" MODIFIED="1761149212251" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
@@ -933,13 +955,13 @@
     <SUITE FILE_PATH="coverage/Bots$Bonificação.coverage" NAME="Bonificação Coverage Results" MODIFIED="1763145555564" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Politicas" />
     <SUITE FILE_PATH="coverage/Bots$Melhor_Envio.coverage" NAME="Melhor Envio Coverage Results" MODIFIED="1761224588822" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Bases_Aleatorias" />
     <SUITE FILE_PATH="coverage/Bots$3__T_0.coverage" NAME="3- T-0 Coverage Results" MODIFIED="1762170652723" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
-    <SUITE FILE_PATH="coverage/Bots$2__Ressarcimentos.coverage" NAME="2. Ressarcimentos Coverage Results" MODIFIED="1768240707950" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatório  - Semanal Wiki" />
+    <SUITE FILE_PATH="coverage/Bots$2__Ressarcimentos.coverage" NAME="2. Ressarcimentos Coverage Results" MODIFIED="1768826950168" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatório  - Semanal Wiki" />
     <SUITE FILE_PATH="coverage/Bots$bootstrap_etl.coverage" NAME="bootstrap_etl Coverage Results" MODIFIED="1767116651928" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Banco de Dados/etl" />
     <SUITE FILE_PATH="coverage/Bots$Atualização_Hash.coverage" NAME="Atualização_Hash Coverage Results" MODIFIED="1762466820490" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
     <SUITE FILE_PATH="coverage/Bots$DropOFF.coverage" NAME="DropOFF Coverage Results" MODIFIED="1761249001135" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base de Dados" />
     <SUITE FILE_PATH="coverage/Bots$Erro.coverage" NAME="Erro Coverage Results" MODIFIED="1762518728547" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/WhatsApp" />
     <SUITE FILE_PATH="coverage/Bots$motivacional_bot.coverage" NAME="motivacional_bot Coverage Results" MODIFIED="1760983433531" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base de Dados" />
-    <SUITE FILE_PATH="coverage/Bots$2__Custo.coverage" NAME="2- Custo Coverage Results" MODIFIED="1768391319081" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
+    <SUITE FILE_PATH="coverage/Bots$2__Custo.coverage" NAME="2- Custo Coverage Results" MODIFIED="1769083299514" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
     <SUITE FILE_PATH="coverage/Bots$1__Franquias___Entrega_Realizada.coverage" NAME="1- Franquias - Entrega Realizada Coverage Results" MODIFIED="1764761210813" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
     <SUITE FILE_PATH="coverage/Bots$Local_Para_Teste_02.coverage" NAME="Local_Para_Teste_02 Coverage Results" MODIFIED="1762433044909" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$3__SLA___Entrega_Realizada.coverage" NAME="3- SLA - Entrega Realizada Coverage Results" MODIFIED="1762968554700" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
@@ -950,17 +972,17 @@
     <SUITE FILE_PATH="coverage/Bots$Nova_Regra.coverage" NAME="Nova Regra Coverage Results" MODIFIED="1761144246076" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$Sem_Movimentação___Para_Junção.coverage" NAME="Sem Movimentação - Para Junção Coverage Results" MODIFIED="1767794094035" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base Cobrança" />
     <SUITE FILE_PATH="coverage/Bots$Novo___T_0.coverage" NAME="Novo - T-0 Coverage Results" MODIFIED="1758804952043" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/Bots$Junção.coverage" NAME="Junção Coverage Results" MODIFIED="1768225600450" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base de Dados" />
-    <SUITE FILE_PATH="coverage/Bots$3__Fraquias___Custo.coverage" NAME="3- Fraquias - Custo Coverage Results" MODIFIED="1768391320525" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
-    <SUITE FILE_PATH="coverage/Bots$3__Sem_Movimentação.coverage" NAME="3. Sem Movimentação Coverage Results" MODIFIED="1768238772318" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatório  - Semanal Wiki" />
+    <SUITE FILE_PATH="coverage/Bots$Junção.coverage" NAME="Junção Coverage Results" MODIFIED="1769016524288" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base de Dados" />
+    <SUITE FILE_PATH="coverage/Bots$3__Fraquias___Custo.coverage" NAME="3- Fraquias - Custo Coverage Results" MODIFIED="1769083297810" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
+    <SUITE FILE_PATH="coverage/Bots$3__Sem_Movimentação.coverage" NAME="3. Sem Movimentação Coverage Results" MODIFIED="1768829162245" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatório  - Semanal Wiki" />
     <SUITE FILE_PATH="coverage/Bots$SLA_Entrega___Indicadores_de_Negocio.coverage" NAME="SLA Entrega - Indicadores de Negocio Coverage Results" MODIFIED="1767113260994" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Indicadores" />
     <SUITE FILE_PATH="coverage/Bots$T_0.coverage" NAME="T-0 Coverage Results" MODIFIED="1761241507643" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatoriso Semanais" />
     <SUITE FILE_PATH="coverage/Bots$Fraquias___Custo.coverage" NAME="Fraquias - Custo Coverage Results" MODIFIED="1759941963224" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
     <SUITE FILE_PATH="coverage/Bots$1_1__Bot_Sem_Movimentação.coverage" NAME="1-1. Bot-Sem Movimentação Coverage Results" MODIFIED="1758746184927" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bots$LangChain.coverage" NAME="LangChain Coverage Results" MODIFIED="1758631529437" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bots$app.coverage" NAME="app Coverage Results" MODIFIED="1766514631903" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/StreamLit" />
-    <SUITE FILE_PATH="coverage/Bots$GP___Motoristas.coverage" NAME="GP - Motoristas Coverage Results" MODIFIED="1768221485376" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatório  - Semanal Wiki" />
-    <SUITE FILE_PATH="coverage/Bots$3__SLA___Entrega_Realizada___Ganbira.coverage" NAME="3- SLA - Entrega Realizada - Ganbira Coverage Results" MODIFIED="1768475730296" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
+    <SUITE FILE_PATH="coverage/Bots$GP___Motoristas.coverage" NAME="GP - Motoristas Coverage Results" MODIFIED="1768853440112" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatório  - Semanal Wiki" />
+    <SUITE FILE_PATH="coverage/Bots$3__SLA___Entrega_Realizada___Ganbira.coverage" NAME="3- SLA - Entrega Realizada - Ganbira Coverage Results" MODIFIED="1769083056767" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
     <SUITE FILE_PATH="coverage/Bots$GP___Semanal.coverage" NAME="GP - Semanal Coverage Results" MODIFIED="1766407581937" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatoriso Semanais" />
     <SUITE FILE_PATH="coverage/Bots$dashboard_reclamacoes.coverage" NAME="dashboard_reclamacoes Coverage Results" MODIFIED="1763731979327" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Banco de Dados" />
     <SUITE FILE_PATH="coverage/Bots$Consulta_CEPs.coverage" NAME="Consulta CEPs Coverage Results" MODIFIED="1768423869542" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Antigos" />
@@ -970,13 +992,13 @@
     <SUITE FILE_PATH="coverage/Bots$4__SLA___Entrega_Realizada.coverage" NAME="4- SLA - Entrega Realizada Coverage Results" MODIFIED="1762265593593" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base" />
     <SUITE FILE_PATH="coverage/Bots$Bots_Teste.coverage" NAME="Bots_Teste Coverage Results" MODIFIED="1758214824003" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bots$Comparação.coverage" NAME="Comparação Coverage Results" MODIFIED="1767112590330" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Bases_Aleatorias" />
-    <SUITE FILE_PATH="coverage/Bots$4__ShippingTime.coverage" NAME="4. ShippingTime Coverage Results" MODIFIED="1768237203996" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatório  - Semanal Wiki" />
+    <SUITE FILE_PATH="coverage/Bots$4__ShippingTime.coverage" NAME="4. ShippingTime Coverage Results" MODIFIED="1768826553133" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatório  - Semanal Wiki" />
     <SUITE FILE_PATH="coverage/Bots$WhatsApp.coverage" NAME="WhatsApp Coverage Results" MODIFIED="1762862529838" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/WhatsApp" />
     <SUITE FILE_PATH="coverage/Bots$utils.coverage" NAME="utils Coverage Results" MODIFIED="1767117860201" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Banco de Dados/jt_etl" />
-    <SUITE FILE_PATH="coverage/Bots$2__Franquias___Regras_Sem_Movimentação.coverage" NAME="2- Franquias - Regras_Sem Movimentação Coverage Results" MODIFIED="1768391693128" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
+    <SUITE FILE_PATH="coverage/Bots$2__Franquias___Regras_Sem_Movimentação.coverage" NAME="2- Franquias - Regras_Sem Movimentação Coverage Results" MODIFIED="1768908503778" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
     <SUITE FILE_PATH="coverage/Bots$3__Franquias___T0.coverage" NAME="3- Franquias - T0 Coverage Results" MODIFIED="1760012062743" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
     <SUITE FILE_PATH="coverage/Bots$Entrega_Realizada___Novo_Modelo.coverage" NAME="Entrega Realizada - Novo Modelo Coverage Results" MODIFIED="1764706206173" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Franquias" />
-    <SUITE FILE_PATH="coverage/Bots$teste.coverage" NAME="teste Coverage Results" MODIFIED="1768414215722" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
+    <SUITE FILE_PATH="coverage/Bots$teste.coverage" NAME="teste Coverage Results" MODIFIED="1769027609982" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos" />
     <SUITE FILE_PATH="coverage/Bots$teste_Zapzap.coverage" NAME="teste_Zapzap Coverage Results" MODIFIED="1762522392750" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/WhatsApp" />
     <SUITE FILE_PATH="coverage/Bots$glm_dev_helper.coverage" NAME="glm_dev_helper Coverage Results" MODIFIED="1760990372611" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Base de Dados" />
     <SUITE FILE_PATH="coverage/Bots$main.coverage" NAME="main Coverage Results" MODIFIED="1768422290257" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
@@ -985,6 +1007,6 @@
     <SUITE FILE_PATH="coverage/Bots$db.coverage" NAME="db Coverage Results" MODIFIED="1765556713039" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/StreamLit" />
     <SUITE FILE_PATH="coverage/Bots$auditoria_etl.coverage" NAME="auditoria_etl Coverage Results" MODIFIED="1767123821467" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Banco de Dados" />
     <SUITE FILE_PATH="coverage/Bots$Selenium.coverage" NAME="Selenium Coverage Results" MODIFIED="1758632723277" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/Bots$1__T_0.coverage" NAME="1. T-0 Coverage Results" MODIFIED="1768237654718" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatório  - Semanal Wiki" />
+    <SUITE FILE_PATH="coverage/Bots$1__T_0.coverage" NAME="1. T-0 Coverage Results" MODIFIED="1768825736473" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Novos/Relatório  - Semanal Wiki" />
   </component>
 </project>
