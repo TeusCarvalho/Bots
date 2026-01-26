@@ -1,456 +1,458 @@
 # -*- coding: utf-8 -*-
 """
-v3.1 — Polars: motoristas ENTREGUES (por Status) + assinatura normal (opcional) + export seguro
+Comparativo consolidado em UM único Excel, pensado para rodar via "Run" no PyCharm
+(sem PowerShell / sem parâmetros).
 
-- Lê Excel/CSV dentro de uma pasta (recursivo)
-- Detecta colunas (motorista / assinatura / status / id)
-- Recorte A: ENTREGUES (pelo Status) -> lista + contagem por motorista
-- Recorte B (opcional): Assinatura normal (+ entregue se status existir) -> lista + contagem por motorista
-- Exporta Excel com:
-  - Resumo
-  - Motoristas entregues (lista + contagem)
-  - Motoristas assinatura normal (lista + contagem) (se habilitado)
-  - Amostra (assinatura normal) (se existir)
+O script procura os arquivos Excel na pasta fixa (BASE_DIR) e gera:
+- comparativo_unico.xlsx
 
-Requisitos:
-  pip install polars pandas openpyxl
+Saídas no Excel:
+- Resumo        : por Transportadora x Aba (quantidade comparada, quem foi menor, etc.)
+- Comparativo   : detalhe de todas as chaves casadas (valor_nova vs valor_gp)
+- NaoCasados    : itens presentes só em uma das fontes
+
+Obs:
+- "NOVA" = arquivo da tabela matriz (transportadora/peso/destino)
+- "GP"   = arquivo com faixas de peso (de/até) por destino
 """
 
 from __future__ import annotations
 
+import math
 import re
-import unicodedata
-import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
-import polars as pl
-
-warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl.styles.stylesheet")
-
-# =========================
-# CONFIG
-# =========================
-PASTA = Path(r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Dez")
-
-SAIDA_XLSX = PASTA / "resultado_motoristas_entregues.xlsx"
-
-# (Opcional) Detalhe grande da assinatura normal (recomendado Parquet)
-DETALHE_DIR = PASTA / "_assinatura_detalhe_parquet"   # pasta com múltiplos parquet
-SALVAR_DETALHE_PARQUET = True
-
-AMOSTRA_EXCEL_ROWS = 200_000
-
-ALVO_ASSINATURA = "Recebimento com assinatura normal"
-
-# Se você quiser DESLIGAR tudo de assinatura normal e ficar só nos ENTREGUES:
-HABILITAR_ASSINATURA_NORMAL = False  # <-- coloque True se quiser também assinatura normal
+import openpyxl
 
 
 # =========================
-# HELPERS
+# CONFIG (para usar só RUN)
 # =========================
-def _norm_text(s: str) -> str:
-    s = str(s).strip().lower()
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(ch for ch in s if not unicodedata.combining(ch))
-    s = re.sub(r"[^a-z0-9]+", "", s)
+BASE_DIR = Path(r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Pastas")
+
+# Nomes "preferidos" (se existirem exatamente, usa eles; senão tenta achar por padrão)
+ARQ_NOVA_PREFERRED = "Nova Tabela melhor envio J&T Express.finalizada1.xlsx"
+ARQ_GP_PREFERRED = "Tabelas GP - C2C 11.2025. filtrado1.xlsx"
+
+ARQ_SAIDA = "comparativo_unico.xlsx"
+
+# Transportadoras que serão comparadas (linhas do arquivo NOVA)
+CARRIERS = ["J&T Express Standard", "Menor valor"]
+
+# Tolerância para considerar "igual"
+TOL_IGUAL = 0.01
+
+
+# =========================
+# Helpers
+# =========================
+def norm_sheet_name(name: str) -> str:
+    s = str(name).upper().strip()
+    s = s.replace("-", " ")
+    s = re.sub(r"\s+", " ", s)
     return s
 
 
-def _find_col(columns: List[str], candidates_norm: List[str]) -> Optional[str]:
-    norm_map = {_norm_text(c): c for c in columns}
-    for cand in candidates_norm:
-        if cand in norm_map:
-            return norm_map[cand]
+def to_float(x) -> float:
+    """Converte valores como 'R$ 35,64' / '35.64' / numérico -> float."""
+    if x is None:
+        return np.nan
 
-    # fallback por "contém"
-    for col in columns:
-        n = _norm_text(col)
-        for cand in candidates_norm:
-            if cand in n:
-                return col
+    if isinstance(x, (int, float, np.integer, np.floating)):
+        try:
+            if isinstance(x, float) and math.isnan(x):
+                return np.nan
+        except Exception:
+            pass
+        return float(x)
+
+    s = str(x).strip()
+    if not s or s.lower() in {"nan", "none"}:
+        return np.nan
+
+    # NBSP
+    s = s.replace("\u00A0", " ")
+    # moeda
+    s = s.replace("R$", "").replace("r$", "").strip()
+
+    # pt-BR (milhar e decimal)
+    if "," in s and "." in s:
+        s = s.replace(".", "")
+        s = s.replace(",", ".")
+    elif "," in s and "." not in s:
+        s = s.replace(",", ".")
+
+    # mantém dígitos/ponto/sinal
+    s = re.sub(r"[^0-9.\-]", "", s)
+    if s in {"", "-", "."}:
+        return np.nan
+
+    try:
+        return float(s)
+    except Exception:
+        return np.nan
+
+
+def find_cell(df: pd.DataFrame, predicate) -> Optional[Tuple[int, int]]:
+    """Retorna (row, col) do primeiro match textual no df (header=None)."""
+    for i in range(df.shape[0]):
+        for j in range(df.shape[1]):
+            v = df.iat[i, j]
+            if isinstance(v, str) and predicate(v):
+                return i, j
     return None
 
 
-def _list_files(pasta: Path) -> List[Path]:
-    exts = {".xlsx", ".xls", ".csv"}
-    files = []
-    for p in pasta.rglob("*"):
-        if p.is_file() and p.suffix.lower() in exts and not p.name.startswith("~$"):
-            files.append(p)
-    return sorted(files)
+def find_excel_file(base_dir: Path, preferred_name: str, name_patterns: List[str]) -> Path:
+    """
+    Encontra um arquivo Excel:
+    1) Se existir o 'preferred_name' exato, usa ele.
+    2) Senão, procura por padrões (regex simples) dentro do nome.
+    """
+    p = base_dir / preferred_name
+    if p.exists():
+        return p
+
+    candidates = sorted(base_dir.glob("*.xlsx"))
+    if not candidates:
+        raise FileNotFoundError(f"Nenhum .xlsx encontrado em: {base_dir}")
+
+    for pat in name_patterns:
+        rx = re.compile(pat, flags=re.IGNORECASE)
+        for c in candidates:
+            if rx.search(c.name):
+                return c
+
+    msg = "Não encontrei o arquivo esperado.\n"
+    msg += f"Pasta: {base_dir}\n"
+    msg += "Arquivos .xlsx encontrados:\n"
+    for c in candidates[:50]:
+        msg += f" - {c.name}\n"
+    msg += "\nDica: renomeie o arquivo para o nome esperado ou ajuste os padrões no código."
+    raise FileNotFoundError(msg)
 
 
-def _clean_str_expr(colname: str) -> pl.Expr:
-    c = pl.col(colname).cast(pl.Utf8, strict=False).fill_null("").str.strip_chars()
-    return pl.when(c.is_in(["nan", "None", "NaT"])).then("").otherwise(c)
+# =========================
+# Parsers
+# =========================
+def parse_nova_tabela(path: Path, sheet: str, carriers: List[str]) -> pd.DataFrame:
+    """
+    Parse da planilha NOVA (matriz):
+    - Localiza 'ESTADO' (linha de destinos)
+    - Localiza 'PESO' (coluna do peso)
+    - Transportadora costuma estar na coluna 0
+    - Valores por destino nas colunas à direita
+    """
+    df = pd.read_excel(path, sheet_name=sheet, header=None, engine="openpyxl")
 
+    loc_estado = find_cell(df, lambda s: s.strip().upper() == "ESTADO")
+    loc_peso = find_cell(df, lambda s: s.strip().upper() == "PESO")
+    if not loc_estado or not loc_peso:
+        return pd.DataFrame(columns=["aba", "transportadora", "peso_ate", "destino", "valor"])
 
-def _read_excel_all_sheets_as_polars(file: Path) -> List[Tuple[str, pl.DataFrame]]:
-    out: List[Tuple[str, pl.DataFrame]] = []
-    sheets = pd.read_excel(file, sheet_name=None, engine="openpyxl")
-    for sheet_name, df in sheets.items():
-        if df is None or df.empty:
+    row_estado, col_estado = loc_estado
+    row_peso, col_peso = loc_peso
+
+    col_start = max(col_estado, col_peso) + 1
+
+    dests: Dict[int, str] = {}
+    for col in range(col_start, df.shape[1]):
+        v = df.iat[row_estado, col]
+        if isinstance(v, str) and v.strip():
+            dests[col] = v.strip().upper()
+
+    carrier_map = {c.strip().upper(): c for c in carriers}
+
+    records = []
+    for i in range(row_peso + 1, df.shape[0]):
+        carrier = df.iat[i, 0]
+        if not isinstance(carrier, str):
             continue
-        df = df.copy()
-        df["__arquivo"] = file.name
-        df["__aba"] = sheet_name
-        out.append((sheet_name, pl.from_pandas(df)))
+
+        c_up = carrier.strip().upper()
+        if c_up not in carrier_map:
+            continue
+
+        peso_f = to_float(df.iat[i, col_peso])
+        if math.isnan(peso_f):
+            continue
+
+        for col, destino in dests.items():
+            val = to_float(df.iat[i, col])
+            if math.isnan(val):
+                continue
+            records.append((norm_sheet_name(sheet), carrier_map[c_up], float(peso_f), destino, val))
+
+    out = pd.DataFrame(records, columns=["aba", "transportadora", "peso_ate", "destino", "valor"])
+
+    # Dedup defensivo: se repetir a mesma chave, mantém o menor valor
+    if not out.empty:
+        out = (
+            out.groupby(["aba", "transportadora", "destino", "peso_ate"], as_index=False)
+            .agg(valor=("valor", "min"))
+        )
+
     return out
 
 
-def _read_csv_as_polars(file: Path) -> pl.DataFrame:
-    seps = [",", ";", "\t", "|"]
-    encodings = ["utf8", "utf8-lossy", "iso8859-1"]
-
-    for sep in seps:
-        for enc in encodings:
-            try:
-                df = pl.read_csv(
-                    file,
-                    separator=sep,
-                    encoding=enc,
-                    ignore_errors=True,
-                    infer_schema_length=5000,
-                )
-                if df.width > 1:
-                    return df.with_columns(
-                        pl.lit(file.name).alias("__arquivo"),
-                        pl.lit("CSV").alias("__aba"),
-                    )
-            except Exception:
-                pass
-
-    # fallback pandas
-    try:
-        dfp = pd.read_csv(file, sep=None, engine="python", encoding="utf-8")
-    except Exception:
-        dfp = pd.read_csv(file, sep=None, engine="python", encoding="latin1")
-
-    dfp["__arquivo"] = file.name
-    dfp["__aba"] = "CSV"
-    return pl.from_pandas(dfp)
-
-
-def _append_parquet(df: pl.DataFrame, out_dir: Path, part_idx: int) -> None:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / f"part_{part_idx:05d}.parquet"
-    df.write_parquet(out_file, compression="zstd")
-
-
-def _is_entregue_expr(status_col: str) -> pl.Expr:
+def parse_tabela_gp(path: Path, sheet: str) -> pd.DataFrame:
     """
-    Heurística de 'entregue' a partir do texto do status.
-    Evita falso positivo em 'não entregue' (que contém 'entreg').
+    Parse da planilha GP:
+    - Procura 'Faixa de Peso em Kg'
+    - Procura 'GEOCOM' acima (header de destinos)
+    - Lê (peso_de, peso_ate) e valores por destino
     """
-    stc = _clean_str_expr(status_col).str.to_lowercase()
+    df = pd.read_excel(path, sheet_name=sheet, header=None, engine="openpyxl")
 
-    neg = (
-        stc.str.contains("nao entreg") |
-        stc.str.contains("não entreg") |
-        stc.str.contains("nao entregue") |
-        stc.str.contains("não entregue") |
-        stc.str.contains("devolv") |
-        stc.str.contains("retorn") |
-        stc.str.contains("cancel") |
-        stc.str.contains("extravi") |
-        stc.str.contains("perd")
-    )
+    faixa_rows: List[int] = []
+    for i in range(df.shape[0]):
+        for j in range(df.shape[1]):
+            v = df.iat[i, j]
+            if isinstance(v, str):
+                s = v.strip().upper()
+                if "FAIXA" in s and "PESO" in s:
+                    faixa_rows.append(i)
+                    break
 
-    pos = (
-        stc.str.contains("entreg") |
-        stc.str.contains("delivered") |
-        stc.str.contains("conclu") |
-        stc.str.contains("finaliz") |
-        stc.str.contains("pod") |
-        stc.str.contains("comprov")
-    )
+    records = []
+    for row_faixa in faixa_rows:
+        dest_row = None
+        for k in range(row_faixa - 1, max(-1, row_faixa - 15), -1):
+            row_vals = df.iloc[k, :].tolist()
+            if any(isinstance(x, str) and x.strip().upper() == "GEOCOM" for x in row_vals):
+                dest_row = k
+                break
+        if dest_row is None:
+            dest_row = row_faixa - 1
 
-    return pos & (~neg)
+        dests: Dict[int, str] = {}
+        for col in range(3, df.shape[1]):
+            v = df.iat[dest_row, col]
+            if isinstance(v, str) and v.strip():
+                dests[col] = v.strip().upper()
 
+        i = row_faixa + 1
+        while i < df.shape[0]:
+            lo_raw = df.iat[i, 1]
+            hi_raw = df.iat[i, 2]
 
-def _accum_counts_from_df(df: pl.DataFrame, driver_col: str, out_counts: Dict[str, int]) -> None:
-    if df.is_empty():
-        return
+            lo_f = to_float(lo_raw)
+            hi_f = to_float(hi_raw)
 
-    tmp = (
-        df.select(_clean_str_expr(driver_col).alias("_drv"))
-          .filter(pl.col("_drv") != "")
-          .group_by("_drv")
-          .agg(pl.len().alias("qtd"))
-    )
+            # condição de parada: linha vazia (sem faixa e sem valores)
+            if (lo_raw is None) or (isinstance(lo_raw, float) and math.isnan(lo_raw)) or (
+                isinstance(lo_raw, str) and not lo_raw.strip()
+            ):
+                row_vals = df.iloc[i, 3:3 + len(dests)].tolist() if dests else df.iloc[i, :].tolist()
+                if all(
+                    (x is None)
+                    or (isinstance(x, float) and math.isnan(x))
+                    or (isinstance(x, str) and not x.strip())
+                    for x in row_vals
+                ):
+                    break
 
-    for row in tmp.iter_rows(named=True):
-        k = row["_drv"]
-        v = int(row["qtd"])
-        out_counts[k] = out_counts.get(k, 0) + v
-
-
-def _process_one_df(
-    df: pl.DataFrame,
-    col_driver: Optional[str],
-    col_sign: Optional[str],
-    col_status: Optional[str],
-    motoristas_entregues: set,
-    motoristas_assinatura: set,
-    counts_entregues: Dict[str, int],
-    counts_assinatura: Dict[str, int],
-    state: dict,
-) -> None:
-    if not col_driver:
-        return
-
-    # =========================
-    # A) ENTREGUES (pelo status)
-    # =========================
-    if col_status and col_status in df.columns:
-        entregue_ok = _is_entregue_expr(col_status)
-        df_ent = df.filter(entregue_ok)
-
-        if not df_ent.is_empty():
-            drv_ent = (
-                df_ent.select(_clean_str_expr(col_driver).alias("_drv"))
-                      .get_column("_drv")
-                      .to_list()
-            )
-            for x in drv_ent:
-                if x:
-                    motoristas_entregues.add(x)
-
-            _accum_counts_from_df(df_ent, col_driver, counts_entregues)
-            state["linhas_entregues"] += df_ent.height
-
-    # =========================
-    # B) Assinatura normal (opcional)
-    # =========================
-    if not HABILITAR_ASSINATURA_NORMAL:
-        return
-
-    if not col_sign or col_sign not in df.columns:
-        return
-
-    sign_ok = _clean_str_expr(col_sign).str.to_lowercase() == ALVO_ASSINATURA.casefold()
-
-    if col_status and col_status in df.columns:
-        entregue_ok2 = _is_entregue_expr(col_status)
-    else:
-        entregue_ok2 = pl.lit(True)
-
-    df_sig = df.filter(sign_ok & entregue_ok2)
-    if df_sig.is_empty():
-        return
-
-    state["linhas_assinatura"] += df_sig.height
-
-    drv_sig = (
-        df_sig.select(_clean_str_expr(col_driver).alias("_drv"))
-              .get_column("_drv")
-              .to_list()
-    )
-    for x in drv_sig:
-        if x:
-            motoristas_assinatura.add(x)
-
-    _accum_counts_from_df(df_sig, col_driver, counts_assinatura)
-
-    if SALVAR_DETALHE_PARQUET:
-        _append_parquet(df_sig, DETALHE_DIR, state["part_idx"])
-        state["part_idx"] += 1
-
-    if state["amostra_assinatura"] is None:
-        state["amostra_assinatura"] = df_sig.head(AMOSTRA_EXCEL_ROWS)
-    else:
-        if state["amostra_assinatura"].height < AMOSTRA_EXCEL_ROWS:
-            faltam = AMOSTRA_EXCEL_ROWS - state["amostra_assinatura"].height
-            state["amostra_assinatura"] = pl.concat(
-                [state["amostra_assinatura"], df_sig.head(faltam)],
-                how="vertical"
-            )
-
-
-def main() -> None:
-    if not PASTA.exists():
-        raise FileNotFoundError(f"Pasta não encontrada: {PASTA}")
-
-    files = _list_files(PASTA)
-    if not files:
-        raise FileNotFoundError(f"Nenhum .xlsx/.xls/.csv encontrado em: {PASTA}")
-
-    driver_candidates = list(map(_norm_text, [
-        "Responsável pela entrega",
-        "Responsavel pela entrega",
-        "Entregador",
-        "Motorista",
-        "Courier",
-    ]))
-    sign_candidates = list(map(_norm_text, [
-        "Marca de assinatura",
-        "Marca assinatura",
-        "Assinatura",
-        "Signature",
-    ]))
-    status_candidates = list(map(_norm_text, [
-        "Status",
-        "Situação",
-        "Situacao",
-        "Ocorrência",
-        "Ocorrencia",
-        "Delivery status",
-        "Status do pedido",
-        "Status entrega",
-        "Status da entrega",
-        "Última ocorrência",
-        "Ultima ocorrencia",
-        "Evento",
-        "Operação",
-        "Operacao",
-    ]))
-
-    col_driver = col_sign = col_status = None
-
-    motoristas_entregues = set()
-    motoristas_assinatura = set()
-
-    counts_entregues: Dict[str, int] = {}
-    counts_assinatura: Dict[str, int] = {}
-
-    state = {
-        "part_idx": 0,
-        "linhas_entregues": 0,
-        "linhas_assinatura": 0,
-        "amostra_assinatura": None,
-    }
-
-    if SALVAR_DETALHE_PARQUET and HABILITAR_ASSINATURA_NORMAL:
-        if DETALHE_DIR.exists():
-            for p in DETALHE_DIR.glob("part_*.parquet"):
-                try:
-                    p.unlink()
-                except Exception:
-                    pass
-
-    for f in files:
-        try:
-            if f.suffix.lower() in [".xlsx", ".xls"]:
-                sheets = _read_excel_all_sheets_as_polars(f)
-                for _, df in sheets:
-                    if df.is_empty():
+            if not math.isnan(hi_f):
+                for col, destino in dests.items():
+                    val = to_float(df.iat[i, col])
+                    if math.isnan(val):
                         continue
-
-                    if col_driver is None:
-                        cols = df.columns
-                        col_driver = _find_col(cols, driver_candidates)
-                        col_sign = _find_col(cols, sign_candidates)
-                        col_status = _find_col(cols, status_candidates)
-
-                    _process_one_df(
-                        df=df,
-                        col_driver=col_driver,
-                        col_sign=col_sign,
-                        col_status=col_status,
-                        motoristas_entregues=motoristas_entregues,
-                        motoristas_assinatura=motoristas_assinatura,
-                        counts_entregues=counts_entregues,
-                        counts_assinatura=counts_assinatura,
-                        state=state,
+                    records.append(
+                        (
+                            norm_sheet_name(sheet),
+                            float(lo_f) if not math.isnan(lo_f) else np.nan,
+                            float(hi_f),
+                            destino,
+                            val,
+                        )
                     )
-            else:
-                df = _read_csv_as_polars(f)
-                if df.is_empty():
-                    continue
 
-                if col_driver is None:
-                    cols = df.columns
-                    col_driver = _find_col(cols, driver_candidates)
-                    col_sign = _find_col(cols, sign_candidates)
-                    col_status = _find_col(cols, status_candidates)
+            i += 1
 
-                _process_one_df(
-                    df=df,
-                    col_driver=col_driver,
-                    col_sign=col_sign,
-                    col_status=col_status,
-                    motoristas_entregues=motoristas_entregues,
-                    motoristas_assinatura=motoristas_assinatura,
-                    counts_entregues=counts_entregues,
-                    counts_assinatura=counts_assinatura,
-                    state=state,
-                )
+    out = pd.DataFrame(records, columns=["aba", "peso_de", "peso_ate", "destino", "valor"])
 
-        except Exception as e:
-            print(f"[ERRO] Falha lendo/processando {f.name}: {e}")
+    # Dedup defensivo: mesma chave -> mantém o menor valor
+    if not out.empty:
+        out = (
+            out.groupby(["aba", "destino", "peso_ate"], as_index=False)
+            .agg(valor=("valor", "min"), peso_de=("peso_de", "min"))
+        )
 
-    print("=" * 80)
-    print("COLUNAS IDENTIFICADAS")
-    print(f"- Motorista: {col_driver}")
-    print(f"- Status (para ENTREGUES): {col_status}")
-    print(f"- Assinatura (opcional): {col_sign}")
-    print("=" * 80)
+    return out
 
-    print("\nRESULTADOS")
-    print(f"1) Motoristas únicos ENTREGUES: {len(motoristas_entregues)}")
-    print(f"2) Linhas ENTREGUES (pelo status): {state['linhas_entregues']}")
 
-    if not col_status:
-        print("\n[ATENÇÃO] Não encontrei coluna de Status. Não dá para filtrar ENTREGUES.")
-        print("Nesse caso, o resultado de ENTREGUES ficará vazio/zero.")
+# =========================
+# Comparação + Saída
+# =========================
+def compare_one_carrier(nova_long: pd.DataFrame, gp_long: pd.DataFrame, carrier_name: str) -> pd.DataFrame:
+    """
+    Compara uma transportadora específica do NOVA contra GP.
+    Chave: aba + destino + peso_ate
 
-    if HABILITAR_ASSINATURA_NORMAL:
-        print(f"3) Motoristas únicos (assinatura normal): {len(motoristas_assinatura)}")
-        print(f"4) Linhas (assinatura normal): {state['linhas_assinatura']}")
-        if SALVAR_DETALHE_PARQUET:
-            print(f"5) Detalhe assinatura (parquet): {DETALHE_DIR}")
+    Correção aplicada:
+    - Se 'transportadora' já existir após merge, sobrescreve em vez de inserir.
+    """
+    a = nova_long[nova_long["transportadora"] == carrier_name].copy()
+    b = gp_long.copy()
 
-    # Export Excel
-    resumo_rows = [
-        {"Métrica": "Arquivos lidos", "Valor": len(files)},
-        {"Métrica": "Coluna motorista", "Valor": col_driver or ""},
-        {"Métrica": "Coluna status", "Valor": col_status or ""},
-        {"Métrica": "Motoristas únicos ENTREGUES", "Valor": len(motoristas_entregues)},
-        {"Métrica": "Linhas ENTREGUES", "Valor": state["linhas_entregues"]},
-        {"Métrica": "Assinatura normal habilitada", "Valor": "Sim" if HABILITAR_ASSINATURA_NORMAL else "Não"},
-        {"Métrica": "Coluna assinatura", "Valor": col_sign or ""},
-        {"Métrica": "Motoristas únicos (assinatura normal)", "Valor": len(motoristas_assinatura) if HABILITAR_ASSINATURA_NORMAL else 0},
-        {"Métrica": "Linhas (assinatura normal)", "Valor": state["linhas_assinatura"] if HABILITAR_ASSINATURA_NORMAL else 0},
-        {"Métrica": "Detalhe assinatura (parquet)", "Valor": str(DETALHE_DIR) if (HABILITAR_ASSINATURA_NORMAL and SALVAR_DETALHE_PARQUET) else "Não"},
-    ]
-
-    df_resumo = pd.DataFrame(resumo_rows)
-
-    df_motoristas_ent = pd.DataFrame({"Motorista": sorted(motoristas_entregues)})
-    df_counts_ent = (
-        pd.DataFrame([{"Motorista": k, "Linhas": v} for k, v in counts_entregues.items()])
-          .sort_values(["Linhas", "Motorista"], ascending=[False, True])
+    m = a.merge(
+        b,
+        on=["aba", "destino", "peso_ate"],
+        how="outer",
+        suffixes=("_nova", "_gp"),
+        indicator=True,
     )
 
-    df_motoristas_sig = pd.DataFrame({"Motorista": sorted(motoristas_assinatura)})
-    df_counts_sig = (
-        pd.DataFrame([{"Motorista": k, "Linhas": v} for k, v in counts_assinatura.items()])
-          .sort_values(["Linhas", "Motorista"], ascending=[False, True])
+    # ---- CORREÇÃO: não inserir se já existir; apenas garantir o valor ----
+    if "transportadora" in m.columns:
+        m["transportadora"] = carrier_name
+    else:
+        m.insert(0, "transportadora", carrier_name)
+
+    m["diff"] = m["valor_nova"] - m["valor_gp"]
+
+    def decide(row):
+        if pd.isna(row.get("valor_nova")) or pd.isna(row.get("valor_gp")):
+            return "NAO_CASADO"
+        d = float(row["diff"])
+        if abs(d) <= TOL_IGUAL:
+            return "IGUAL"
+        return "NOVA" if d < 0 else "GP"
+
+    m["menor"] = m.apply(decide, axis=1)
+    return m
+
+
+def build_resumo(comp_all: pd.DataFrame) -> pd.DataFrame:
+    both = comp_all[comp_all["_merge"] == "both"].copy()
+    if both.empty:
+        return pd.DataFrame(
+            columns=["transportadora", "aba", "qtd_celulas", "nova_menor", "gp_menor", "iguais", "diff_media", "diff_max_abs"]
+        )
+
+    # cria flags para somar sem apply
+    both["is_nova_menor"] = (both["menor"] == "NOVA").astype(int)
+    both["is_gp_menor"] = (both["menor"] == "GP").astype(int)
+    both["is_igual"] = (both["menor"] == "IGUAL").astype(int)
+    both["abs_diff"] = both["diff"].abs()
+
+    res = (
+        both.groupby(["transportadora", "aba"], as_index=False)
+        .agg(
+            qtd_celulas=("diff", "size"),
+            nova_menor=("is_nova_menor", "sum"),
+            gp_menor=("is_gp_menor", "sum"),
+            iguais=("is_igual", "sum"),
+            diff_media=("diff", "mean"),
+            diff_max_abs=("abs_diff", "max"),
+        )
+        .sort_values(["transportadora", "diff_max_abs", "qtd_celulas"], ascending=[True, False, False])
     )
 
-    try:
-        with pd.ExcelWriter(SAIDA_XLSX, engine="openpyxl") as writer:
-            df_resumo.to_excel(writer, sheet_name="Resumo", index=False)
+    return res
 
-            df_motoristas_ent.to_excel(writer, sheet_name="Motoristas_Entregues", index=False)
-            df_counts_ent.to_excel(writer, sheet_name="Entregues_Contagem", index=False)
 
-            if HABILITAR_ASSINATURA_NORMAL:
-                df_motoristas_sig.to_excel(writer, sheet_name="Motoristas_Assinatura", index=False)
-                df_counts_sig.to_excel(writer, sheet_name="Assinatura_Contagem", index=False)
+def build_comparativo(comp_all: pd.DataFrame) -> pd.DataFrame:
+    both = comp_all[comp_all["_merge"] == "both"].copy()
+    both["abs_diff"] = both["diff"].abs()
+    cols = ["transportadora", "aba", "destino", "peso_ate", "valor_nova", "valor_gp", "diff", "menor", "abs_diff"]
+    return both[cols].sort_values(["transportadora", "abs_diff", "aba", "destino", "peso_ate"], ascending=[True, False, True, True, True])
 
-                amostra = state["amostra_assinatura"]
-                if amostra is not None and not amostra.is_empty():
-                    amostra.to_pandas().to_excel(writer, sheet_name="Assinatura_Amostra", index=False)
 
-        print(f"\nExcel gerado: {SAIDA_XLSX}")
+def build_nao_casados(comp_all: pd.DataFrame) -> pd.DataFrame:
+    left = comp_all[comp_all["_merge"] == "left_only"].copy()
+    right = comp_all[comp_all["_merge"] == "right_only"].copy()
 
-    except Exception as e:
-        print(f"\n[ERRO] Não consegui salvar o Excel: {e}")
-        print("Os resultados no console continuam válidos.")
+    left_u = left[["transportadora", "aba", "destino", "peso_ate", "valor_nova"]].rename(columns={"valor_nova": "valor"})
+    right_u = right[["transportadora", "aba", "destino", "peso_ate", "valor_gp"]].rename(columns={"valor_gp": "valor"})
+
+    left_u["origem"] = "NOVA"
+    right_u["origem"] = "GP"
+
+    u = pd.concat([left_u, right_u], ignore_index=True)
+    return u.sort_values(["transportadora", "origem", "aba", "destino", "peso_ate"])
+
+
+def main():
+    if not BASE_DIR.exists():
+        raise FileNotFoundError(
+            f"BASE_DIR não existe:\n{BASE_DIR}\n\nAjuste a variável BASE_DIR no topo do script."
+        )
+
+    nova_path = find_excel_file(
+        BASE_DIR,
+        ARQ_NOVA_PREFERRED,
+        name_patterns=[
+            r"^Nova\s+Tabela\s+melhor\s+envio.*\.xlsx$",
+            r"Nova\s+Tabela\s+melhor\s+envio",
+        ],
+    )
+
+    gp_path = find_excel_file(
+        BASE_DIR,
+        ARQ_GP_PREFERRED,
+        name_patterns=[
+            r"^Tabelas\s+GP\s*-\s*C2C.*\.xlsx$",
+            r"Tabelas\s+GP",
+            r"C2C",
+        ],
+    )
+
+    out_path = BASE_DIR / ARQ_SAIDA
+
+    print("==============================================")
+    print("[OK] Base:", BASE_DIR)
+    print("[OK] NOVA:", nova_path.name)
+    print("[OK] GP  :", gp_path.name)
+    print("[OK] OUT :", out_path.name)
+    print("[OK] Carriers:", ", ".join(CARRIERS))
+    print("==============================================")
+
+    # Parse NOVA
+    wb_nova = openpyxl.load_workbook(nova_path, read_only=True, data_only=True)
+    nova_parts = []
+    for sh in wb_nova.sheetnames:
+        part = parse_nova_tabela(nova_path, sh, CARRIERS)
+        if not part.empty:
+            nova_parts.append(part)
+    nova_long = pd.concat(nova_parts, ignore_index=True) if nova_parts else pd.DataFrame()
+
+    # Parse GP
+    wb_gp = openpyxl.load_workbook(gp_path, read_only=True, data_only=True)
+    gp_parts = []
+    for sh in wb_gp.sheetnames:
+        part = parse_tabela_gp(gp_path, sh)
+        if not part.empty:
+            gp_parts.append(part)
+    gp_long = pd.concat(gp_parts, ignore_index=True) if gp_parts else pd.DataFrame()
+
+    if nova_long.empty:
+        raise RuntimeError("Não consegui extrair dados do arquivo NOVA (não achei 'ESTADO' e/ou 'PESO' nas abas).")
+    if gp_long.empty:
+        raise RuntimeError("Não consegui extrair dados do arquivo GP (não achei 'Faixa de Peso em Kg' nas abas).")
+
+    # Comparação por transportadora
+    comps = []
+    for carrier in CARRIERS:
+        comps.append(compare_one_carrier(nova_long, gp_long, carrier))
+    comp_all = pd.concat(comps, ignore_index=True) if comps else pd.DataFrame()
+
+    resumo = build_resumo(comp_all)
+    comparativo = build_comparativo(comp_all)
+    nao_casados = build_nao_casados(comp_all)
+
+    # Export
+    with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+        resumo.to_excel(writer, index=False, sheet_name="Resumo")
+        comparativo.to_excel(writer, index=False, sheet_name="Comparativo")
+        nao_casados.to_excel(writer, index=False, sheet_name="NaoCasados")
+
+    print("==============================================")
+    print(f"[OK] Gerado: {out_path}")
+    print("==============================================")
 
 
 if __name__ == "__main__":
