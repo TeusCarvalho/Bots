@@ -1,3 +1,6 @@
+# =========================
+# BLOCO 1/4 — IMPORTS / CONFIG / VARIÁVEIS
+# =========================
 import os
 import requests
 import warnings
@@ -27,8 +30,12 @@ logging.basicConfig(
 os.environ["POLARS_MAX_THREADS"] = str(multiprocessing.cpu_count())
 
 PASTA_ENTRADA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\14-  SLA Entrega Realizada Franquia"
+
+# ✅ PASTA DE SAÍDA (onde você quer que gere a planilha nova)
+PASTA_SAIDA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada"
+
 WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/92a82aea-9b5c-4e3d-9169-8d4753ecef38"
-LINK_PASTA = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/EvIP3oIiLJRAqcB1SZ_1nmYBXLIYSJkIns5Pf_Xz2OqY_w?e=OEXsJN"
+LINK_PASTA = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/IgDyD96CIiyUQKnAdUmf9Z5mAVyyGEiZCJ7OT3_189jqmP8?e=1GcNs5"
 
 COL_DATA_ORIGINAL = "Data prevista de entrega"
 COL_DATA_UPPER = "DATA PREVISTA DE ENTREGA"
@@ -36,19 +43,23 @@ COL_DATA_REF = "DATA_REF"
 
 # Ative para logar diferenças de schema por arquivo
 DIAGNOSTICO_SCHEMA = True
+# =========================
+# BLOCO 2/4 — BASES + HELPERS + LEITURA/CONSOLIDAÇÃO
+# =========================
 
 # ==========================================================
 # LISTA DE BASES VÁLIDAS
 # ==========================================================
 BASES_VALIDAS = [
-    'F CHR-AM', 'F CAC-RO', 'F PDR-GO','F PVH-RO','F ARQ - RO','F AGB-MT', 'F GYN 03-GO','MAO -AM', 'RBR 02-AC', 'F RBR-AC', 'IPR -GO',
-    'F GYN - GO','F VHL-RO', 'F PON-GO', 'F ANP-GO','F GYN 02-GO','F CDN-AM', 'F AGL-GO','F APG - GO', 'F RVD - GO', 'F PDT-TO',
-    'F PLN-DF','F SEN-GO','F PVL-MT', 'F TRD-GO', 'F CEI-DF','F CNF-MT', 'F FMA-GO','F ALV-AM','F POS-GO','F PPA-MS','F MAC-AP', 'F GAI-TO',
-    'F CRX-GO', 'F DOM -PA', 'F CCR-MT', 'F GRP-TO', 'F PVL 02-MT','F AMB-MS','F BVB-RR','F SVC-RR', 'F MCP-AP','F JPN 02-RO', 'F MCP 02-AP','F BSL-AC',
-    'F PVH 02-RO', 'F JPN-RO', 'F CMV-MT','F DOU-MS','F PGM-PA', 'F RDC -PA', 'F XIG-PA','F TGT-DF','F CGR - MS',
-    'F VLP-GO', 'F CGR 02-MS','F PLA-GO', 'F TGA-MT','F RFI-DF', 'F ORL-PA', 'F ITI-PA',
-    'F PCA-PA','F CNC-PA','F SJA-GO', 'F IGA-PA','F PAZ-AM','F TUR-PA','F JCD-PA', 'F TLA-PA','F ELD-PA', 'F BSB-DF', 'F OCD-GO',
-    'F EMA-DF', 'F GUA-DF','F STM-PA', 'F SBN-DF',
+    'F CHR-AM', 'F CAC-RO', 'F PDR-GO','F PVH-RO','F ARQ - RO','F AGB-MT', 'F GYN 03-GO','MAO -AM', 'RBR 02-AC',
+    'F RBR-AC', 'IPR -GO', 'F GYN - GO','F VHL-RO', 'F PON-GO', 'F ANP-GO','F GYN 02-GO','F CDN-AM', 'F AGL-GO',
+    'F APG - GO', 'F RVD - GO', 'F PDT-TO', 'F PLN-DF','F SEN-GO','F PVL-MT', 'F TRD-GO', 'F CEI-DF','F CNF-MT',
+    'F FMA-GO','F ALV-AM','F POS-GO','F PPA-MS','F MAC-AP', 'F GAI-TO', 'F CRX-GO', 'F DOM -PA', 'F CCR-MT',
+    'F GRP-TO', 'F PVL 02-MT','F AMB-MS','F BVB-RR','F SVC-RR', 'F MCP-AP','F JPN 02-RO', 'F MCP 02-AP',
+    'F BSL-AC', 'F PVH 02-RO', 'F JPN-RO', 'F CMV-MT','F DOU-MS','F PGM-PA', 'F RDC -PA', 'F XIG-PA',
+    'F TGT-DF','F CGR - MS', 'F VLP-GO', 'F CGR 02-MS','F PLA-GO', 'F TGA-MT','F RFI-DF', 'F ORL-PA', 'F ITI-PA',
+    'F PCA-PA','F CNC-PA','F SJA-GO', 'F IGA-PA','F PAZ-AM','F TUR-PA','F JCD-PA', 'F TLA-PA','F ELD-PA',
+    'F BSB-DF', 'F OCD-GO', 'F EMA-DF', 'F GUA-DF','F STM-PA', 'F SBN-DF',
 ]
 
 # ==========================================================
@@ -102,7 +113,6 @@ def _align_schemas(dfs: list[pl.DataFrame]) -> list[pl.DataFrame]:
     if not dfs:
         return dfs
 
-    # Ordem determinística: começa pelo primeiro df e vai adicionando novas colunas que aparecerem
     all_cols: list[str] = []
     seen = set()
     for df in dfs:
@@ -164,7 +174,6 @@ def consolidar_planilhas(pasta: str) -> pl.DataFrame:
         df = ler_planilha_rapido(arquivo)
 
         if not df.is_empty():
-            # Coluna auxiliar p/ rastrear origem (ajuda muito no debug)
             df = df.with_columns(pl.lit(nome).alias("_ARQUIVO_ORIGEM"))
             dfs.append(df)
             schemas_info.append((nome, len(df.columns), df.columns))
@@ -174,13 +183,12 @@ def consolidar_planilhas(pasta: str) -> pl.DataFrame:
     if not dfs:
         raise ValueError("Nenhum DataFrame válido foi lido dos arquivos.")
 
-    # Diagnóstico rápido de schema
     if DIAGNOSTICO_SCHEMA:
         base_nome, base_n, base_cols = schemas_info[0]
         for nome, n, cols in schemas_info[1:]:
             if n != base_n:
                 logging.warning(f"⚠️ Schema diferente: {nome} tem {n} colunas (base {base_nome} tem {base_n}).")
-            # Também loga diferenças por nome (mesmo com mesma contagem)
+
             set_base = set(base_cols)
             set_cols = set(cols)
             missing = sorted(list(set_base - set_cols))
@@ -195,12 +203,13 @@ def consolidar_planilhas(pasta: str) -> pl.DataFrame:
     dfs = _align_schemas(dfs)
 
     logging.info("🔄 Schemas alinhados. Iniciando concatenação...")
-    # Agora pode usar vertical_relaxed com segurança (mesma largura)
     df_final = pl.concat(dfs, how="vertical_relaxed")
 
     logging.info(f"📂 Base consolidada com {df_final.height} linhas e {len(df_final.columns)} colunas.")
     return df_final
-
+# =========================
+# BLOCO 3/4 — DATAS + SLA + SALVAR EXCEL
+# =========================
 
 def preparar_coluna_data(df: pl.DataFrame) -> pl.DataFrame:
     """Padroniza e converte a coluna de data para o tipo Date."""
@@ -242,7 +251,6 @@ def calcular_sla(df: pl.DataFrame) -> pd.DataFrame | None:
 
     possiveis_nomes_coluna = ["ENTREGUE NO PRAZO?", "ENTREGUE NO PRAZO？"]
     col_upper = [c.upper() for c in df.columns]
-
     col_prazo = next((df.columns[i] for i, nome in enumerate(col_upper) if nome in possiveis_nomes_coluna), None)
 
     if col_prazo is None:
@@ -272,9 +280,46 @@ def calcular_sla(df: pl.DataFrame) -> pd.DataFrame | None:
     return r
 
 
-# ==========================================================
-# FUNÇÃO PRINCIPAL (COM RELATÓRIO SIMPLIFICADO)
-# ==========================================================
+def salvar_relatorio_excel(
+    resumo_mes: pd.DataFrame,
+    resumo_domingos: pd.DataFrame | None,
+    primeiro_dia: date,
+    ultimo_dia: date,
+    pasta_saida: str,
+) -> str:
+    """
+    ✅ Gera uma planilha NOVA com os resumos do mês e domingos.
+    Retorna o caminho completo do arquivo gerado.
+    """
+    if not os.path.exists(pasta_saida):
+        logging.warning(f"⚠️ Pasta de saída não existe. Vou tentar criar: {pasta_saida}")
+        os.makedirs(pasta_saida, exist_ok=True)
+
+    agora = datetime.now().strftime("%Y%m%d_%H%M%S")
+    nome_arquivo = f"SLA_Franquias_{primeiro_dia.strftime('%Y-%m')}_{agora}.xlsx"
+    caminho_saida = os.path.join(pasta_saida, nome_arquivo)
+
+    with pd.ExcelWriter(caminho_saida, engine="openpyxl") as writer:
+        resumo_mes.to_excel(writer, index=False, sheet_name="SLA_MES")
+
+        if resumo_domingos is not None and not resumo_domingos.empty:
+            resumo_domingos.to_excel(writer, index=False, sheet_name="SLA_DOMINGOS")
+        else:
+            pd.DataFrame({"Info": [f"Sem registros de domingos no período {primeiro_dia} a {ultimo_dia}."]}).to_excel(
+                writer, index=False, sheet_name="SLA_DOMINGOS"
+            )
+
+        # Aba auxiliar com top piores
+        piores_mes = resumo_mes.sort_values("SLA", ascending=True).head(10).copy()
+        piores_mes["SLA_%"] = (piores_mes["SLA"] * 100).round(2)
+        piores_mes.to_excel(writer, index=False, sheet_name="TOP_10_PIORES")
+
+    logging.info(f"📝 Planilha gerada com sucesso: {caminho_saida}")
+    return caminho_saida
+# =========================
+# BLOCO 4/4 — CARD FEISHU + MAIN
+# =========================
+
 def exibir_e_enviar_card(
     resumo_mes: pd.DataFrame,
     resumo_domingos: pd.DataFrame | None,
@@ -294,6 +339,7 @@ def exibir_e_enviar_card(
             f"**Atualizado em:** {data_atual_str}\n"
             f"**📉 4 Piores Bases — {periodo_str}**\n\n"
         )
+
         for _, row in piores_df_mes.iterrows():
             sla_percent = row["SLA"] * 100
             conteudo_piores += f"{row['Base De Entrega']} | SLA: {sla_percent:.2f}%\n"
@@ -359,13 +405,16 @@ def exibir_e_enviar_card(
 
 
 # ==========================================================
-# BLOCO PRINCIPAL DE EXECUÇÃO (MENSAL + DEDUP)
+# BLOCO PRINCIPAL DE EXECUÇÃO (MENSAL + DEDUP + SALVAR EXCEL)
 # ==========================================================
 if __name__ == "__main__":
     try:
-        logging.info("🚀 Iniciando script de SLA v12.4 (Fix schema lengths differ)...")
+        logging.info("🚀 Iniciando script de SLA v12.4 (com export Excel)...")
 
-        # 1. Processar os dados
+        # ✅ Check rápido de pasta de saída
+        logging.info(f"📌 Pasta de saída configurada: {PASTA_SAIDA}")
+
+        # 1) Processar os dados
         df_consolidado = consolidar_planilhas(PASTA_ENTRADA)
         df_preparado = preparar_coluna_data(df_consolidado)
 
@@ -375,7 +424,7 @@ if __name__ == "__main__":
             pl.col("BASE DE ENTREGA").is_in([b.upper() for b in BASES_VALIDAS])
         )
 
-        # 2. Remover duplicatas
+        # 2) Remover duplicatas
         linhas_antes = df_filtrado.height
         df_filtrado = df_filtrado.unique(keep="first")
         linhas_depois = df_filtrado.height
@@ -389,7 +438,7 @@ if __name__ == "__main__":
         if df_filtrado.is_empty():
             raise ValueError("Nenhuma linha restante após o filtro de bases válidas e remoção de duplicatas.")
 
-        # 3. Definir período de análise (MÊS INTEIRO)
+        # 3) Definir período de análise (MÊS INTEIRO)
         data_ref = df_filtrado.select(pl.col(COL_DATA_REF)).max().item()
         primeiro_dia = data_ref.replace(day=1)
 
@@ -404,7 +453,7 @@ if __name__ == "__main__":
             f"({primeiro_dia.strftime('%d/%m/%Y')} a {ultimo_dia.strftime('%d/%m/%Y')})"
         )
 
-        # 4. SLA do mês
+        # 4) SLA do mês
         df_mes = df_filtrado.filter(pl.col(COL_DATA_REF).is_between(primeiro_dia, ultimo_dia))
         if df_mes.is_empty():
             raise ValueError("Sem dados para o mês atual.")
@@ -413,11 +462,21 @@ if __name__ == "__main__":
         if resumo_mes is None:
             raise ValueError("Não foi possível calcular o SLA para o mês.")
 
-        # 5. SLA domingos
+        # 5) SLA domingos
         df_domingos = df_mes.filter(pl.col(COL_DATA_REF).dt.weekday() == 6)  # 6 = Domingo
         resumo_domingos = calcular_sla(df_domingos) if not df_domingos.is_empty() else None
 
-        # 6. Exibir + enviar card
+        # ✅ 6) GERAR PLANILHA NOVA NA PASTA DE SAÍDA
+        caminho_arquivo = salvar_relatorio_excel(
+            resumo_mes=resumo_mes,
+            resumo_domingos=resumo_domingos,
+            primeiro_dia=primeiro_dia,
+            ultimo_dia=ultimo_dia,
+            pasta_saida=PASTA_SAIDA,
+        )
+        logging.info(f"✅ Relatório salvo em: {caminho_arquivo}")
+
+        # 7) Exibir + enviar card
         exibir_e_enviar_card(resumo_mes, resumo_domingos, primeiro_dia, ultimo_dia)
 
         logging.info("🏁 Processo finalizado com sucesso.")

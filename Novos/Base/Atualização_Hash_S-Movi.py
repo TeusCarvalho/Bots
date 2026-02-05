@@ -24,7 +24,7 @@ COORDENADOR_WEBHOOKS = {
     "Odária Fereira": "https://open.feishu.cn/open-apis/bot/v2/hook/914ce9f9-35ab-4869-860f-d2bef7d933fb",
     "Rodrigo Castro": "https://open.feishu.cn/open-apis/bot/v2/hook/16414836-5020-49bd-b3d3-ded4f34878ab",
     "Orlean Nascimento": "https://open.feishu.cn/open-apis/bot/v2/hook/62cd648c-ecd5-406a-903d-b596944c1919",
-    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/62518b67-f897-4341-98e6-2db87f4fdee2",
+    "Fabio Souza": "https://open.feishu.cn/open-apis/bot/v2/hook/7616db98-d225-4b46-915e-dc73bde24284",
     "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/e502bc10-3cb3-4b46-872e-eb73ef1c5ee0",
     "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/db18d309-8f26-41b5-b911-1a9f27449c83",
     "Ana Cunha": "https://open.feishu.cn/open-apis/bot/v2/hook/ffc8420d-a317-498a-b3b5-d83432311677",

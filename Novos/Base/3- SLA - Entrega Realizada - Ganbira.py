@@ -55,7 +55,7 @@ ARQ_BASE_XLSX = os.path.join(PASTA_BASE_CONSOLIDADA, f"Base_Consolidada_{DATA_HO
 EXCEL_MAX_ROWS = 1_048_576
 
 LINK_PASTA = (
-    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/IgDyD96CIiyUQKnAdUmf9Z5mAVyyGEiZCJ7OT3_189jqmP8?e=2agovI"
+    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/IgCkMQtn4udmRZAFJTit7pkaAVAudAyWYHic-zXIKMlQz1Q?e=d3eOd5"
 )
 
 COORDENADOR_WEBHOOKS = {
@@ -66,7 +66,7 @@ COORDENADOR_WEBHOOKS = {
     "Odária Fereira": "https://open.feishu.cn/open-apis/bot/v2/hook/48c4db73-b5a4-4007-96af-f5d28301f0c1",
     "Rodrigo Castro": "https://open.feishu.cn/open-apis/bot/v2/hook/606ed22b-dc49-451d-9bfe-0a8829dbe76e",
     "Orlean Nascimento": "https://open.feishu.cn/open-apis/bot/v2/hook/840f79b0-1eff-42fe-aae0-433c9edbad80",
-    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/95c8e4d2-27aa-4811-b6bf-ebf99cdfd42d",
+    "Fabio Souza": "https://open.feishu.cn/open-apis/bot/v2/hook/ca2c260c-f69c-472d-9757-279db52a79b8",
     "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/63751a67-efe8-40e4-b841-b290a4819836",
     "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/3ddc5962-2d32-4b2d-92d9-a4bc95ac3393",
     "Ana Cunha": "https://open.feishu.cn/open-apis/bot/v2/hook/b2ec868f-3149-4808-af53-9e0c6d2cd94e",
@@ -419,6 +419,27 @@ def exportar_base_consolidada(df_periodo: pl.DataFrame) -> None:
             )
     except Exception as e:
         logging.error(f"❌ Falha ao salvar XLSX da base: {e}")
+
+
+def montar_arquivos_gerados_md() -> str:
+    """
+    ✅ NOVO (FIX):
+    Monta um bloco de texto (markdown) com os arquivos gerados, para entrar no card do Feishu.
+    """
+    base_xlsx_txt = (
+        f"- Base (XLSX): `{os.path.basename(ARQ_BASE_XLSX)}`\n"
+        if os.path.exists(ARQ_BASE_XLSX)
+        else "- Base (XLSX): *(não gerado — limite do Excel)*\n"
+    )
+
+    txt = (
+        "📄 **Arquivos gerados:**\n"
+        f"- Resumo: `{os.path.basename(ARQUIVO_SAIDA)}`\n"
+        f"- Base (PARQUET): `{os.path.basename(ARQ_BASE_PARQUET)}`\n"
+        f"- Base (CSV): `{os.path.basename(ARQ_BASE_CSV)}`\n"
+        + base_xlsx_txt
+    )
+    return txt
 # =========================
 # BLOCO 3/4 — FEISHU
 # =========================
@@ -430,6 +451,7 @@ def enviar_card_feishu(
     sla: float,
     periodo_txt: str,
     dias_txt: str,
+    arquivos_gerados_md: str,  # ✅ NOVO (FIX): agora vem por parâmetro
 ) -> bool:
     try:
         if resumo.empty:
@@ -442,22 +464,15 @@ def enviar_card_feishu(
         melhores = resumo.sort_values("% SLA Cumprido", ascending=False).head(3)
 
         linhas_piores = [
-            f"{i}. {cor_percentual(l['% SLA Cumprido'])} **{l['Base De Entrega']}** — {l['% SLA Cumprido']:.2%}"
+            f"{i}. {cor_percentual(float(l['% SLA Cumprido']))} **{l['Base De Entrega']}** — {float(l['% SLA Cumprido']):.2%}"
             for i, l in enumerate(piores.to_dict("records"), 1)
         ]
 
         medalhas = ["🥇", "🥈", "🥉"]
         linhas_melhores = [
-            f"{medalhas[i-1]} {cor_percentual(l['% SLA Cumprido'])} **{l['Base De Entrega']}** — {l['% SLA Cumprido']:.2%}"
+            f"{medalhas[i-1]} {cor_percentual(float(l['% SLA Cumprido']))} **{l['Base De Entrega']}** — {float(l['% SLA Cumprido']):.2%}"
             for i, l in enumerate(melhores.to_dict("records"), 1)
         ]
-
-        # ✅ NOVO: informar nomes dos arquivos gerados no dia
-        arquivos_gerados = (
-            f"📎 **Arquivos gerados (hoje):**\n"
-            f"- Resumo: `Resumo_Consolidado_{DATA_HOJE}.xlsx`\n"
-            f"- Base (alterada): `Base_Consolidada_{DATA_HOJE}.parquet` e `Base_Consolidada_{DATA_HOJE}.csv`\n"
-        )
 
         conteudo = (
             f"👤 **Coordenador:** {coord}\n"
@@ -465,7 +480,7 @@ def enviar_card_feishu(
             f"🗓️ **Dias considerados:** {dias_txt}\n"
             f"📈 **SLA (Período):** {sla:.2%}\n"
             f"🏢 **Bases analisadas:** {bases}\n\n"
-            + arquivos_gerados
+            + arquivos_gerados_md
             + "\n"
             f"🔻 **3 Piores:**\n" + "\n".join(linhas_piores) +
             "\n\n🏆 **3 Melhores:**\n" + "\n".join(linhas_melhores)
@@ -603,9 +618,11 @@ if __name__ == "__main__":
         sem_coord = df_periodo.filter(pl.col("COORDENADOR").is_null()).height
         logging.info(f"🧩 Registros sem coordenador após join: {sem_coord}")
 
-        # ✅ 10.1) NOVO: exportar "arquivo original com alterações"
-        # (base consolidada já com _ENTREGUE_PRAZO, COORDENADOR, BASE_NORM etc.)
+        # ✅ 10.1) Exportar "arquivo original com alterações"
         exportar_base_consolidada(df_periodo)
+
+        # ✅ NOVO (FIX): monta o bloco de “arquivos gerados” só depois de exportar
+        arquivos_gerados_md = montar_arquivos_gerados_md()
 
         # 11) Resumo
         if df_periodo.is_empty():
@@ -654,7 +671,15 @@ if __name__ == "__main__":
             ent = float(sub["Entregues no Prazo"].sum()) if "Entregues no Prazo" in sub.columns else 0.0
             sla = (ent / total) if total > 0 else 0.0
 
-            enviar_card_feishu(sub, webhook, coord, sla, periodo_txt, dias_txt)
+            enviar_card_feishu(
+                sub,
+                webhook,
+                coord,
+                sla,
+                periodo_txt,
+                dias_txt,
+                arquivos_gerados_md,  # ✅ NOVO (FIX)
+            )
 
         logging.info("🏁 Processamento concluído (v2.14)")
 

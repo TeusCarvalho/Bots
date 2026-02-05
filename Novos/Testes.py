@@ -1,169 +1,263 @@
+# -*- coding: utf-8 -*-
+# 🚀 União de Planilhas com Polars (CSV/XLSX/XLS) + múltiplas abas Excel
+# - Lê TODAS as abas de cada Excel
+# - Adiciona colunas de rastreio: __arquivo e __aba
+# - Exporta Excel em partes (1M linhas por aba) sem converter tudo para pandas de uma vez
+# - Filtro 1: manter apenas valores específicos em "Aging超时类型"
+# - Filtro 2: REMOVER bases específicas em "Unidade responsável责任机构"
+
 import os
-import re
-import numpy as np
+import sys
+import tkinter as tk
+from tkinter import filedialog
+from datetime import datetime
+import polars as pl
 import pandas as pd
 
-# =========================
-# CONFIG
-# =========================
-pasta = r"C:\Users\J&T-099\Downloads\CEPS MANAUS"
-base_path = os.path.join(pasta, "BASE - MANAUS.xlsx")
-faixa_path = os.path.join(pasta, "FAIXA CEP MANAUS.xlsx")
 
 # =========================
-# Leitura
+# UTIL
 # =========================
-base_df = pd.read_excel(base_path, sheet_name=0)
-faixa_df = pd.read_excel(faixa_path, sheet_name=0)
+def _sniff_csv_separator(path: str, default=";") -> str:
+    """Tenta adivinhar separador olhando a primeira linha."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            line = f.readline()
+        candidates = [";", ",", "\t", "|"]
+        scores = {c: line.count(c) for c in candidates}
+        best = max(scores, key=scores.get)
+        return best if scores[best] > 0 else default
+    except Exception:
+        return default
 
-print("Colunas BASE:", list(base_df.columns))
-print("Colunas FAIXA:", list(faixa_df.columns))
 
-# =========================
-# Funções utilitárias
-# =========================
-def _norm(s: str) -> str:
-    return re.sub(r"\s+", " ", str(s).strip().lower())
+def _read_csv_polars(path: str) -> pl.DataFrame:
+    """Lê CSV tentando encoding e separador."""
+    sep = _sniff_csv_separator(path, default=";")
+    for enc in ("utf-8", "latin1"):
+        try:
+            return pl.read_csv(path, separator=sep, encoding=enc, ignore_errors=True)
+        except Exception:
+            pass
+    return pl.read_csv(path, separator=sep, ignore_errors=True)
 
-def limpar_cep(x):
-    """
-    Mantém apenas dígitos e converte para int de 8 dígitos.
-    Retorna <NA> se inválido.
-    """
-    if pd.isna(x):
-        return pd.NA
-    s = str(x).strip()
-    s = re.sub(r"\D", "", s)
-    if not s:
-        return pd.NA
-    if len(s) < 8:
-        s = s.zfill(8)
-    elif len(s) > 8:
-        return pd.NA
-    return int(s)
 
-def achar_coluna(df: pd.DataFrame, preferidas: list[str], contem: list[str] = None):
-    """
-    Tenta achar coluna por lista de nomes preferidos (match normalizado),
-    senão procura por termos 'contem' no nome da coluna.
-    """
-    cols = list(df.columns)
-    cols_norm = {_norm(c): c for c in cols}
+def _read_excel_all_sheets(path: str) -> list[tuple[str, pl.DataFrame]]:
+    """Lê TODAS as abas do Excel e retorna lista (nome_aba, df_polars)."""
+    sheets = []
+    try:
+        xls = pd.ExcelFile(path)
+        sheet_names = xls.sheet_names
+    except Exception:
+        sheet_names = [None]
 
-    for nome in preferidas:
-        n = _norm(nome)
-        if n in cols_norm:
-            return cols_norm[n]
+    for sh in sheet_names:
+        # 1) tenta Polars
+        try:
+            if sh is None:
+                df = pl.read_excel(path)
+                sheets.append(("Sheet1", df))
+            else:
+                df = pl.read_excel(path, sheet_name=sh)
+                sheets.append((str(sh), df))
+            continue
+        except Exception:
+            pass
 
-    if contem:
-        for c in cols:
-            cn = _norm(c)
-            if all(t in cn for t in contem):
-                return c
+        # 2) fallback pandas -> polars
+        try:
+            if sh is None:
+                pdf = pd.read_excel(path)
+                sheets.append(("Sheet1", pl.from_pandas(pdf)))
+            else:
+                pdf = pd.read_excel(path, sheet_name=sh)
+                sheets.append((str(sh), pl.from_pandas(pdf)))
+        except Exception as e:
+            raise RuntimeError(f"Falha ao ler Excel (aba={sh}): {e}")
 
-    return None
+    return sheets
 
-# =========================
-# Detectar colunas (já batendo com seus arquivos)
-# =========================
-col_base_cep = achar_coluna(
-    base_df,
-    preferidas=["CEP destino", "CEP", "CEP Destino", "cep destino"],
-    contem=["cep"]
-)
-if not col_base_cep:
-    raise KeyError(f"Não encontrei coluna de CEP na BASE. Colunas: {list(base_df.columns)}")
-
-col_faixa_ini = achar_coluna(
-    faixa_df,
-    preferidas=["CEP inicial", "CEP_INICIAL", "CEP INICIAL"],
-    contem=["cep", "inicial"]
-)
-col_faixa_fim = achar_coluna(
-    faixa_df,
-    preferidas=["CEP final", "CEP_FINAL", "CEP FINAL"],
-    contem=["cep", "final"]
-)
-
-# “Bairro”/região no seu arquivo está como "Nome de região"
-col_faixa_bairro = achar_coluna(
-    faixa_df,
-    preferidas=["Nome de região", "Nome de regiao", "BAIRRO", "Bairro", "Região", "Regiao"],
-    contem=["reg"]
-)
-
-if not col_faixa_ini or not col_faixa_fim or not col_faixa_bairro:
-    raise KeyError(
-        "Não consegui detectar as colunas da FAIXA.\n"
-        f"Detectado: ini={col_faixa_ini}, fim={col_faixa_fim}, bairro={col_faixa_bairro}\n"
-        f"Colunas FAIXA: {list(faixa_df.columns)}"
-    )
-
-print("\nUsando colunas:")
-print(f"BASE CEP -> {col_base_cep}")
-print(f"FAIXA INI -> {col_faixa_ini}")
-print(f"FAIXA FIM -> {col_faixa_fim}")
-print(f"FAIXA BAIRRO/REGIAO -> {col_faixa_bairro}\n")
 
 # =========================
-# Limpar CEPs
+# MAIN
 # =========================
-base_df["_CEP_LIMPO"] = base_df[col_base_cep].apply(limpar_cep).astype("Int64")
+def juntar_planilhas_na_pasta(diretorio_entrada=None, nome_saida="planilha_unificada"):
+    if diretorio_entrada is None:
+        print("📂 Selecione a pasta com as planilhas...")
+        root = tk.Tk()
+        root.withdraw()
+        diretorio_entrada = filedialog.askdirectory(title="Selecione a pasta com as planilhas")
+        root.destroy()
 
-faixa_ok = faixa_df.copy()
-faixa_ok["_INI"] = faixa_ok[col_faixa_ini].apply(limpar_cep).astype("Int64")
-faixa_ok["_FIM"] = faixa_ok[col_faixa_fim].apply(limpar_cep).astype("Int64")
+        if not diretorio_entrada:
+            print("❌ Nenhuma pasta selecionada. Operação cancelada.")
+            return
 
-# remove linhas inválidas
-faixa_ok = faixa_ok.dropna(subset=["_INI", "_FIM", col_faixa_bairro]).copy()
-faixa_ok = faixa_ok[faixa_ok["_INI"] <= faixa_ok["_FIM"]].copy()
-faixa_ok.sort_values("_INI", inplace=True)
+    if not os.path.isdir(diretorio_entrada):
+        print(f"❌ Diretório inválido: {diretorio_entrada}")
+        return
 
-starts = faixa_ok["_INI"].to_numpy(dtype=np.int64)
-ends = faixa_ok["_FIM"].to_numpy(dtype=np.int64)
-bairros = faixa_ok[col_faixa_bairro].astype(str).to_numpy()
+    print(f"🚀 Iniciando união de planilhas em: {diretorio_entrada}")
 
-# =========================
-# Match vetorizado por faixa (rápido)
-# =========================
-ceps_series = base_df["_CEP_LIMPO"]
+    arquivos = [
+        f for f in os.listdir(diretorio_entrada)
+        if os.path.isfile(os.path.join(diretorio_entrada, f))
+    ]
+    arquivos_planilha = [f for f in arquivos if f.lower().endswith((".csv", ".xlsx", ".xls"))]
 
-mask_valid = ceps_series.notna().to_numpy()
-ceps = np.zeros(len(base_df), dtype=np.int64)
-ceps[mask_valid] = ceps_series[mask_valid].astype(np.int64).to_numpy()
+    if not arquivos_planilha:
+        print("⚠️ Nenhum arquivo CSV/XLSX/XLS encontrado.")
+        return
 
-idx = np.searchsorted(starts, ceps, side="right") - 1
+    frames: list[pl.DataFrame] = []
 
-ok_idx = (idx >= 0) & mask_valid
-ok_range = np.zeros(len(base_df), dtype=bool)
-ok_range[ok_idx] = ceps[ok_idx] <= ends[idx[ok_idx]]
+    for arquivo in arquivos_planilha:
+        caminho = os.path.join(diretorio_entrada, arquivo)
+        ext = os.path.splitext(arquivo)[1].lower()
 
-resultado = np.full(len(base_df), pd.NA, dtype=object)
-resultado[ok_range] = bairros[idx[ok_range]]
+        try:
+            if ext == ".csv":
+                df = _read_csv_polars(caminho).with_columns([
+                    pl.lit(arquivo).alias("__arquivo"),
+                    pl.lit("CSV").alias("__aba"),
+                ])
+                print(f"📖 {arquivo} (CSV) -> {df.height} linhas, {df.width} colunas")
+                frames.append(df)
 
-# coluna final (nome mais “amigável”)
-base_df["BAIRRO_FAIXA_CEP"] = resultado
+            elif ext in (".xlsx", ".xls"):
+                sheets = _read_excel_all_sheets(caminho)
+                for aba, df in sheets:
+                    df2 = df.with_columns([
+                        pl.lit(arquivo).alias("__arquivo"),
+                        pl.lit(aba).alias("__aba"),
+                    ])
+                    print(f"📖 {arquivo} [{aba}] -> {df2.height} linhas, {df2.width} colunas")
+                    frames.append(df2)
 
-# =========================
-# Relatório e export
-# =========================
-total = len(base_df)
-encontrados = base_df["BAIRRO_FAIXA_CEP"].notna().sum()
-nao_encontrados = total - encontrados
+        except Exception as e:
+            print(f"❌ Erro ao ler {arquivo}: {e}")
 
-print(f"Total linhas: {total}")
-print(f"Encontrados: {encontrados}")
-print(f"Não encontrados: {nao_encontrados}")
+    if not frames:
+        print("⚠️ Nenhuma planilha foi lida com sucesso.")
+        return
 
-nao = base_df.loc[base_df["BAIRRO_FAIXA_CEP"].isna(), [col_base_cep]].copy()
+    print("🧩 Concatenando planilhas...")
+    planilha_final = pl.concat(frames, how="diagonal_relaxed")
 
-# remove auxiliar
-base_df.drop(columns=["_CEP_LIMPO"], inplace=True)
+    # =========================
+    # FILTRO 1 (MANTER) Aging超时类型
+    # =========================
+    COL_FILTRO_1 = "Aging超时类型"
+    VALORES_PERMITIDOS = [
+        "Exceed 7 days with no track",
+        "Exceed 6 days with no track",
+        "Exceed 5 days with no track",
+        "Exceed 30 days with no track",
+        "Exceed 14 days with no track",
+        "Exceed 10 days with no track",
+    ]
 
-saida_path = os.path.join(pasta, "BASE_MANAUS_COM_BAIRRO.xlsx")
-with pd.ExcelWriter(saida_path, engine="openpyxl") as writer:
-    base_df.to_excel(writer, index=False, sheet_name="BASE_COM_BAIRRO")
-    nao.to_excel(writer, index=False, sheet_name="CEPS_NAO_ENCONTRADOS")
+    if COL_FILTRO_1 in planilha_final.columns:
+        antes = planilha_final.height
+        planilha_final = planilha_final.filter(
+            pl.col(COL_FILTRO_1)
+              .cast(pl.Utf8)
+              .str.strip_chars()
+              .is_in(VALORES_PERMITIDOS)
+        )
+        depois = planilha_final.height
+        print(f"🔎 Filtro (MANTER) '{COL_FILTRO_1}': {antes} -> {depois} linhas.")
+    else:
+        print(f"⚠️ Coluna '{COL_FILTRO_1}' não encontrada. (Sem filtro 1.)")
 
-print("\nArquivo gerado com sucesso:")
-print(saida_path)
+    # =========================
+    # FILTRO 2 (REMOVER) Unidade responsável责任机构
+    # =========================
+    COL_FILTRO_2 = "Unidade responsável责任机构"
+    BASES_REMOVER = [
+        "TO PMW",
+        "DC JUI-MT",
+        "PA STM",
+        "DC STM-PA",
+        "DF BSB",
+        "GO GYN",
+        "DC GYN-GO",
+        "DC MAO-AM",
+        "AM MAO",
+        "RO PVH",
+        "DC PVH-RO",
+        "MT CGB",
+        "DC AGB-MT",
+        "MS CGR",
+        "DC CGR-MS",
+        "PA MRB",
+        "PA ANA",
+        "DC PMW-TO",
+        "DC MRB-PA",
+        "DC RBR-AC",
+    ]
+
+    if COL_FILTRO_2 in planilha_final.columns:
+        antes = planilha_final.height
+
+        col_norm = (
+            pl.col(COL_FILTRO_2)
+              .cast(pl.Utf8)
+              .fill_null("")
+              .str.strip_chars()
+        )
+
+        # Mantém tudo que NÃO está na lista (e também mantém vazios/null)
+        planilha_final = planilha_final.filter(
+            (col_norm == "") | (~col_norm.is_in(BASES_REMOVER))
+        )
+
+        depois = planilha_final.height
+        print(f"🧹 Filtro (REMOVER) '{COL_FILTRO_2}': {antes} -> {depois} linhas.")
+    else:
+        print(f"⚠️ Coluna '{COL_FILTRO_2}' não encontrada. (Sem filtro 2.)")
+
+    total_linhas, total_colunas = planilha_final.shape
+    print(f"✅ Planilha final contém {total_linhas} linhas e {total_colunas} colunas")
+
+    # === Exportar CSV ===
+    caminho_csv = os.path.join(diretorio_entrada, f"{nome_saida}.csv")
+    try:
+        planilha_final.write_csv(caminho_csv, separator=";", null_value="")
+        print(f"💾 CSV salvo em: {caminho_csv}")
+    except Exception as e:
+        print(f"❌ Erro ao salvar CSV: {e}")
+
+    # === Exportar Excel dividido em abas ===
+    caminho_xlsx = os.path.join(diretorio_entrada, f"{nome_saida}.xlsx")
+    max_linhas = 1_000_000
+    print("📘 Exportando para Excel dividido em abas...")
+
+    partes = max(1, (total_linhas + max_linhas - 1) // max_linhas)
+
+    try:
+        with pd.ExcelWriter(caminho_xlsx, engine="openpyxl") as writer:
+            for i in range(partes):
+                inicio = i * max_linhas
+                tamanho = min(max_linhas, total_linhas - inicio)
+
+                parte_pd = (
+                    planilha_final
+                    .slice(inicio, tamanho)
+                    .to_pandas(use_pyarrow_extension_array=True)
+                )
+
+                sheet_name = f"Parte_{i + 1}"
+                parte_pd.to_excel(writer, sheet_name=sheet_name, index=False)
+                print(f" -> Aba {sheet_name} com {len(parte_pd)} linhas salva.")
+
+        print(f"✅ Excel salvo com sucesso em: {caminho_xlsx}")
+    except Exception as e:
+        print(f"❌ Erro ao salvar Excel: {e}")
+
+    print(f"✨ Finalizado em {datetime.now().strftime('%H:%M:%S')} ✨")
+
+
+if __name__ == "__main__":
+    diretorio = sys.argv[1] if len(sys.argv) > 1 else None
+    juntar_planilhas_na_pasta(diretorio)
