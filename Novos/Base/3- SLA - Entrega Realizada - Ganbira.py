@@ -39,17 +39,16 @@ PASTA_SAIDA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\SLA - Entr
 # Arquivo morto (para relatórios e bases antigas)
 PASTA_ARQUIVO = os.path.join(PASTA_SAIDA, "Arquivo Morto")
 
-# ✅ NOVO: pasta específica para base consolidada (original + alterações)
+# ✅ pasta específica para base consolidada (original + alterações)
 PASTA_BASE_CONSOLIDADA = os.path.join(PASTA_SAIDA, "Base Consolidada")
 
 DATA_HOJE = datetime.now().strftime("%Y%m%d")
 
+# ✅ Resumo principal (Seg–Sáb)
 ARQUIVO_SAIDA = os.path.join(PASTA_SAIDA, f"Resumo_Consolidado_{DATA_HOJE}.xlsx")
 
-# ✅ NOVO: arquivos da base consolidada (original + alterações)
-ARQ_BASE_PARQUET = os.path.join(PASTA_BASE_CONSOLIDADA, f"Base_Consolidada_{DATA_HOJE}.parquet")
-ARQ_BASE_CSV = os.path.join(PASTA_BASE_CONSOLIDADA, f"Base_Consolidada_{DATA_HOJE}.csv")
-ARQ_BASE_XLSX = os.path.join(PASTA_BASE_CONSOLIDADA, f"Base_Consolidada_{DATA_HOJE}.xlsx")
+# ✅ Resumo Domingo (se existir)
+ARQUIVO_SAIDA_DOMINGO = os.path.join(PASTA_SAIDA, f"Resumo_Consolidado_Domingo_{DATA_HOJE}.xlsx")
 
 # Limite de linhas do Excel
 EXCEL_MAX_ROWS = 1_048_576
@@ -83,7 +82,7 @@ PULAR_FERIADOS_EM_FDS = False
 
 _CACHE_FERIADOS: Dict[int, Set[date]] = {}
 # =========================
-# BLOCO 2/4 — FUNÇÕES (FERIADOS / PERÍODO / LEITURA / DATA / FALLBACK / EXPORT)
+# BLOCO 2/4 — FUNÇÕES (FERIADOS / PERÍODO / LEITURA / DATA / FALLBACK / EXPORT / SEPARAÇÃO DOMINGO)
 # =========================
 
 def normalizar(s) -> str:
@@ -152,9 +151,17 @@ def formatar_periodo(inicio: date, fim: date) -> str:
 
 
 def formatar_lista_dias(datas: List[date]) -> str:
+    if not datas:
+        return ""
     dias_pt = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
     partes = [f"{dias_pt[d.weekday()]} {d.strftime('%d/%m')}" for d in datas]
     return ", ".join(partes)
+
+
+def periodo_txt_de_datas(datas: List[date]) -> str:
+    if not datas:
+        return "-"
+    return formatar_periodo(min(datas), max(datas))
 
 
 def cor_percentual(p: float) -> str:
@@ -163,6 +170,18 @@ def cor_percentual(p: float) -> str:
     elif p < 0.97:
         return "🟡"
     return "🟢"
+
+
+def separar_seg_sab_e_domingo(datas: List[date]) -> Tuple[List[date], List[date]]:
+    """
+    ✅ NOVO:
+    Retorna (datas_seg_sab, datas_domingo) a partir da lista calculada.
+    - Seg–Sáb: weekday != 6
+    - Domingo: weekday == 6
+    """
+    datas_dom = [d for d in datas if d.weekday() == 6]
+    datas_seg_sab = [d for d in datas if d.weekday() != 6]
+    return datas_seg_sab, datas_dom
 
 
 def calcular_periodo_base() -> Optional[Tuple[date, date, List[date]]]:
@@ -223,9 +242,6 @@ def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo: 
 
 
 def arquivar_bases_antigas(pasta_origem: str, pasta_destino: str, prefixo: str) -> None:
-    """
-    ✅ NOVO: move bases antigas (xlsx/csv/parquet) para Arquivo Morto.
-    """
     os.makedirs(pasta_destino, exist_ok=True)
     if not os.path.isdir(pasta_origem):
         return
@@ -378,68 +394,115 @@ def ajustar_periodo_por_dados(
     return novo_inicio, novo_fim, novo_datas
 
 
-def exportar_base_consolidada(df_periodo: pl.DataFrame) -> None:
+def exportar_base_consolidada(df_periodo: pl.DataFrame, tag: str = "") -> Dict[str, str]:
     """
     ✅ NOVO:
-    Salva o "arquivo original com alterações" (base consolidada) em:
-      - PARQUET (sempre)  -> melhor para volume
-      - CSV (sempre)      -> compatibilidade
-      - XLSX (somente se couber no limite de linhas do Excel)
+    Exporta base consolidada por "tag":
+      tag=""         -> Base_Consolidada_YYYYMMDD.*
+      tag="_Domingo" -> Base_Consolidada_Domingo_YYYYMMDD.*
+
+    Retorna dict com caminhos gerados.
     """
     os.makedirs(PASTA_BASE_CONSOLIDADA, exist_ok=True)
 
-    # Arquiva bases antigas
-    arquivar_bases_antigas(PASTA_BASE_CONSOLIDADA, PASTA_ARQUIVO, "Base_Consolidada_")
+    if tag == "_Domingo":
+        prefixo = "Base_Consolidada_Domingo_"
+        nome_base = f"Base_Consolidada_Domingo_{DATA_HOJE}"
+    else:
+        prefixo = "Base_Consolidada_"
+        nome_base = f"Base_Consolidada_{DATA_HOJE}"
 
-    # Sempre salva parquet (mais leve e rápido)
-    try:
-        df_periodo.write_parquet(ARQ_BASE_PARQUET)
-        logging.info(f"✅ Base consolidada (PARQUET) salva em: {ARQ_BASE_PARQUET}")
-    except Exception as e:
-        logging.error(f"❌ Falha ao salvar PARQUET: {e}")
+    arq_parquet = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.parquet")
+    arq_csv = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.csv")
+    arq_xlsx = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.xlsx")
 
-    # Sempre salva CSV (pode ser grande)
+    # Arquiva bases antigas do mesmo tipo/tag
+    arquivar_bases_antigas(PASTA_BASE_CONSOLIDADA, PASTA_ARQUIVO, prefixo)
+
+    # Sempre salva parquet
     try:
-        df_periodo.write_csv(ARQ_BASE_CSV)
-        logging.info(f"✅ Base consolidada (CSV) salva em: {ARQ_BASE_CSV}")
+        df_periodo.write_parquet(arq_parquet)
+        logging.info(f"✅ Base consolidada (PARQUET) salva em: {arq_parquet}")
     except Exception as e:
-        logging.error(f"❌ Falha ao salvar CSV: {e}")
+        logging.error(f"❌ Falha ao salvar PARQUET ({nome_base}): {e}")
+
+    # Sempre salva CSV
+    try:
+        df_periodo.write_csv(arq_csv)
+        logging.info(f"✅ Base consolidada (CSV) salva em: {arq_csv}")
+    except Exception as e:
+        logging.error(f"❌ Falha ao salvar CSV ({nome_base}): {e}")
 
     # XLSX só se couber no Excel
     try:
         if df_periodo.height <= (EXCEL_MAX_ROWS - 1):
             df_pd = df_periodo.to_pandas()
-            with pd.ExcelWriter(ARQ_BASE_XLSX, engine="openpyxl") as w:
+            with pd.ExcelWriter(arq_xlsx, engine="openpyxl") as w:
                 df_pd.to_excel(w, index=False, sheet_name="Base Consolidada")
-            logging.info(f"✅ Base consolidada (XLSX) salva em: {ARQ_BASE_XLSX}")
+            logging.info(f"✅ Base consolidada (XLSX) salva em: {arq_xlsx}")
         else:
             logging.warning(
-                f"⚠️ Base tem {df_periodo.height:,} linhas. Excel suporta até {EXCEL_MAX_ROWS:,}. "
+                f"⚠️ {nome_base} tem {df_periodo.height:,} linhas. Excel suporta até {EXCEL_MAX_ROWS:,}. "
                 "XLSX NÃO gerado (use PARQUET/CSV)."
             )
     except Exception as e:
-        logging.error(f"❌ Falha ao salvar XLSX da base: {e}")
+        logging.error(f"❌ Falha ao salvar XLSX ({nome_base}): {e}")
+
+    return {"parquet": arq_parquet, "csv": arq_csv, "xlsx": arq_xlsx}
 
 
-def montar_arquivos_gerados_md() -> str:
-    """
-    ✅ NOVO (FIX):
-    Monta um bloco de texto (markdown) com os arquivos gerados, para entrar no card do Feishu.
-    """
+def exportar_resumo_excel(resumo_pd: pd.DataFrame, arquivo_saida: str, prefixo: str) -> None:
+    os.makedirs(PASTA_SAIDA, exist_ok=True)
+    arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, prefixo)
+    with pd.ExcelWriter(arquivo_saida, engine="openpyxl") as w:
+        resumo_pd.to_excel(w, index=False, sheet_name="Resumo SLA")
+    logging.info(f"✅ Resumo Excel salvo em: {arquivo_saida}")
+
+
+def montar_arquivos_gerados_md(arquivo_resumo: str, paths_base: Dict[str, str]) -> str:
     base_xlsx_txt = (
-        f"- Base (XLSX): `{os.path.basename(ARQ_BASE_XLSX)}`\n"
-        if os.path.exists(ARQ_BASE_XLSX)
+        f"- Base (XLSX): `{os.path.basename(paths_base['xlsx'])}`\n"
+        if os.path.exists(paths_base["xlsx"])
         else "- Base (XLSX): *(não gerado — limite do Excel)*\n"
     )
 
     txt = (
         "📄 **Arquivos gerados:**\n"
-        f"- Resumo: `{os.path.basename(ARQUIVO_SAIDA)}`\n"
-        f"- Base (PARQUET): `{os.path.basename(ARQ_BASE_PARQUET)}`\n"
-        f"- Base (CSV): `{os.path.basename(ARQ_BASE_CSV)}`\n"
+        f"- Resumo: `{os.path.basename(arquivo_resumo)}`\n"
+        f"- Base (PARQUET): `{os.path.basename(paths_base['parquet'])}`\n"
+        f"- Base (CSV): `{os.path.basename(paths_base['csv'])}`\n"
         + base_xlsx_txt
     )
     return txt
+
+
+def gerar_resumo_por_base(df_periodo: pl.DataFrame) -> pd.DataFrame:
+    if df_periodo.is_empty():
+        return pd.DataFrame(
+            columns=[
+                "Base De Entrega",
+                "COORDENADOR",
+                "Total",
+                "Entregues no Prazo",
+                "Fora do Prazo",
+                "% SLA Cumprido",
+            ]
+        )
+
+    resumo = (
+        df_periodo.group_by(["BASE DE ENTREGA", "COORDENADOR"])
+        .agg(
+            [
+                pl.len().alias("Total"),
+                pl.col("_ENTREGUE_PRAZO").sum().alias("Entregues no Prazo"),
+                (pl.len() - pl.col("_ENTREGUE_PRAZO").sum()).alias("Fora do Prazo"),
+                (pl.col("_ENTREGUE_PRAZO").sum() / pl.len()).alias("% SLA Cumprido"),
+            ]
+        )
+        .sort("% SLA Cumprido", descending=True)
+    )
+
+    return resumo.to_pandas().rename(columns={"BASE DE ENTREGA": "Base De Entrega"})
 # =========================
 # BLOCO 3/4 — FEISHU
 # =========================
@@ -451,11 +514,12 @@ def enviar_card_feishu(
     sla: float,
     periodo_txt: str,
     dias_txt: str,
-    arquivos_gerados_md: str,  # ✅ NOVO (FIX): agora vem por parâmetro
+    arquivos_gerados_md: str,
+    titulo_suffix: str = "",  # ✅ NOVO: para marcar "Domingo"
 ) -> bool:
     try:
         if resumo.empty:
-            logging.warning(f"⚠️ Nenhuma base para {coord}")
+            logging.warning(f"⚠️ Nenhuma base para {coord}{titulo_suffix}")
             return False
 
         bases = resumo["Base De Entrega"].nunique()
@@ -486,13 +550,15 @@ def enviar_card_feishu(
             "\n\n🏆 **3 Melhores:**\n" + "\n".join(linhas_melhores)
         )
 
+        titulo = f"SLA - Entrega no Prazo — {coord}{titulo_suffix}"
+
         payload = {
             "msg_type": "interactive",
             "card": {
                 "config": {"wide_screen_mode": True},
                 "header": {
                     "template": "blue",
-                    "title": {"tag": "plain_text", "content": f"SLA - Entrega no Prazo — {coord}"},
+                    "title": {"tag": "plain_text", "content": titulo},
                 },
                 "elements": [
                     {"tag": "div", "text": {"tag": "lark_md", "content": conteudo}},
@@ -516,22 +582,22 @@ def enviar_card_feishu(
 
         if r.status_code != 200:
             logging.error(
-                f"❌ ERRO ao enviar card para {coord}. Status: {r.status_code}. Resposta: {r.text}"
+                f"❌ ERRO ao enviar card para {coord}{titulo_suffix}. Status: {r.status_code}. Resposta: {r.text}"
             )
             return False
 
-        logging.info(f"📨 Card enviado para {coord}")
+        logging.info(f"📨 Card enviado para {coord}{titulo_suffix}")
         return True
 
     except Exception as e:
-        logging.error(f"❌ Falha no envio para {coord}. Erro: {e}. Webhook: {webhook}")
+        logging.error(f"❌ Falha no envio para {coord}{titulo_suffix}. Erro: {e}. Webhook: {webhook}")
         return False
 # =========================
-# BLOCO 4/4 — MAIN (v2.14 — exporta base alterada)
+# BLOCO 4/4 — MAIN (v2.15 — separa Domingo)
 # =========================
 
 if __name__ == "__main__":
-    logging.info("🚀 Iniciando processamento SLA (v2.14 — exporta base alterada)...")
+    logging.info("🚀 Iniciando processamento SLA (v2.15 — separa Domingo)...")
 
     try:
         # ✅ Garantir pastas
@@ -571,6 +637,20 @@ if __name__ == "__main__":
         logging.info(f"🗓️ Dias considerados (FINAL): {dias_txt}")
         logging.info(f"📌 Datas (ISO): {', '.join([d.strftime('%Y-%m-%d') for d in datas])}")
 
+        # ✅ 4.1) Separar datas Seg–Sáb vs Domingo
+        datas_seg_sab, datas_domingo = separar_seg_sab_e_domingo(datas)
+
+        periodo_txt_seg_sab = periodo_txt_de_datas(datas_seg_sab)
+        dias_txt_seg_sab = formatar_lista_dias(datas_seg_sab)
+
+        periodo_txt_domingo = periodo_txt_de_datas(datas_domingo)
+        dias_txt_domingo = formatar_lista_dias(datas_domingo)
+
+        if datas_domingo:
+            logging.info(f"🧩 Separação ativa: Seg–Sáb = {dias_txt_seg_sab} | Domingo = {dias_txt_domingo}")
+        else:
+            logging.info("🧩 Não há domingo no período. Vai gerar apenas Seg–Sáb.")
+
         # 5) Detectar coluna ENTREGUE NO PRAZO
         colunas = list(df.columns)
         col_upper = [c.upper() for c in colunas]
@@ -596,9 +676,9 @@ if __name__ == "__main__":
             .alias("_ENTREGUE_PRAZO")
         )
 
-        # 7) Filtrar registros do período-base
-        df_periodo = df.filter(pl.col(COL_DATA_BASE).is_in(datas))
-        logging.info(f"📊 Registros para {periodo_txt}: {df_periodo.height}")
+        # 7) Filtrar registros do período-base (tudo do período, depois separa)
+        df_periodo_all = df.filter(pl.col(COL_DATA_BASE).is_in(datas))
+        logging.info(f"📊 Registros para {periodo_txt}: {df_periodo_all.height}")
 
         # 8) Carregar Excel dos coordenadores
         coord_df = pl.read_excel(PASTA_COORDENADOR).rename(
@@ -606,7 +686,7 @@ if __name__ == "__main__":
         )
 
         # 9) Normalizar nomes de base (para join)
-        df_periodo = df_periodo.with_columns(
+        df_periodo_all = df_periodo_all.with_columns(
             pl.col("BASE DE ENTREGA").map_elements(normalizar, return_dtype=pl.Utf8).alias("BASE_NORM")
         )
         coord_df = coord_df.with_columns(
@@ -614,57 +694,49 @@ if __name__ == "__main__":
         )
 
         # 10) JOIN
-        df_periodo = df_periodo.join(coord_df, on="BASE_NORM", how="left")
-        sem_coord = df_periodo.filter(pl.col("COORDENADOR").is_null()).height
-        logging.info(f"🧩 Registros sem coordenador após join: {sem_coord}")
+        df_periodo_all = df_periodo_all.join(coord_df, on="BASE_NORM", how="left")
+        sem_coord = df_periodo_all.filter(pl.col("COORDENADOR").is_null()).height
+        logging.info(f"🧩 Registros sem coordenador após join (período total): {sem_coord}")
 
-        # ✅ 10.1) Exportar "arquivo original com alterações"
-        exportar_base_consolidada(df_periodo)
+        # ✅ 10.1) Separar DF Seg–Sáb e DF Domingo (por DATA)
+        df_seg_sab = df_periodo_all.filter(pl.col(COL_DATA_BASE).is_in(datas_seg_sab)) if datas_seg_sab else pl.DataFrame()
+        df_domingo = df_periodo_all.filter(pl.col(COL_DATA_BASE).is_in(datas_domingo)) if datas_domingo else pl.DataFrame()
 
-        # ✅ NOVO (FIX): monta o bloco de “arquivos gerados” só depois de exportar
-        arquivos_gerados_md = montar_arquivos_gerados_md()
+        logging.info(f"📦 Registros Seg–Sáb: {df_seg_sab.height if hasattr(df_seg_sab, 'height') else 0}")
+        logging.info(f"📦 Registros Domingo: {df_domingo.height if hasattr(df_domingo, 'height') else 0}")
 
-        # 11) Resumo
-        if df_periodo.is_empty():
-            resumo_pd = pd.DataFrame(
-                columns=[
-                    "Base De Entrega",
-                    "COORDENADOR",
-                    "Total",
-                    "Entregues no Prazo",
-                    "Fora do Prazo",
-                    "% SLA Cumprido",
-                ]
-            )
+        # =========================
+        # ✅ PARTE A) SEG–SÁB (principal)
+        # =========================
+        paths_base_seg_sab = exportar_base_consolidada(df_seg_sab, tag="")  # Base_Consolidada_YYYYMMDD.*
+        arquivos_md_seg_sab = montar_arquivos_gerados_md(ARQUIVO_SAIDA, paths_base_seg_sab)
+
+        resumo_seg_sab = gerar_resumo_por_base(df_seg_sab)
+        exportar_resumo_excel(resumo_seg_sab, ARQUIVO_SAIDA, prefixo="Resumo_Consolidado_")
+
+        # =========================
+        # ✅ PARTE B) DOMINGO (se existir)
+        # =========================
+        domingo_existe = (not df_domingo.is_empty()) if hasattr(df_domingo, "is_empty") else False
+
+        if domingo_existe:
+            paths_base_domingo = exportar_base_consolidada(df_domingo, tag="_Domingo")  # Base_Consolidada_Domingo_YYYYMMDD.*
+            arquivos_md_domingo = montar_arquivos_gerados_md(ARQUIVO_SAIDA_DOMINGO, paths_base_domingo)
+
+            resumo_domingo = gerar_resumo_por_base(df_domingo)
+            exportar_resumo_excel(resumo_domingo, ARQUIVO_SAIDA_DOMINGO, prefixo="Resumo_Consolidado_Domingo_")
         else:
-            resumo = (
-                df_periodo.group_by(["BASE DE ENTREGA", "COORDENADOR"])
-                .agg(
-                    [
-                        pl.len().alias("Total"),
-                        pl.col("_ENTREGUE_PRAZO").sum().alias("Entregues no Prazo"),
-                        (pl.len() - pl.col("_ENTREGUE_PRAZO").sum()).alias("Fora do Prazo"),
-                        (pl.col("_ENTREGUE_PRAZO").sum() / pl.len()).alias("% SLA Cumprido"),
-                    ]
-                )
-                .sort("% SLA Cumprido", descending=True)
-            )
+            resumo_domingo = pd.DataFrame()
+            arquivos_md_domingo = ""
 
-            resumo_pd = resumo.to_pandas().rename(columns={"BASE DE ENTREGA": "Base De Entrega"})
-
-        # 12) Exportar Excel do Resumo
-        arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, "Resumo_Consolidado_")
-        with pd.ExcelWriter(ARQUIVO_SAIDA, engine="openpyxl") as w:
-            resumo_pd.to_excel(w, index=False, sheet_name="Resumo SLA")
-
-        logging.info(f"✅ Resumo Excel salvo em: {ARQUIVO_SAIDA}")
-
-        # 13) Enviar cards
+        # =========================
+        # 13) Enviar cards (SEG–SÁB)
+        # =========================
         for coord, webhook in COORDENADOR_WEBHOOKS.items():
-            sub = resumo_pd[resumo_pd["COORDENADOR"] == coord]
+            sub = resumo_seg_sab[resumo_seg_sab["COORDENADOR"] == coord] if not resumo_seg_sab.empty else pd.DataFrame()
 
             if sub.empty:
-                logging.warning(f"⚠️ Nenhuma base encontrada para {coord}")
+                logging.warning(f"⚠️ Nenhuma base encontrada para {coord} (Seg–Sáb)")
                 continue
 
             total = float(sub["Total"].sum()) if "Total" in sub.columns else 0.0
@@ -676,12 +748,39 @@ if __name__ == "__main__":
                 webhook,
                 coord,
                 sla,
-                periodo_txt,
-                dias_txt,
-                arquivos_gerados_md,  # ✅ NOVO (FIX)
+                periodo_txt_seg_sab,
+                dias_txt_seg_sab,
+                arquivos_md_seg_sab,
+                titulo_suffix="",  # principal
             )
 
-        logging.info("🏁 Processamento concluído (v2.14)")
+        # =========================
+        # 14) Enviar cards (DOMINGO separado)
+        # =========================
+        if domingo_existe:
+            for coord, webhook in COORDENADOR_WEBHOOKS.items():
+                sub = resumo_domingo[resumo_domingo["COORDENADOR"] == coord] if not resumo_domingo.empty else pd.DataFrame()
+
+                if sub.empty:
+                    logging.warning(f"⚠️ Nenhuma base encontrada para {coord} (Domingo)")
+                    continue
+
+                total = float(sub["Total"].sum()) if "Total" in sub.columns else 0.0
+                ent = float(sub["Entregues no Prazo"].sum()) if "Entregues no Prazo" in sub.columns else 0.0
+                sla = (ent / total) if total > 0 else 0.0
+
+                enviar_card_feishu(
+                    sub,
+                    webhook,
+                    coord,
+                    sla,
+                    periodo_txt_domingo,
+                    dias_txt_domingo,
+                    arquivos_md_domingo,
+                    titulo_suffix=" — Domingo",
+                )
+
+        logging.info("🏁 Processamento concluído (v2.15 — separa Domingo)")
 
     except Exception as e:
         logging.critical(f"❌ ERRO FATAL: {e}", exc_info=True)
