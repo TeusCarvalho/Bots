@@ -6,6 +6,7 @@ from tqdm import tqdm
 from datetime import datetime
 import shutil
 import logging
+import time
 from typing import List, Dict, Optional, Any
 
 # ==============================================================================
@@ -107,6 +108,62 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
+
+# ==============================================================================
+# --- AVISO DE TÉRMINO (LOG + PRINT + NOTIFICAÇÃO + BEEP) ---
+# ==============================================================================
+def avisar_termino(titulo: str, mensagem: str, sucesso: bool = True) -> None:
+    """
+    Aviso no fim do processo:
+    - log + print
+    - notificação do Windows (se plyer/win10toast estiver instalado)
+    - beep (winsound) quando possível
+    """
+    try:
+        # 1) Log + Print
+        if sucesso:
+            logging.info(f"✅ {titulo} - {mensagem}")
+        else:
+            logging.error(f"❌ {titulo} - {mensagem}")
+        print(f"\n{titulo}\n{mensagem}\n")
+
+        # 2) Notificação (opcional) via plyer
+        try:
+            from plyer import notification  # pip install plyer
+            notification.notify(
+                title=titulo,
+                message=mensagem,
+                app_name="Relatórios J&T",
+                timeout=10
+            )
+        except Exception:
+            pass
+
+        # 3) Notificação (opcional) via win10toast
+        try:
+            from win10toast import ToastNotifier  # pip install win10toast
+            toaster = ToastNotifier()
+            toaster.show_toast(titulo, mensagem, duration=10, threaded=True)
+        except Exception:
+            pass
+
+        # 4) Beep do Windows (quando disponível)
+        try:
+            import winsound
+            # Sons diferentes para sucesso/erro
+            winsound.MessageBeep(winsound.MB_ICONASTERISK if sucesso else winsound.MB_ICONHAND)
+        except Exception:
+            # fallback: bell no terminal
+            try:
+                print("\a", end="")
+            except Exception:
+                pass
+
+    except Exception:
+        # não deixa o processo falhar por causa do aviso
+        pass
+
+
 def encontrar_arquivo_principal(pasta: str, inicio_nome: str) -> Optional[str]:
     try:
         for nome_arquivo in os.listdir(pasta):
@@ -154,6 +211,8 @@ def carregar_planilhas_de_pasta(caminho_pasta: str, descricao_tqdm: str) -> pd.D
     except Exception as e:
         logging.error(f"Ocorreu um erro inesperado ao ler os arquivos da pasta '{nome_pasta}': {e}")
         raise
+
+
 def aplicar_regras_transito(df: pd.DataFrame) -> pd.DataFrame:
     logging.info("Aplicando regras de trânsito...")
 
@@ -324,8 +383,6 @@ def aplicar_regras_status(df: pd.DataFrame) -> pd.DataFrame:
 
     logging.info("Regras aplicadas com sucesso.")
     return df
-
-
 def calcular_multa(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         logging.info("Nenhum pacote com 6+ dias para cálculo de multa.")
@@ -350,6 +407,8 @@ def calcular_multa(df: pd.DataFrame) -> pd.DataFrame:
     df_copy[COL_MULTA] = np.select(condicoes_multa, valores_multa, default=0)
     logging.info("Multa calculada por item.")
     return df_copy
+
+
 def processar_dados(df_main: pd.DataFrame, df_problematicos: pd.DataFrame, df_devolucao: pd.DataFrame) -> pd.DataFrame:
     colunas_necessarias = [
         COL_REMESSA, COL_ULTIMA_OPERACAO, COL_REGIONAL, COL_NOME_PROBLEMATICO, COL_HORA_OPERACAO, COL_BASE_RECENTE
@@ -467,6 +526,8 @@ def adicionar_info_coordenador(df_principal: pd.DataFrame) -> pd.DataFrame:
 
     logging.info("Informações de coordenador e filial adicionadas.")
     return df_principal
+
+
 def _mask_incompletos(df: pd.DataFrame) -> pd.Series:
     """
     Máscara robusta para detectar "Mercadorias incompletas" na coluna Nome de pacote problemático.
@@ -565,31 +626,50 @@ def mover_para_arquivo_morto(pasta_origem: str, pasta_destino: str):
                 logging.info(f"📦 Arquivo antigo movido para Arquivo Morto: {arquivo}")
             except Exception as e:
                 logging.error(f"Erro ao mover o arquivo {arquivo}: {e}")
+
+
 def main():
+    t0 = time.perf_counter()
     logging.info("--- INICIANDO PROCESSO DE GERAÇÃO DE RELATÓRIOS ---")
 
-    caminho_arquivo_original = encontrar_arquivo_principal(PATH_INPUT_MAIN, FILENAME_START_MAIN)
-    if not caminho_arquivo_original:
-        logging.critical("Arquivo principal não encontrado. Processo interrompido.")
-        return
+    try:
+        caminho_arquivo_original = encontrar_arquivo_principal(PATH_INPUT_MAIN, FILENAME_START_MAIN)
+        if not caminho_arquivo_original:
+            logging.critical("Arquivo principal não encontrado. Processo interrompido.")
+            raise FileNotFoundError("Arquivo principal não encontrado.")
 
-    df_main = pd.read_excel(caminho_arquivo_original)
-    df_problematicos = carregar_planilhas_de_pasta(PATH_INPUT_PROBLEMATICOS, "Consolidando problemáticos")
-    df_devolucao = carregar_planilhas_de_pasta(PATH_INPUT_DEVOLUCAO, "Consolidando devoluções")
+        df_main = pd.read_excel(caminho_arquivo_original)
+        df_problematicos = carregar_planilhas_de_pasta(PATH_INPUT_PROBLEMATICOS, "Consolidando problemáticos")
+        df_devolucao = carregar_planilhas_de_pasta(PATH_INPUT_DEVOLUCAO, "Consolidando devoluções")
 
-    df_final = processar_dados(df_main, df_problematicos, df_devolucao)
-    df_final = adicionar_info_coordenador(df_final)
+        df_final = processar_dados(df_main, df_problematicos, df_devolucao)
+        df_final = adicionar_info_coordenador(df_final)
 
-    # Move relatórios antigos antes de salvar novos
-    mover_para_arquivo_morto(PATH_OUTPUT_REPORTS, PATH_OUTPUT_ARQUIVO_MORTO)
+        # Move relatórios antigos antes de salvar novos
+        mover_para_arquivo_morto(PATH_OUTPUT_REPORTS, PATH_OUTPUT_ARQUIVO_MORTO)
 
-    # Salva relatórios e pega o DF PRINCIPAL (SEM incompletos) para o Feishu
-    df_para_feishu = salvar_relatorios(df_final, PATH_OUTPUT_REPORTS)
+        # Salva relatórios e pega o DF PRINCIPAL (SEM incompletos) para o Feishu
+        df_para_feishu = salvar_relatorios(df_final, PATH_OUTPUT_REPORTS)
 
-    # ✅ Use df_para_feishu para montar o card do Feishu (não vai mais levar "incompletos")
-    logging.info(f"DF para Feishu (principal, sem incompletos): {len(df_para_feishu)} linhas")
+        logging.info(f"DF para Feishu (principal, sem incompletos): {len(df_para_feishu)} linhas")
+        logging.info("--- PROCESSO CONCLUÍDO COM SUCESSO! ---")
 
-    logging.info("--- PROCESSO CONCLUÍDO COM SUCESSO! ---")
+        dt = time.perf_counter() - t0
+        avisar_termino(
+            titulo="Processo finalizado ✅",
+            mensagem=f"Relatórios gerados com sucesso. Tempo total: {dt:.1f}s",
+            sucesso=True
+        )
+
+    except Exception as e:
+        dt = time.perf_counter() - t0
+        logging.exception("❌ PROCESSO FINALIZADO COM ERRO.")
+        avisar_termino(
+            titulo="Processo finalizado com erro ❌",
+            mensagem=f"Falha ao gerar relatórios: {e}\nTempo até falhar: {dt:.1f}s",
+            sucesso=False
+        )
+        raise
 
 
 if __name__ == "__main__":

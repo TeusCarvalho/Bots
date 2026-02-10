@@ -2451,3 +2451,37 @@ KeyError: "Coluna 'DATA PREVISTA DE ENTREGA' não encontrada."
 2026-02-09 09:45:48,697 - INFO - 📨 Card enviado para Marcos Caique
 2026-02-09 09:45:50,222 - INFO - 📨 Card enviado para Ana Cunha
 2026-02-09 09:45:50,223 - INFO - 🏁 Processamento concluído (v2.14)
+2026-02-10 08:40:45,140 - INFO - 🚀 Iniciando processamento SLA (v2.15 — separa Domingo)...
+2026-02-10 08:40:45,140 - INFO - 📅 Período (após feriados) usado para SLA: 09/02/2026
+2026-02-10 08:40:45,141 - INFO - 🗓️ Dias considerados: Seg 09/02
+2026-02-10 08:40:45,141 - INFO - 📌 Datas (ISO): 2026-02-09
+2026-02-10 08:40:51,392 - INFO - 📥 Registros carregados: 205635
+2026-02-10 08:40:51,403 - INFO - 📅 Período FINAL usado para cálculo SLA: 09/02/2026
+2026-02-10 08:40:51,404 - INFO - 🗓️ Dias considerados (FINAL): Seg 09/02
+2026-02-10 08:40:51,404 - INFO - 📌 Datas (ISO): 2026-02-09
+2026-02-10 08:40:51,404 - INFO - 🧩 Não há domingo no período. Vai gerar apenas Seg–Sáb.
+2026-02-10 08:40:51,404 - INFO - 📌 Coluna detectada: ENTREGUE NO PRAZO？
+2026-02-10 08:40:51,410 - INFO - 📊 Registros para 09/02/2026: 205635
+2026-02-10 08:40:51,836 - INFO - 🧩 Registros sem coordenador após join (período total): 3160
+2026-02-10 08:40:51,854 - INFO - 📦 Registros Seg–Sáb: 205635
+2026-02-10 08:40:51,855 - INFO - 📦 Registros Domingo: 0
+2026-02-10 08:40:51,857 - INFO - 📦 Base antiga movida: Base_Consolidada_20260209.csv
+2026-02-10 08:40:51,859 - INFO - 📦 Base antiga movida: Base_Consolidada_20260209.parquet
+2026-02-10 08:40:51,860 - INFO - 📦 Base antiga movida: Base_Consolidada_20260209.xlsx
+2026-02-10 08:40:52,014 - INFO - ✅ Base consolidada (PARQUET) salva em: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\SLA - Entrega Realizada\Base Consolidada\Base_Consolidada_20260210.parquet
+2026-02-10 08:40:52,096 - INFO - ✅ Base consolidada (CSV) salva em: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\SLA - Entrega Realizada\Base Consolidada\Base_Consolidada_20260210.csv
+2026-02-10 08:43:18,118 - INFO - ✅ Base consolidada (XLSX) salva em: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\SLA - Entrega Realizada\Base Consolidada\Base_Consolidada_20260210.xlsx
+2026-02-10 08:43:18,135 - INFO - 📦 Arquivo antigo movido: Resumo_Consolidado_20260209.xlsx
+2026-02-10 08:43:18,162 - INFO - ✅ Resumo Excel salvo em: C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\SLA - Entrega Realizada\Resumo_Consolidado_20260210.xlsx
+2026-02-10 08:43:20,138 - INFO - 📨 Card enviado para João Melo
+2026-02-10 08:43:21,694 - INFO - 📨 Card enviado para Johas Vieira
+2026-02-10 08:43:23,296 - INFO - 📨 Card enviado para Anderson Matheus
+2026-02-10 08:43:24,836 - INFO - 📨 Card enviado para Marcelo Medina
+2026-02-10 08:43:26,488 - INFO - 📨 Card enviado para Odária Fereira
+2026-02-10 08:43:28,013 - INFO - 📨 Card enviado para Rodrigo Castro
+2026-02-10 08:43:29,940 - INFO - 📨 Card enviado para Orlean Nascimento
+2026-02-10 08:43:31,535 - INFO - 📨 Card enviado para Fabio Souza
+2026-02-10 08:43:33,091 - INFO - 📨 Card enviado para Emerson Silva
+2026-02-10 08:43:34,584 - INFO - 📨 Card enviado para Marcos Caique
+2026-02-10 08:43:36,111 - INFO - 📨 Card enviado para Ana Cunha
+2026-02-10 08:43:36,112 - INFO - 🏁 Processamento concluído (v2.15 — separa Domingo)
