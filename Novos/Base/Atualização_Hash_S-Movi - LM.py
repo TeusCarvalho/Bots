@@ -1,4 +1,12 @@
+# =========================================================
+# ARQUIVO COMPLETO (MESMA COISA) — INDICADOR NA IMAGEM + CARD
+# Cole TUDO no mesmo .py
+# =========================================================
 # -*- coding: utf-8 -*-
+
+# =========================
+# BLOCO 1/3 — IMPORTS + CONFIG
+# =========================
 import os
 import json
 import time
@@ -12,6 +20,9 @@ from typing import Dict, Any, Optional, Tuple, List
 # CONFIG
 # =========================
 
+# 🏷️ Nome do indicador (vai aparecer na IMAGEM e no CARD)
+INDICADOR_NOME = "Multas 5+ dias — Bases por quantidade (Δ vs relatório anterior)"  # <-- ajuste aqui
+
 COORDENADOR_WEBHOOKS = {
     "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/1d9bbacf-79ed-4eb3-8046-26d7480893c3",
     "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/5c2bb460-1971-4770-9b37-98b6e4ba3cd9",
@@ -24,7 +35,7 @@ COORDENADOR_WEBHOOKS = {
     "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/e502bc10-3cb3-4b46-872e-eb73ef1c5ee0",
     "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/db18d309-8f26-41b5-b911-1a9f27449c83",
     "Ana Cunha": "https://open.feishu.cn/open-apis/bot/v2/hook/ffc8420d-a317-498a-b3b5-d83432311677",
-    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/5ea0a62d-3e94-47d0-8914-59f722feff5b"
+    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/5ea0a62d-3e94-47d0-8914-59f722feff5b",
 }
 
 REPORTS_FOLDER_PATH = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Jt - Relatórios"
@@ -46,9 +57,8 @@ ROWS_PER_PAGE = 22
 FEISHU_BASE_DOMAIN = os.getenv("FEISHU_BASE_DOMAIN", "https://open.feishu.cn").rstrip("/")
 APP_ID = os.getenv("FEISHU_APP_ID", "cli_a906d2d682f8dbd8").strip()
 APP_SECRET = os.getenv("FEISHU_APP_SECRET", "Fzh1cr6K55a3oQUBV9wCZd6AWiZH5ONw").strip()
-
 # =========================
-# UTIL
+# BLOCO 2/3 — UTIL + FEISHU TOKEN/UPLOAD + IMAGENS (PIL)
 # =========================
 
 def format_currency_brl(value: float) -> str:
@@ -57,6 +67,7 @@ def format_currency_brl(value: float) -> str:
     except Exception:
         return "R$ 0,00"
 
+
 def calcular_hash_md5(file_path: str) -> str:
     h = hashlib.md5()
     with open(file_path, "rb") as f:
@@ -64,21 +75,28 @@ def calcular_hash_md5(file_path: str) -> str:
             h.update(chunk)
     return h.hexdigest()
 
+
 def carregar_snapshot_antigo() -> Optional[Dict[str, Any]]:
     if os.path.exists(HASH_FILE):
         with open(HASH_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return None
 
+
 def salvar_snapshot(snapshot: Dict[str, Any]) -> None:
     with open(HASH_FILE, "w", encoding="utf-8") as f:
         json.dump(snapshot, f, ensure_ascii=False, indent=4)
 
-def requests_post_with_retry(url: str, *, json_payload: dict, timeout: int = 15,
-                             retries: int = 5, backoff: float = 1.6) -> Tuple[bool, str]:
-    """
-    Retorna (ok, response_text)
-    """
+
+def requests_post_with_retry(
+    url: str,
+    *,
+    json_payload: dict,
+    timeout: int = 15,
+    retries: int = 5,
+    backoff: float = 1.6,
+) -> Tuple[bool, str]:
+    """Retorna (ok, response_text)"""
     last_err = ""
     for attempt in range(1, retries + 1):
         try:
@@ -94,6 +112,19 @@ def requests_post_with_retry(url: str, *, json_payload: dict, timeout: int = 15,
 
     return False, last_err
 
+
+def safe_filename(text: str) -> str:
+    """Evita problemas com caracteres especiais no nome do arquivo."""
+    if text is None:
+        return "SEM_NOME"
+    ok = []
+    for c in str(text).strip():
+        if c.isalnum() or c in (" ", "-", "_"):
+            ok.append(c)
+    s = "".join(ok).strip().replace(" ", "_")
+    return s or "SEM_NOME"
+
+
 # =========================
 # FEISHU TOKEN + UPLOAD IMAGE
 # =========================
@@ -101,10 +132,9 @@ def requests_post_with_retry(url: str, *, json_payload: dict, timeout: int = 15,
 def feishu_enabled() -> bool:
     return bool(APP_ID and APP_SECRET)
 
+
 def get_tenant_access_token() -> str:
-    """
-    POST /open-apis/auth/v3/tenant_access_token/internal
-    """
+    """POST /open-apis/auth/v3/tenant_access_token/internal"""
     url = f"{FEISHU_BASE_DOMAIN}/open-apis/auth/v3/tenant_access_token/internal"
     payload = {"app_id": APP_ID, "app_secret": APP_SECRET}
 
@@ -117,16 +147,14 @@ def get_tenant_access_token() -> str:
 
     return data["tenant_access_token"]
 
+
 def upload_image_get_key(image_path: str, token: str, image_type: str = "message") -> str:
-    """
-    POST /open-apis/im/v1/images
-    multipart: image_type + image(file)
-    """
+    """POST /open-apis/im/v1/images (multipart)"""
     url = f"{FEISHU_BASE_DOMAIN}/open-apis/im/v1/images"
     headers = {"Authorization": f"Bearer {token}"}
 
     with open(image_path, "rb") as f:
-        files = {"image": f}
+        files = {"image": (os.path.basename(image_path), f)}
         data = {"image_type": image_type}
         r = requests.post(url, headers=headers, data=data, files=files, timeout=30)
 
@@ -136,63 +164,78 @@ def upload_image_get_key(image_path: str, token: str, image_type: str = "message
     if resp.get("code") != 0:
         code = resp.get("code")
         msg = resp.get("msg")
-        # 234007 -> Bot ability não habilitada
         raise RuntimeError(f"Upload falhou | code={code} msg={msg} raw={resp}")
 
     return resp["data"]["image_key"]
 
+
 # =========================
-# GERAR IMAGEM “BONITINHA” (PILLOW) - sem barras
+# GERAR IMAGEM “BONITINHA” (PILLOW) — SEM BARRAS
+# + INDICADOR NO HEADER
 # =========================
 
-def _load_font(size: int):
+def _load_font(size: int, bold: bool = False):
     from PIL import ImageFont
-    # tenta Arial (Windows)
-    for p in [r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\calibri.ttf"]:
+    candidates = []
+    if bold:
+        candidates += [r"C:\Windows\Fonts\arialbd.ttf", r"C:\Windows\Fonts\calibrib.ttf", r"C:\Windows\Fonts\segoeuib.ttf"]
+    candidates += [r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\calibri.ttf", r"C:\Windows\Fonts\segoeui.ttf"]
+
+    for p in candidates:
         if os.path.exists(p):
-            return ImageFont.truetype(p, size=size)
+            try:
+                return ImageFont.truetype(p, size=size)
+            except Exception:
+                pass
     return ImageFont.load_default()
 
-def gerar_imagens_bases(coordenador: str,
-                        bases_atuais: Dict[str, int],
-                        bases_antigas: Dict[str, int],
-                        out_dir: str,
-                        rows_per_page: int = ROWS_PER_PAGE) -> List[str]:
+
+def gerar_imagens_bases(
+    coordenador: str,
+    indicador_nome: str,
+    bases_atuais: Dict[str, int],
+    bases_antigas: Dict[str, int],
+    out_dir: str,
+    rows_per_page: int = ROWS_PER_PAGE,
+) -> List[str]:
     """
     Retorna lista de caminhos de imagens (paginadas) com todas as bases, ordenadas por qtd desc.
+    ✅ Mostra INDICADOR no header
     """
     from PIL import Image, ImageDraw
 
-    items = sorted(bases_atuais.items(), key=lambda x: x[1], reverse=True)
+    indicador_nome = (indicador_nome or "").strip() or "Indicador"
+
+    items = sorted((bases_atuais or {}).items(), key=lambda x: x[1], reverse=True)
     if not items:
         return []
 
     total_pages = (len(items) + rows_per_page - 1) // rows_per_page
     ts = datetime.now().strftime("%d/%m/%Y %H:%M")
 
-    font_title = _load_font(34)
-    font_sub = _load_font(18)
-    font_head = _load_font(18)
-    font_row = _load_font(18)
+    font_title = _load_font(32, bold=True)
+    font_ind = _load_font(18, bold=True)
+    font_sub = _load_font(18, bold=False)
+    font_head = _load_font(18, bold=True)
+    font_row = _load_font(18, bold=False)
 
     # tema (dark)
-    bg = (12, 16, 24)          # #0c1018
-    card = (16, 22, 33)        # #101621
+    bg = (12, 16, 24)
+    card = (16, 22, 33)
     line = (40, 50, 70)
-    accent = (16, 185, 129)    # verde
     text = (235, 240, 250)
     muted = (160, 170, 190)
 
     # layout
     W = 1400
     pad = 36
-    header_h = 110
+    header_h = 140  # ⬅️ aumentei para caber a linha do indicador
     table_top = header_h + 26
     row_h = 44
     head_h = 44
     footer_h = 24
 
-    out_paths = []
+    out_paths: List[str] = []
 
     for page in range(1, total_pages + 1):
         chunk = items[(page - 1) * rows_per_page: page * rows_per_page]
@@ -201,13 +244,15 @@ def gerar_imagens_bases(coordenador: str,
         img = Image.new("RGB", (W, H), bg)
         draw = ImageDraw.Draw(img)
 
-        # “card”
+        # card
         draw.rounded_rectangle((18, 18, W - 18, H - 18), radius=20, fill=card, outline=line, width=2)
 
         # header bar
         draw.rounded_rectangle((22, 22, W - 22, 22 + header_h), radius=18, fill=(10, 115, 85))
-        draw.text((pad, 44), f"{coordenador}", fill=(255, 255, 255), font=font_title)
-        draw.text((pad, 86), f"Atualizado: {ts}  •  Página {page}/{total_pages}", fill=(235, 245, 245), font=font_sub)
+
+        draw.text((pad, 38), f"{coordenador}", fill=(255, 255, 255), font=font_title)
+        draw.text((pad, 78), f"Indicador: {indicador_nome}", fill=(235, 245, 245), font=font_ind)
+        draw.text((pad, 108), f"Atualizado: {ts}  •  Página {page}/{total_pages}", fill=(235, 245, 245), font=font_sub)
 
         # table header
         x0 = pad
@@ -224,23 +269,24 @@ def gerar_imagens_bases(coordenador: str,
         # rows
         y_row = y + head_h
         for idx, (base, qtd) in enumerate(chunk, 1):
-            # zebra
             if idx % 2 == 0:
-                draw.rounded_rectangle((pad - 10, y_row - 6, W - pad + 10, y_row + row_h - 6),
-                                       radius=12, fill=(14, 20, 30))
+                draw.rounded_rectangle(
+                    (pad - 10, y_row - 6, W - pad + 10, y_row + row_h - 6),
+                    radius=12,
+                    fill=(14, 20, 30),
+                )
 
-            diff = int(qtd) - int(bases_antigas.get(base, 0))
+            diff = int(qtd) - int((bases_antigas or {}).get(base, 0))
             if diff > 0:
                 diff_txt = f"+{diff}"
-                diff_color = (255, 95, 95)     # vermelho
+                diff_color = (255, 95, 95)  # vermelho
             elif diff < 0:
                 diff_txt = f"{diff}"
-                diff_color = (80, 220, 140)    # verde
+                diff_color = (80, 220, 140)  # verde
             else:
                 diff_txt = "0"
                 diff_color = muted
 
-            # base (trunca)
             base_txt = str(base)
             if len(base_txt) > 40:
                 base_txt = base_txt[:37] + "..."
@@ -254,14 +300,14 @@ def gerar_imagens_bases(coordenador: str,
         # footer
         draw.text((pad, H - 44), "Bases (todas) — ordenado por quantidade", fill=muted, font=font_sub)
 
-        out_path = os.path.join(out_dir, f"bases_{coordenador.replace(' ', '_')}_p{page}.png")
+        fname = f"bases_{safe_filename(coordenador)}_p{page:02d}.png"
+        out_path = os.path.join(out_dir, fname)
         img.save(out_path, "PNG")
         out_paths.append(out_path)
 
     return out_paths
-
 # =========================
-# PROCESSAR RELATÓRIO
+# BLOCO 3/3 — PROCESSAR RELATÓRIO + SNAPSHOT + CARD + MAIN
 # =========================
 
 def process_report_file(file_path: str) -> pd.DataFrame:
@@ -270,6 +316,7 @@ def process_report_file(file_path: str) -> pd.DataFrame:
     df.rename(columns={"运单号": "Remessa", "Coordenador": "Coordenadores"}, inplace=True)
     return df
 
+
 def gerar_snapshot(df: pd.DataFrame) -> Dict[str, Any]:
     snapshot = {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "coordenadores": {}}
     for coord in df["Coordenadores"].dropna().unique():
@@ -277,8 +324,12 @@ def gerar_snapshot(df: pd.DataFrame) -> Dict[str, Any]:
         total_pacotes = dfc["Remessa"].nunique()
         total_multa = dfc["Multa (R$)"].sum() if "Multa (R$)" in dfc.columns else 0
 
-        # bases -> qtd de remessas
-        bases = dfc.groupby("Unidade responsável")["Remessa"].nunique().sort_values(ascending=False).to_dict()
+        bases = (
+            dfc.groupby("Unidade responsável")["Remessa"]
+            .nunique()
+            .sort_values(ascending=False)
+            .to_dict()
+        )
 
         snapshot["coordenadores"][coord] = {
             "total_pacotes": int(total_pacotes),
@@ -286,6 +337,7 @@ def gerar_snapshot(df: pd.DataFrame) -> Dict[str, Any]:
             "bases": {str(k): int(v) for k, v in bases.items()},
         }
     return snapshot
+
 
 def comparar_coordenador(snapshot_atual, snapshot_antigo, coord) -> Dict[str, Any]:
     atual = snapshot_atual["coordenadores"].get(coord, {})
@@ -322,16 +374,24 @@ def comparar_coordenador(snapshot_atual, snapshot_antigo, coord) -> Dict[str, An
         "bases_antigas": bases_antigas,
     }
 
+
 # =========================
-# CARD (COM IMAGEM)
+# CARD (COM IMAGEM) — + INDICADOR NO CORPO
 # =========================
 
-def create_feishu_payload(coordenador: str,
-                          data: Dict[str, Any],
-                          image_keys: Optional[List[str]] = None) -> Dict[str, Any]:
+def create_feishu_payload(
+    coordenador: str,
+    data: Dict[str, Any],
+    image_keys: Optional[List[str]] = None,
+    indicador_nome: str = "",
+) -> Dict[str, Any]:
     ts = datetime.now().strftime("%d/%m/%Y %H:%M")
+    indicador_nome = (indicador_nome or "").strip() or "Indicador"
 
-    elements = [
+    elements: List[Dict[str, Any]] = [
+        # ✅ NOVO: Indicador no card
+        {"tag": "div", "text": {"tag": "lark_md", "content": f"📌 **Indicador:** {indicador_nome}"}},
+        {"tag": "hr"},
         {
             "tag": "div",
             "fields": [
@@ -375,10 +435,13 @@ def create_feishu_payload(coordenador: str,
             )
             elements.append({"tag": "hr"})
     else:
-        # fallback (texto curto) se não houver imagem
         bases = data.get("bases_atuais", {}) or {}
         top = sorted(bases.items(), key=lambda x: x[1], reverse=True)[:5]
-        txt = "**Bases (Top 5 por qtd):**\n" + "\n".join([f"- **{b}**: {q}" for b, q in top]) if top else "Sem bases."
+        txt = (
+            "**Bases (Top 5 por qtd):**\n" + "\n".join([f"- **{b}**: {q}" for b, q in top])
+            if top
+            else "Sem bases."
+        )
         elements.append({"tag": "div", "text": {"tag": "lark_md", "content": txt}})
         elements.append({"tag": "hr"})
 
@@ -409,12 +472,14 @@ def create_feishu_payload(coordenador: str,
         },
     }
 
+
 def send_to_feishu(webhook_url: str, payload: Dict[str, Any]) -> None:
     ok, err = requests_post_with_retry(webhook_url, json_payload=payload, timeout=15, retries=5)
     if ok:
         print(f"✅ Enviado → {webhook_url[:55]}...")
     else:
         print(f"❌ Erro ao enviar → {webhook_url[:55]}... | {err}")
+
 
 # =========================
 # MAIN
@@ -435,6 +500,7 @@ def find_latest_report(folder: str) -> Optional[str]:
 
     arquivos.sort(key=lambda x: os.path.getmtime(os.path.join(folder, x)), reverse=True)
     return os.path.join(folder, arquivos[0])
+
 
 def run_main_task():
     print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] Procurando relatórios em {REPORTS_FOLDER_PATH}")
@@ -472,11 +538,12 @@ def run_main_task():
 
         data = comparar_coordenador(snapshot_atual, snapshot_antigo, coord)
 
-        # gerar imagens (todas as bases)
+        # gerar imagens (todas as bases) — ✅ passa indicador
         image_keys: List[str] = []
         try:
             img_paths = gerar_imagens_bases(
                 coordenador=coord,
+                indicador_nome=INDICADOR_NOME,
                 bases_atuais=data["bases_atuais"],
                 bases_antigas=data["bases_antigas"],
                 out_dir=IMAGES_OUT_DIR,
@@ -484,7 +551,6 @@ def run_main_task():
             )
 
             if img_paths and token:
-                # upload de cada página
                 for p in img_paths:
                     try:
                         k = upload_image_get_key(p, token=token, image_type="message")
@@ -492,26 +558,30 @@ def run_main_task():
                     except Exception as e:
                         msg = str(e)
                         print(f"⚠️ Upload imagem falhou ({coord}) — enviando sem imagem. Motivo: {msg}")
-                        # dica específica do 234007
                         if "234007" in msg:
                             print("   ➜ Habilite o recurso BOT no app: Add Features → Bot → Add, publique e instale no tenant.")
                         image_keys = []
                         break
             else:
-                # sem token ou sem imagens
                 image_keys = []
 
         except Exception as e:
             print(f"⚠️ Falha ao gerar imagens ({coord}) — enviando sem imagem: {e}")
             image_keys = []
 
-        payload = create_feishu_payload(coord, data, image_keys=image_keys)
+        payload = create_feishu_payload(
+            coord,
+            data,
+            image_keys=image_keys,
+            indicador_nome=INDICADOR_NOME,  # ✅ NOVO
+        )
         send_to_feishu(webhook, payload)
         time.sleep(1)
 
     salvar_snapshot(snapshot_atual)
     print(f"📂 Relatório mantido em {REPORTS_FOLDER_PATH}")
     print("✅ Processo concluído!")
+
 
 if __name__ == "__main__":
     run_main_task()

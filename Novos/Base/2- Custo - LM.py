@@ -34,6 +34,11 @@ LINK_PASTA = (
 )
 
 # ======================================================
+# 🏷️ NOME DO INDICADOR (VAI APARECER NA IMAGEM)
+# ======================================================
+INDICADOR_NOME = "Custos e Ressarcimento"  # <-- ajuste aqui como quiser
+
+# ======================================================
 # ✅ WEBHOOKS POR COORDENADOR (OPÇÃO 1: COLE AQUI)
 # ======================================================
 COORDENADOR_WEBHOOKS = {
@@ -208,6 +213,7 @@ def _chunk_list(items: List[Any], size: int) -> List[List[Any]]:
 
 def gerar_imagens_todas_as_bases_dark(
     coord: str,
+    indicador_nome: str,  # <-- NOVO: vai aparecer no header da imagem
     total_pedidos: int,
     custo_total: float,
     total_bases: int,
@@ -219,6 +225,7 @@ def gerar_imagens_todas_as_bases_dark(
     ✅ SEM BARRA
     ✅ Custo sempre visível (alinhado à direita)
     ✅ Todas as bases (paginado)
+    ✅ Mostra nome do indicador no header
     """
     from PIL import Image, ImageDraw, ImageFont
 
@@ -267,10 +274,15 @@ def gerar_imagens_todas_as_bases_dark(
 
     f_title = load_font(30, bold=True)
     f_sub = load_font(18, bold=False)
+    f_sub_bold = load_font(18, bold=True)
     f_card_label = load_font(16, bold=False)
     f_card_value = load_font(22, bold=True)
     f_head = load_font(18, bold=True)
     f_row = load_font(17, bold=False)
+
+    indicador_nome = (indicador_nome or "").strip()
+    if not indicador_nome:
+        indicador_nome = "Indicador"
 
     for page_idx, page_rows in enumerate(pages, start=1):
         table_h = 90 + (len(page_rows) * row_h) + 38
@@ -293,10 +305,24 @@ def gerar_imagens_todas_as_bases_dark(
             )
             draw.line([(hx1, hy1 + i), (hx2, hy1 + i)], fill=c)
 
-        draw.text((hx1 + 22, hy1 + 18), f"{coord}", fill=(255, 255, 255), font=f_title)
-        draw.text((hx1 + 22, hy1 + 64),
-                  f"Atualizado: {DATA_HUMANA}   •   Página {page_idx}/{total_pages}",
-                  fill=(230, 255, 245), font=f_sub)
+        # Título: Coordenador
+        draw.text((hx1 + 22, hy1 + 14), f"{coord}", fill=(255, 255, 255), font=f_title)
+
+        # Linha do indicador (NOVO)
+        draw.text(
+            (hx1 + 22, hy1 + 56),
+            f"Indicador: {indicador_nome}",
+            fill=(230, 255, 245),
+            font=f_sub_bold
+        )
+
+        # Data + paginação (ajustado para descer)
+        draw.text(
+            (hx1 + 22, hy1 + 86),
+            f"Atualizado: {DATA_HUMANA}   •   Página {page_idx}/{total_pages}",
+            fill=(230, 255, 245),
+            font=f_sub
+        )
 
         # cards métricas
         cx1 = padding + 18
@@ -429,6 +455,7 @@ def upload_image_get_key(image_path: str) -> str:
 def enviar_card_somente_nome_com_imagem(
     webhook: str,
     nome_coord: str,          # header: SOMENTE isso
+    indicador_nome: str,      # <-- NOVO (opcional no card)
     total_pedidos: int,
     custo_total: float,
     bases_avaliadas: int,
@@ -443,6 +470,10 @@ def enviar_card_somente_nome_com_imagem(
             "text": {"tag": "lark_md", "content": f"**{FEISHU_KEYWORD}**"}
         }, {"tag": "hr"}]
 
+    indicador_nome = (indicador_nome or "").strip()
+    if not indicador_nome:
+        indicador_nome = "Custos por Base"
+
     elementos = [
         *keyword_block,
         {
@@ -450,6 +481,7 @@ def enviar_card_somente_nome_com_imagem(
             "text": {
                 "tag": "lark_md",
                 "content": (
+                    f"📌 **Indicador:** {indicador_nome}\n"
                     f"📅 **Atualizado em:** {data_humana}\n"
                     f"📦 **Total de pedidos:** {total_pedidos}\n"
                     f"💰 **Custo total:** {money_br(float(custo_total))}\n"
@@ -606,6 +638,7 @@ def main():
 
             img_paths = gerar_imagens_todas_as_bases_dark(
                 coord=coord,
+                indicador_nome=INDICADOR_NOME,  # <-- AQUI entra o nome do indicador
                 total_pedidos=total_pedidos,
                 custo_total=custo_total,
                 total_bases=total_bases,
@@ -623,6 +656,7 @@ def main():
                 resp = enviar_card_somente_nome_com_imagem(
                     webhook=webhook_coord,
                     nome_coord=coord,
+                    indicador_nome=INDICADOR_NOME,  # <-- opcional no card
                     total_pedidos=total_pedidos,
                     custo_total=custo_total,
                     bases_avaliadas=total_bases,

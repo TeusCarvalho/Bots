@@ -63,6 +63,11 @@ LINK_PASTA = (
     "IgCkMQtn4udmRZAFJTit7pkaAVAudAyWYHic-zXIKMlQz1Q?e=d3eOd5"
 )
 
+# ============================================================
+# 🏷️ NOME DO INDICADOR (VAI APARECER NA IMAGEM E NO CARD)
+# ============================================================
+INDICADOR_NOME = "SLA Entrega Realizada — %SLA por Base (pior → melhor)"  # <-- ajuste aqui
+
 # ✅ COLE AQUI SEUS WEBHOOKS (você já tem)
 COORDENADOR_WEBHOOKS = {
     "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/3663dd30-722c-45d6-9e3c-1d4e2838f112",
@@ -192,7 +197,7 @@ def formatar_periodo(inicio: date, fim: date) -> str:
 
 def formatar_lista_dias(datas: List[date]) -> str:
     if not datas:
-        return ""
+        return "Fevereiro 2026"
     dias_pt = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
     return ", ".join([f"{dias_pt[d.weekday()]} {d.strftime('%d/%m')}" for d in datas])
 
@@ -530,6 +535,7 @@ def _chunk(items: List[Any], n: int) -> List[List[Any]]:
 
 def gerar_imagens_sla_tabela(
     coord: str,
+    indicador_nome: str,   # ✅ NOVO
     titulo_suffix: str,
     periodo_txt: str,
     dias_txt: str,
@@ -541,6 +547,7 @@ def gerar_imagens_sla_tabela(
     """
     Imagem: tabela com TODAS as bases do coordenador (sem gráfico/barra).
     Legibilidade alta (font maior, colunas alinhadas).
+    + Nome do indicador no header
     """
     try:
         from PIL import Image, ImageDraw, ImageFont
@@ -603,12 +610,15 @@ def gerar_imagens_sla_tabela(
 
     f_title = load_font(34, bold=True)
     f_sub = load_font(19, bold=False)
+    f_sub_bold = load_font(19, bold=True)  # ✅ NOVO
     f_head = load_font(19, bold=True)
     f_row = load_font(19, bold=False)
 
     out_paths = []
     total_pages = len(pages)
     data_humana = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    indicador_nome = (indicador_nome or "").strip() or "SLA Entrega Realizada"
 
     for page_idx, page_rows in enumerate(pages, start=1):
         table_h = 130 + (len(page_rows) * row_h) + 40
@@ -632,14 +642,29 @@ def gerar_imagens_sla_tabela(
             draw.line([(hx1, hy1 + i), (hx2, hy1 + i)], fill=c)
 
         title = f"{coord}{titulo_suffix}"
-        draw.text((hx1 + 22, hy1 + 18), title, fill=(255, 255, 255), font=f_title)
+        draw.text((hx1 + 22, hy1 + 14), title, fill=(255, 255, 255), font=f_title)
+
+        # ✅ NOVO: Indicador
         draw.text(
-            (hx1 + 22, hy1 + 74),
+            (hx1 + 22, hy1 + 58),
+            f"Indicador: {indicador_nome}",
+            fill=(230, 255, 245),
+            font=f_sub_bold
+        )
+
+        draw.text(
+            (hx1 + 22, hy1 + 88),
             f"Atualizado: {data_humana}   •   Página {page_idx}/{total_pages}   •   SLA total: {sla_total:.2%}",
             fill=(230, 255, 245),
             font=f_sub
         )
-        draw.text((hx1 + 22, hy1 + 104), f"Período: {periodo_txt}   •   Dias: {dias_txt}", fill=(230, 255, 245), font=f_sub)
+
+        draw.text(
+            (hx1 + 22, hy1 + 116),
+            f"Período: {periodo_txt}   •   Dias: {dias_txt}",
+            fill=(230, 255, 245),
+            font=f_sub
+        )
 
         # tabela
         tx1 = pad + 18
@@ -702,6 +727,7 @@ def gerar_imagens_sla_tabela(
 def enviar_card_feishu(
     webhook: str,
     coord: str,
+    indicador_nome: str,  # ✅ NOVO
     periodo_txt: str,
     dias_txt: str,
     sla: float,
@@ -721,8 +747,10 @@ def enviar_card_feishu(
             return False
 
         titulo = f"{coord}{titulo_suffix}"
+        indicador_nome = (indicador_nome or "").strip() or "SLA Entrega Realizada"
 
         body = (
+            f"📌 **Indicador:** {indicador_nome}\n"
             f"📅 **Período:** {periodo_txt}\n"
             f"🗓️ **Dias:** {dias_txt}\n"
             f"📈 **SLA:** {sla:.2%}\n"
@@ -896,9 +924,10 @@ if __name__ == "__main__":
             ent = float(sub["Entregues no Prazo"].sum()) if "Entregues no Prazo" in sub.columns else 0.0
             sla = (ent / total) if total > 0 else 0.0
 
-            # gera imagens (todas as bases)
+            # gera imagens (todas as bases) — ✅ passa indicador
             img_paths = gerar_imagens_sla_tabela(
                 coord=coord,
+                indicador_nome=INDICADOR_NOME,
                 titulo_suffix="",
                 periodo_txt=periodo_txt,
                 dias_txt=dias_txt,
@@ -915,6 +944,7 @@ if __name__ == "__main__":
                     enviar_card_feishu(
                         webhook=webhook,
                         coord=coord,
+                        indicador_nome=INDICADOR_NOME,
                         periodo_txt=periodo_txt,
                         dias_txt=dias_txt,
                         sla=sla,
@@ -930,6 +960,7 @@ if __name__ == "__main__":
                 enviar_card_feishu(
                     webhook=webhook,
                     coord=coord,
+                    indicador_nome=INDICADOR_NOME,
                     periodo_txt=periodo_txt,
                     dias_txt=dias_txt,
                     sla=sla,
