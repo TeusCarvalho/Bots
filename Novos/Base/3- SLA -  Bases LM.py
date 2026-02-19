@@ -66,9 +66,9 @@ LINK_PASTA = (
 # ============================================================
 # 🏷️ NOME DO INDICADOR (VAI APARECER NA IMAGEM E NO CARD)
 # ============================================================
-INDICADOR_NOME = "SLA Entrega Realizada — %SLA por Base (pior → melhor)"  # <-- ajuste aqui
+INDICADOR_NOME = "SLA Entrega Realizada — %SLA por Base (pior → melhor)"
 
-# ✅ COLE AQUI SEUS WEBHOOKS (você já tem)
+# ✅ COLE AQUI SEUS WEBHOOKS
 COORDENADOR_WEBHOOKS = {
     "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/3663dd30-722c-45d6-9e3c-1d4e2838f112",
     "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/0b907801-c73e-4de8-9f84-682d7b54f6fd",
@@ -107,7 +107,22 @@ IMG_ROWS_PER_PAGE = int(os.getenv("IMG_ROWS_PER_PAGE", "22"))
 # cache token
 _TOKEN_CACHE = {"token": None, "exp": 0}
 
+# ============================================================
+# 🎨 PALETA J&T (RGB)
+# ============================================================
+JT_RED_MAIN = (227, 6, 19)      # #E30613
+JT_RED_SOFT = (196, 39, 46)     # #C4272E
+JT_BG_GRAY  = (242, 242, 242)   # #F2F2F2
+JT_TEXT     = (51, 51, 51)      # #333333
+JT_WHITE    = (255, 255, 255)   # #FFFFFF
 
+JT_STROKE   = (220, 220, 220)
+JT_MUTED    = (110, 110, 110)
+JT_ROW_ALT  = (248, 248, 248)
+
+# ============================================================
+# HTTP (retry simples)
+# ============================================================
 def _post_with_retry(url: str, json_payload: dict, timeout: int = 25, tries: int = 7) -> requests.Response:
     last = None
     for i in range(1, tries + 1):
@@ -450,7 +465,9 @@ def montar_arquivos_gerados_md(arquivo_resumo: str, paths_base: Dict[str, str]) 
 
 def gerar_resumo_por_base(df_periodo: pl.DataFrame) -> pd.DataFrame:
     if df_periodo.is_empty():
-        return pd.DataFrame(columns=["Base De Entrega", "COORDENADOR", "Total", "Entregues no Prazo", "Fora do Prazo", "% SLA Cumprido"])
+        return pd.DataFrame(
+            columns=["Base De Entrega", "COORDENADOR", "Total", "Entregues no Prazo", "Fora do Prazo", "% SLA Cumprido"]
+        )
 
     resumo = (
         df_periodo.group_by(["BASE DE ENTREGA", "COORDENADOR"])
@@ -535,7 +552,7 @@ def _chunk(items: List[Any], n: int) -> List[List[Any]]:
 
 def gerar_imagens_sla_tabela(
     coord: str,
-    indicador_nome: str,   # ✅ NOVO
+    indicador_nome: str,
     titulo_suffix: str,
     periodo_txt: str,
     dias_txt: str,
@@ -546,8 +563,7 @@ def gerar_imagens_sla_tabela(
 ) -> List[str]:
     """
     Imagem: tabela com TODAS as bases do coordenador (sem gráfico/barra).
-    Legibilidade alta (font maior, colunas alinhadas).
-    + Nome do indicador no header
+    Tema J&T (vermelho/cinza claro/texto escuro).
     """
     try:
         from PIL import Image, ImageDraw, ImageFont
@@ -591,16 +607,14 @@ def gerar_imagens_sla_tabela(
         except Exception:
             draw.rectangle(xy, fill=fill, outline=outline, width=width)
 
-    # tema
-    BG = (10, 12, 16)
-    CARD = (20, 24, 33)
-    STROKE = (44, 52, 72)
-    TXT = (235, 238, 244)
-    MUTED = (160, 170, 190)
-    Z1 = (18, 22, 30)
-    Z2 = (15, 18, 26)
-    GREEN1 = (16, 185, 129)
-    GREEN2 = (5, 150, 105)
+    # ===== Tema J&T =====
+    BG = JT_BG_GRAY
+    CARD = JT_WHITE
+    STROKE = JT_STROKE
+    TXT = JT_TEXT
+    MUTED = JT_MUTED
+    ROW1 = JT_WHITE
+    ROW2 = JT_ROW_ALT
 
     W = 1800
     pad = 34
@@ -610,11 +624,11 @@ def gerar_imagens_sla_tabela(
 
     f_title = load_font(34, bold=True)
     f_sub = load_font(19, bold=False)
-    f_sub_bold = load_font(19, bold=True)  # ✅ NOVO
+    f_sub_bold = load_font(19, bold=True)
     f_head = load_font(19, bold=True)
     f_row = load_font(19, bold=False)
 
-    out_paths = []
+    out_paths: List[str] = []
     total_pages = len(pages)
     data_humana = datetime.now().strftime("%d/%m/%Y %H:%M")
 
@@ -629,48 +643,42 @@ def gerar_imagens_sla_tabela(
 
         rr(draw, (pad, pad, W - pad, H - pad), 26, CARD, outline=STROKE, width=2)
 
-        # header gradiente
+        # Header gradiente vermelho (soft -> main)
         hx1, hy1 = pad + 18, pad + 18
         hx2, hy2 = W - pad - 18, pad + header_h
         for i in range(hy2 - hy1):
             t = i / max(1, (hy2 - hy1))
             c = (
-                int(GREEN2[0] + (GREEN1[0] - GREEN2[0]) * t),
-                int(GREEN2[1] + (GREEN1[1] - GREEN2[1]) * t),
-                int(GREEN2[2] + (GREEN1[2] - GREEN2[2]) * t),
+                int(JT_RED_SOFT[0] + (JT_RED_MAIN[0] - JT_RED_SOFT[0]) * t),
+                int(JT_RED_SOFT[1] + (JT_RED_MAIN[1] - JT_RED_SOFT[1]) * t),
+                int(JT_RED_SOFT[2] + (JT_RED_MAIN[2] - JT_RED_SOFT[2]) * t),
             )
             draw.line([(hx1, hy1 + i), (hx2, hy1 + i)], fill=c)
 
         title = f"{coord}{titulo_suffix}"
-        draw.text((hx1 + 22, hy1 + 14), title, fill=(255, 255, 255), font=f_title)
+        draw.text((hx1 + 22, hy1 + 14), title, fill=JT_WHITE, font=f_title)
 
-        # ✅ NOVO: Indicador
-        draw.text(
-            (hx1 + 22, hy1 + 58),
-            f"Indicador: {indicador_nome}",
-            fill=(230, 255, 245),
-            font=f_sub_bold
-        )
+        draw.text((hx1 + 22, hy1 + 58), f"Indicador: {indicador_nome}", fill=JT_WHITE, font=f_sub_bold)
 
         draw.text(
             (hx1 + 22, hy1 + 88),
             f"Atualizado: {data_humana}   •   Página {page_idx}/{total_pages}   •   SLA total: {sla_total:.2%}",
-            fill=(230, 255, 245),
-            font=f_sub
+            fill=JT_WHITE,
+            font=f_sub,
         )
 
         draw.text(
             (hx1 + 22, hy1 + 116),
             f"Período: {periodo_txt}   •   Dias: {dias_txt}",
-            fill=(230, 255, 245),
-            font=f_sub
+            fill=JT_WHITE,
+            font=f_sub,
         )
 
-        # tabela
+        # Área tabela
         tx1 = pad + 18
         ty1 = hy2 + gap
         tx2 = W - pad - 18
-        rr(draw, (tx1, ty1, tx2, H - pad - 18), 20, (17, 20, 28), outline=STROKE, width=2)
+        rr(draw, (tx1, ty1, tx2, H - pad - 18), 20, JT_WHITE, outline=STROKE, width=2)
 
         draw.text((tx1 + 18, ty1 + 14), "Todas as bases — %SLA (pior → melhor)", fill=TXT, font=f_head)
         draw.line((tx1 + 12, ty1 + 52, tx2 - 12, ty1 + 52), fill=STROKE, width=2)
@@ -697,8 +705,8 @@ def gerar_imagens_sla_tabela(
         start_rank = (page_idx - 1) * rows_per_page
 
         for i, (base, tot, ent, fora, sla) in enumerate(page_rows, start=1):
-            bg_row = Z1 if (i % 2 == 1) else Z2
-            rr(draw, (tx1 + 12, y - 8, tx2 - 12, y + row_h - 10), 14, bg_row)
+            bg_row = ROW1 if (i % 2 == 1) else ROW2
+            rr(draw, (tx1 + 12, y - 8, tx2 - 12, y + row_h - 10), 14, bg_row, outline=None)
 
             rank = start_rank + i
             base_txt = (base or "")[:78]
@@ -711,7 +719,7 @@ def gerar_imagens_sla_tabela(
             draw.text((col_fora, y), str(fora), fill=TXT, font=f_row)
 
             bbox = draw.textbbox((0, 0), sla_txt, font=f_row)
-            draw.text((col_sla_right - (bbox[2] - bbox[0]), y), sla_txt, fill=TXT, font=f_row)
+            draw.text((col_sla_right - (bbox[2] - bbox[0]), y), sla_txt, fill=JT_RED_SOFT, font=f_row)
 
             y += row_h
 
@@ -727,7 +735,7 @@ def gerar_imagens_sla_tabela(
 def enviar_card_feishu(
     webhook: str,
     coord: str,
-    indicador_nome: str,  # ✅ NOVO
+    indicador_nome: str,
     periodo_txt: str,
     dias_txt: str,
     sla: float,
@@ -738,8 +746,8 @@ def enviar_card_feishu(
     titulo_suffix: str = "",
 ) -> bool:
     """
-    Card: título = SOMENTE nome do coordenador (como você pediu).
-    Mostra só resumo + imagem (com todas as bases).
+    Card: título = nome do coordenador.
+    Mostra resumo + (opcional) imagem.
     """
     try:
         if not webhook:
@@ -794,7 +802,7 @@ def enviar_card_feishu(
             "card": {
                 "config": {"wide_screen_mode": True},
                 "header": {
-                    "template": "green",
+                    "template": "red",  # ✅ J&T
                     "title": {"tag": "plain_text", "content": titulo},
                 },
                 "elements": elements,
@@ -882,9 +890,22 @@ if __name__ == "__main__":
         logging.info(f"📊 Registros para {periodo_txt}: {df_periodo_all.height}")
 
         # coordenadores
-        coord_df = pl.read_excel(PASTA_COORDENADOR).rename(
-            {"Nome da base": "BASE DE ENTREGA", "Coordenadores": "COORDENADOR"}
-        )
+        coord_df = pl.read_excel(PASTA_COORDENADOR)
+
+        # ✅ tentativa de rename mais tolerante
+        # (se já estiver padronizado, não quebra)
+        rename_map = {}
+        if "Nome da base" in coord_df.columns:
+            rename_map["Nome da base"] = "BASE DE ENTREGA"
+        if "Coordenadores" in coord_df.columns:
+            rename_map["Coordenadores"] = "COORDENADOR"
+        if "Coordenador" in coord_df.columns and "COORDENADOR" not in rename_map.values():
+            rename_map["Coordenador"] = "COORDENADOR"
+        if rename_map:
+            coord_df = coord_df.rename(rename_map)
+
+        if "BASE DE ENTREGA" not in coord_df.columns or "COORDENADOR" not in coord_df.columns:
+            raise KeyError(f"❌ Base_Atualizada.xlsx precisa ter 'BASE DE ENTREGA' e 'COORDENADOR'. Colunas: {coord_df.columns}")
 
         # normalizar base para join
         df_periodo_all = df_periodo_all.with_columns(
@@ -894,7 +915,11 @@ if __name__ == "__main__":
             pl.col("BASE DE ENTREGA").map_elements(normalizar, return_dtype=pl.Utf8).alias("BASE_NORM")
         )
 
-        df_periodo_all = df_periodo_all.join(coord_df, on="BASE_NORM", how="left")
+        # ✅ evitar duplicação no join (many-to-many)
+        coord_df = coord_df.unique(subset=["BASE_NORM"], keep="first")
+
+        df_periodo_all = df_periodo_all.join(coord_df.select(["BASE_NORM", "COORDENADOR"]), on="BASE_NORM", how="left")
+
         sem_coord = df_periodo_all.filter(pl.col("COORDENADOR").is_null()).height
         logging.info(f"🧩 Registros sem coordenador após join (período total): {sem_coord}")
 
@@ -924,7 +949,6 @@ if __name__ == "__main__":
             ent = float(sub["Entregues no Prazo"].sum()) if "Entregues no Prazo" in sub.columns else 0.0
             sla = (ent / total) if total > 0 else 0.0
 
-            # gera imagens (todas as bases) — ✅ passa indicador
             img_paths = gerar_imagens_sla_tabela(
                 coord=coord,
                 indicador_nome=INDICADOR_NOME,
@@ -937,7 +961,6 @@ if __name__ == "__main__":
                 rows_per_page=IMG_ROWS_PER_PAGE,
             )
 
-            # envia uma página por card (com imagem)
             if img_paths and _feishu_enabled():
                 for i, p in enumerate(img_paths, start=1):
                     img_key = feishu_upload_image_get_key(p)
@@ -956,7 +979,6 @@ if __name__ == "__main__":
                     )
                     time.sleep(0.35)
             else:
-                # fallback sem upload
                 enviar_card_feishu(
                     webhook=webhook,
                     coord=coord,

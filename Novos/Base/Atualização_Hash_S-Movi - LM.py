@@ -1,5 +1,5 @@
 # =========================================================
-# ARQUIVO COMPLETO (MESMA COISA) — INDICADOR NA IMAGEM + CARD
+# ARQUIVO COMPLETO — INDICADOR NA IMAGEM + CARD (CORES J&T)
 # Cole TUDO no mesmo .py
 # =========================================================
 # -*- coding: utf-8 -*-
@@ -57,6 +57,23 @@ ROWS_PER_PAGE = 22
 FEISHU_BASE_DOMAIN = os.getenv("FEISHU_BASE_DOMAIN", "https://open.feishu.cn").rstrip("/")
 APP_ID = os.getenv("FEISHU_APP_ID", "cli_a906d2d682f8dbd8").strip()
 APP_SECRET = os.getenv("FEISHU_APP_SECRET", "Fzh1cr6K55a3oQUBV9wCZd6AWiZH5ONw").strip()
+
+# =========================
+# 🎨 PALETA J&T (HEX -> RGB)
+# =========================
+JT_RED_MAIN = (227, 6, 19)      # #E30613
+JT_RED_SOFT = (196, 39, 46)     # #C4272E
+JT_BG_GRAY  = (242, 242, 242)   # #F2F2F2
+JT_TEXT     = (51, 51, 51)      # #333333
+JT_WHITE    = (255, 255, 255)   # #FFFFFF
+
+JT_STROKE   = (210, 210, 210)
+JT_MUTED    = (120, 120, 120)
+JT_ROW_ALT  = (248, 248, 248)
+
+# (Opcional) cor “boa” para queda (não faz parte da paleta, mas melhora leitura)
+GOOD_GREEN  = (16, 185, 129)
+
 # =========================
 # BLOCO 2/3 — UTIL + FEISHU TOKEN/UPLOAD + IMAGENS (PIL)
 # =========================
@@ -171,7 +188,7 @@ def upload_image_get_key(image_path: str, token: str, image_type: str = "message
 
 # =========================
 # GERAR IMAGEM “BONITINHA” (PILLOW) — SEM BARRAS
-# + INDICADOR NO HEADER
+# + INDICADOR NO HEADER (CORES J&T)
 # =========================
 
 def _load_font(size: int, bold: bool = False):
@@ -201,6 +218,7 @@ def gerar_imagens_bases(
     """
     Retorna lista de caminhos de imagens (paginadas) com todas as bases, ordenadas por qtd desc.
     ✅ Mostra INDICADOR no header
+    ✅ CORES J&T
     """
     from PIL import Image, ImageDraw
 
@@ -219,23 +237,30 @@ def gerar_imagens_bases(
     font_head = _load_font(18, bold=True)
     font_row = _load_font(18, bold=False)
 
-    # tema (dark)
-    bg = (12, 16, 24)
-    card = (16, 22, 33)
-    line = (40, 50, 70)
-    text = (235, 240, 250)
-    muted = (160, 170, 190)
+    # ===== Tema J&T =====
+    bg = JT_BG_GRAY
+    card = JT_WHITE
+    line = JT_STROKE
+    text = JT_TEXT
+    muted = JT_MUTED
+    row_alt = JT_ROW_ALT
 
     # layout
     W = 1400
     pad = 36
-    header_h = 140  # ⬅️ aumentei para caber a linha do indicador
+    header_h = 140
     table_top = header_h + 26
     row_h = 44
     head_h = 44
     footer_h = 24
 
     out_paths: List[str] = []
+
+    def rr(draw: ImageDraw.ImageDraw, xy, r, fill, outline=None, width=1):
+        try:
+            draw.rounded_rectangle(xy, radius=r, fill=fill, outline=outline, width=width)
+        except Exception:
+            draw.rectangle(xy, fill=fill, outline=outline, width=width)
 
     for page in range(1, total_pages + 1):
         chunk = items[(page - 1) * rows_per_page: page * rows_per_page]
@@ -244,15 +269,25 @@ def gerar_imagens_bases(
         img = Image.new("RGB", (W, H), bg)
         draw = ImageDraw.Draw(img)
 
-        # card
-        draw.rounded_rectangle((18, 18, W - 18, H - 18), radius=20, fill=card, outline=line, width=2)
+        # card externo
+        rr(draw, (18, 18, W - 18, H - 18), 20, card, outline=line, width=2)
 
-        # header bar
-        draw.rounded_rectangle((22, 22, W - 22, 22 + header_h), radius=18, fill=(10, 115, 85))
+        # header gradiente (vermelho soft -> vermelho main)
+        hx1, hy1 = 22, 22
+        hx2, hy2 = W - 22, 22 + header_h
+        rr(draw, (hx1, hy1, hx2, hy2), 18, JT_RED_SOFT, outline=None, width=1)
+        for i in range(hy2 - hy1):
+            t = i / max(1, (hy2 - hy1))
+            c = (
+                int(JT_RED_SOFT[0] + (JT_RED_MAIN[0] - JT_RED_SOFT[0]) * t),
+                int(JT_RED_SOFT[1] + (JT_RED_MAIN[1] - JT_RED_SOFT[1]) * t),
+                int(JT_RED_SOFT[2] + (JT_RED_MAIN[2] - JT_RED_SOFT[2]) * t),
+            )
+            draw.line([(hx1 + 1, hy1 + i), (hx2 - 1, hy1 + i)], fill=c)
 
-        draw.text((pad, 38), f"{coordenador}", fill=(255, 255, 255), font=font_title)
-        draw.text((pad, 78), f"Indicador: {indicador_nome}", fill=(235, 245, 245), font=font_ind)
-        draw.text((pad, 108), f"Atualizado: {ts}  •  Página {page}/{total_pages}", fill=(235, 245, 245), font=font_sub)
+        draw.text((pad, 38), f"{coordenador}", fill=JT_WHITE, font=font_title)
+        draw.text((pad, 78), f"Indicador: {indicador_nome}", fill=JT_WHITE, font=font_ind)
+        draw.text((pad, 108), f"Atualizado: {ts}  •  Página {page}/{total_pages}", fill=JT_WHITE, font=font_sub)
 
         # table header
         x0 = pad
@@ -270,19 +305,22 @@ def gerar_imagens_bases(
         y_row = y + head_h
         for idx, (base, qtd) in enumerate(chunk, 1):
             if idx % 2 == 0:
-                draw.rounded_rectangle(
+                rr(
+                    draw,
                     (pad - 10, y_row - 6, W - pad + 10, y_row + row_h - 6),
-                    radius=12,
-                    fill=(14, 20, 30),
+                    12,
+                    row_alt,
+                    outline=None,
+                    width=1
                 )
 
             diff = int(qtd) - int((bases_antigas or {}).get(base, 0))
             if diff > 0:
                 diff_txt = f"+{diff}"
-                diff_color = (255, 95, 95)  # vermelho
+                diff_color = JT_RED_MAIN  # aumento = vermelho
             elif diff < 0:
                 diff_txt = f"{diff}"
-                diff_color = (80, 220, 140)  # verde
+                diff_color = GOOD_GREEN   # queda = verde (opcional)
             else:
                 diff_txt = "0"
                 diff_color = muted
@@ -306,6 +344,8 @@ def gerar_imagens_bases(
         out_paths.append(out_path)
 
     return out_paths
+
+
 # =========================
 # BLOCO 3/3 — PROCESSAR RELATÓRIO + SNAPSHOT + CARD + MAIN
 # =========================
@@ -389,8 +429,7 @@ def create_feishu_payload(
     indicador_nome = (indicador_nome or "").strip() or "Indicador"
 
     elements: List[Dict[str, Any]] = [
-        # ✅ NOVO: Indicador no card
-        {"tag": "div", "text": {"tag": "lark_md", "content": f"📌 **Indicador:** {indicador_nome}"}},
+        {"tag": "div", "text": {"tag": "lark_md", "content": f"📌 **Indicador:** {indicador_nome}" }},
         {"tag": "hr"},
         {
             "tag": "div",
@@ -464,9 +503,8 @@ def create_feishu_payload(
         "card": {
             "config": {"wide_screen_mode": True},
             "header": {
-                # você pediu: no card só o nome do coordenador
                 "title": {"tag": "plain_text", "content": f"{coordenador}"},
-                "template": "green",
+                "template": "red",  # ✅ J&T (antes: green)
             },
             "elements": elements,
         },
@@ -538,7 +576,7 @@ def run_main_task():
 
         data = comparar_coordenador(snapshot_atual, snapshot_antigo, coord)
 
-        # gerar imagens (todas as bases) — ✅ passa indicador
+        # gerar imagens (todas as bases) — passa indicador
         image_keys: List[str] = []
         try:
             img_paths = gerar_imagens_bases(
@@ -573,7 +611,7 @@ def run_main_task():
             coord,
             data,
             image_keys=image_keys,
-            indicador_nome=INDICADOR_NOME,  # ✅ NOVO
+            indicador_nome=INDICADOR_NOME,
         )
         send_to_feishu(webhook, payload)
         time.sleep(1)

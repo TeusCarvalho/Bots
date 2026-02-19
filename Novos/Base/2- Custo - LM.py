@@ -4,11 +4,13 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
 import json
 import time
 import warnings
+import unicodedata
 from datetime import datetime
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 
 import pandas as pd
 import requests
@@ -36,10 +38,10 @@ LINK_PASTA = (
 # ======================================================
 # 🏷️ NOME DO INDICADOR (VAI APARECER NA IMAGEM)
 # ======================================================
-INDICADOR_NOME = "Custos e Ressarcimento"  # <-- ajuste aqui como quiser
+INDICADOR_NOME = "Custos e Ressarcimento"
 
 # ======================================================
-# ✅ WEBHOOKS POR COORDENADOR (OPÇÃO 1: COLE AQUI)
+# ✅ WEBHOOKS POR COORDENADOR
 # ======================================================
 COORDENADOR_WEBHOOKS = {
     "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/1f3f48d7-b60c-45c1-87ee-6cc8ab9f6467",
@@ -56,7 +58,6 @@ COORDENADOR_WEBHOOKS = {
     "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/7b9fc992-ba9c-4d1d-9c2c-91493f05d4e2",
 }
 
-# (Opcional) webhook geral fallback se algum coord não tiver webhook definido
 WEBHOOK_FALLBACK = os.getenv("FEISHU_WEBHOOK_URL", "").strip()
 
 # ======================================================
@@ -65,14 +66,12 @@ WEBHOOK_FALLBACK = os.getenv("FEISHU_WEBHOOK_URL", "").strip()
 BASE_DOMAIN = "https://open.feishu.cn"
 APP_ID = os.getenv("APP_ID", "cli_a906d2d682f8dbd8").strip()
 APP_SECRET = os.getenv("APP_SECRET", "Fzh1cr6K55a3oQUBV9wCZd6AWiZH5ONw").strip()
-
-# Se o grupo exigir keyword (opcional)
 FEISHU_KEYWORD = os.getenv("FEISHU_KEYWORD", "").strip()
 
 # ======================================================
 # 🎛️ AJUSTES
 # ======================================================
-ROWS_PER_PAGE = 28  # quantas bases por imagem (ajuste)
+ROWS_PER_PAGE = 28
 SLEEP_ENTRE_PAGINAS = 0.4
 SLEEP_ENTRE_COORDS = 0.8
 
@@ -80,21 +79,76 @@ DATA_ATUAL = datetime.now().strftime("%Y%m%d_%H%M%S")
 DATA_HUMANA = datetime.now().strftime("%d/%m/%Y %H:%M")
 ARQUIVO_SAIDA = os.path.join(OUTPUT_DIR, f"Custos_Consolidado_{DATA_ATUAL}.xlsx")
 
+REGIONAIS_PERMITIDAS = {"GP", "GO", "PA"}
+
+# (Opcional) debug rápido dos valores (0=off, 1=on)
+PARSE_DEBUG = False
+
 # ======================================================
-# 🌐 SESSION com retry (menos 10054)
+# 🔧 HELPERS
+# ======================================================
+def money_br(valor: float) -> str:
+    return (
+        f"R$ {valor:,.2f}"
+        .replace(",", "X")
+        .replace(".", ",")
+        .replace("X", ".")
+    )
+
+def safe_str(x: Any) -> str:
+    if pd.isna(x):
+        return ""
+    return str(x).strip()
+
+def norm_key(s: Any) -> str:
+    s = safe_str(s)
+    if not s:
+        return ""
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    s = re.sub(r"\s+", " ", s).strip().casefold()
+    return s
+
+COORD_WEBHOOKS_NORM = {norm_key(k): v.strip() for k, v in COORDENADOR_WEBHOOKS.items() if v}
+
+def require_env():
+    if not APP_ID or not APP_SECRET:
+        raise RuntimeError("❌ APP_ID/APP_SECRET não definidos nas variáveis de ambiente.")
+
+def get_webhook_do_coordenador(coord: str) -> str:
+    w = (COORD_WEBHOOKS_NORM.get(norm_key(coord)) or "").strip()
+    if w:
+        return w
+    return WEBHOOK_FALLBACK
+
+# ======================================================
+# 🌐 SESSION com retry
 # ======================================================
 def build_session() -> requests.Session:
     s = requests.Session()
-    retry = Retry(
-        total=6,
-        connect=6,
-        read=6,
-        backoff_factor=0.8,
-        status_forcelist=(429, 500, 502, 503, 504),
-        allowed_methods=frozenset(["GET", "POST"]),
-        raise_on_status=False,
-        respect_retry_after_header=True,
-    )
+    try:
+        retry = Retry(
+            total=6,
+            connect=6,
+            read=6,
+            backoff_factor=0.8,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=frozenset(["GET", "POST"]),
+            raise_on_status=False,
+            respect_retry_after_header=True,
+        )
+    except TypeError:
+        retry = Retry(
+            total=6,
+            connect=6,
+            read=6,
+            backoff_factor=0.8,
+            status_forcelist=(429, 500, 502, 503, 504),
+            method_whitelist=frozenset(["GET", "POST"]),
+            raise_on_status=False,
+            respect_retry_after_header=True,
+        )
+
     adapter = HTTPAdapter(max_retries=retry, pool_connections=20, pool_maxsize=20)
     s.mount("https://", adapter)
     s.mount("http://", adapter)
@@ -102,7 +156,7 @@ def build_session() -> requests.Session:
 
 SESSION = build_session()
 
-def post_json(url: str, payload: dict, headers: dict = None, timeout=(10, 60), tag: str = "") -> dict:
+def post_json(url: str, payload: dict, headers: Optional[dict] = None, timeout=(10, 60), tag: str = "") -> dict:
     headers = headers or {}
     last_err = None
     for attempt in range(1, 7):
@@ -117,15 +171,17 @@ def post_json(url: str, payload: dict, headers: dict = None, timeout=(10, 60), t
                 raise requests.HTTPError(f"{tag} HTTP {r.status_code} body={r.text[:400]}")
 
             return data
-        except (requests.exceptions.ConnectionError,
-                requests.exceptions.Timeout,
-                requests.exceptions.ChunkedEncodingError,
-                requests.HTTPError) as e:
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout,
+            requests.exceptions.ChunkedEncodingError,
+            requests.HTTPError,
+        ) as e:
             last_err = e
             time.sleep(0.8 * attempt)
     raise RuntimeError(f"{tag} Falhou após retries. Último erro: {last_err}")
 
-def post_multipart(url: str, data: dict, files: dict, headers: dict = None, timeout=(10, 120), tag: str = "") -> dict:
+def post_multipart(url: str, data: dict, files: dict, headers: Optional[dict] = None, timeout=(10, 120), tag: str = "") -> dict:
     headers = headers or {}
     last_err = None
     for attempt in range(1, 7):
@@ -140,42 +196,17 @@ def post_multipart(url: str, data: dict, files: dict, headers: dict = None, time
                 raise requests.HTTPError(f"{tag} HTTP {r.status_code} body={r.text[:400]}")
 
             return resp
-        except (requests.exceptions.ConnectionError,
-                requests.exceptions.Timeout,
-                requests.exceptions.ChunkedEncodingError,
-                requests.HTTPError) as e:
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout,
+            requests.exceptions.ChunkedEncodingError,
+            requests.HTTPError,
+        ) as e:
             last_err = e
             time.sleep(0.8 * attempt)
     raise RuntimeError(f"{tag} Falhou após retries. Último erro: {last_err}")
-
-def money_br(valor: float) -> str:
-    return (
-        f"R$ {valor:,.2f}"
-        .replace(",", "X")
-        .replace(".", ",")
-        .replace("X", ".")
-    )
-
-def safe_str(x: Any) -> str:
-    if pd.isna(x):
-        return ""
-    return str(x).strip()
-
-def require_env():
-    if not APP_ID or not APP_SECRET:
-        raise RuntimeError("❌ APP_ID/APP_SECRET não definidos (env).")
-
-def get_webhook_do_coordenador(coord: str) -> str:
-    """
-    1) tenta achar no dicionário COORDENADOR_WEBHOOKS
-    2) se não tiver, usa WEBHOOK_FALLBACK (se você definiu)
-    """
-    w = (COORDENADOR_WEBHOOKS.get(coord) or "").strip()
-    if w:
-        return w
-    return WEBHOOK_FALLBACK
 # =========================
-# BLOCO 2/3 — LEITURA + PROCESSAMENTO + IMAGEM (DARK, SEM BARRA)
+# BLOCO 2/3 — LEITURA + PROCESSAMENTO + IMAGEM (TEMA J&T)
 # =========================
 
 def encontrar_arquivo_entrada(pasta: str) -> str:
@@ -198,22 +229,53 @@ def carregar_excel_auto(path: str) -> pd.DataFrame:
         return pd.read_excel(path, dtype=str)
 
 def to_float_safe(series: pd.Series) -> pd.Series:
-    return (
-        pd.to_numeric(
-            series.astype(str)
-            .str.replace(",", ".", regex=False)
-            .str.extract(r"(\d+\.?\d*)")[0],
-            errors="coerce",
-        )
-        .fillna(0)
-    )
+    """
+    ✅ Parser robusto:
+    - "1.234,56" -> 1234.56
+    - "1,234.56" -> 1234.56
+    - "1234.56"  -> 1234.56  (não vira 123456)
+    - "1234,56"  -> 1234.56
+    """
+    s = series.astype(str).str.strip()
+    s = s.str.replace(r"[^\d,.\-]", "", regex=True)
+
+    has_comma = s.str.contains(",", regex=False)
+    has_dot = s.str.contains(r"\.", regex=True)
+
+    both = has_comma & has_dot
+    only_comma = has_comma & ~has_dot
+    only_dot = has_dot & ~has_comma
+
+    out = pd.Series([None] * len(s), index=s.index, dtype="float64")
+
+    # Caso 1: tem "," e "." -> último separador é decimal
+    sb = s[both]
+    comma_decimal = sb.str.rfind(",") > sb.str.rfind(".")
+    sb1 = sb[comma_decimal].str.replace(".", "", regex=False).str.replace(",", ".", regex=False)  # 1.234,56
+    sb2 = sb[~comma_decimal].str.replace(",", "", regex=False)                                   # 1,234.56
+    out.loc[sb1.index] = pd.to_numeric(sb1, errors="coerce")
+    out.loc[sb2.index] = pd.to_numeric(sb2, errors="coerce")
+
+    # Caso 2: só "," -> decimal BR
+    sc = s[only_comma].str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+    out.loc[sc.index] = pd.to_numeric(sc, errors="coerce")
+
+    # Caso 3: só "." -> decimal US (não remove o ponto!)
+    sd = s[only_dot]
+    out.loc[sd.index] = pd.to_numeric(sd, errors="coerce")
+
+    # Caso 4: nenhum separador
+    sn = s[~has_comma & ~has_dot]
+    out.loc[sn.index] = pd.to_numeric(sn, errors="coerce")
+
+    return out.fillna(0.0)
 
 def _chunk_list(items: List[Any], size: int) -> List[List[Any]]:
     return [items[i:i + size] for i in range(0, len(items), size)]
 
 def gerar_imagens_todas_as_bases_dark(
     coord: str,
-    indicador_nome: str,  # <-- NOVO: vai aparecer no header da imagem
+    indicador_nome: str,
     total_pedidos: int,
     custo_total: float,
     total_bases: int,
@@ -222,10 +284,12 @@ def gerar_imagens_todas_as_bases_dark(
     rows_per_page: int = 28,
 ) -> List[str]:
     """
-    ✅ SEM BARRA
-    ✅ Custo sempre visível (alinhado à direita)
-    ✅ Todas as bases (paginado)
-    ✅ Mostra nome do indicador no header
+    Paleta solicitada:
+    - Vermelho Institucional: #E30613
+    - Vermelho Suave:        #C4272E
+    - Cinza Fundo:           #F2F2F2
+    - Texto Cinza escuro:    #333333
+    - Branco:                #FFFFFF
     """
     from PIL import Image, ImageDraw, ImageFont
 
@@ -250,16 +314,17 @@ def gerar_imagens_todas_as_bases_dark(
         except Exception:
             draw.rectangle(xy, fill=fill, outline=outline, width=width)
 
-    # Tema dark
-    BG = (12, 14, 18)
-    CARD = (22, 26, 34)
-    STROKE = (45, 54, 72)
-    TXT = (235, 238, 244)
-    MUTED = (160, 170, 190)
-    Z1 = (18, 22, 30)
-    Z2 = (15, 18, 26)
-    GREEN1 = (16, 185, 129)
-    GREEN2 = (5, 150, 105)
+    RED_MAIN = (227, 6, 19)      # #E30613
+    RED_SOFT = (196, 39, 46)     # #C4272E
+    BG = (242, 242, 242)         # #F2F2F2
+    WHITE = (255, 255, 255)      # #FFFFFF
+    TXT = (51, 51, 51)           # #333333
+
+    STROKE = (220, 220, 220)
+    MUTED = (110, 110, 110)
+    Z1 = (255, 255, 255)
+    Z2 = (248, 248, 248)
+    CARD_SOFT = BG
 
     W = 1500
     padding = 34
@@ -280,9 +345,7 @@ def gerar_imagens_todas_as_bases_dark(
     f_head = load_font(18, bold=True)
     f_row = load_font(17, bold=False)
 
-    indicador_nome = (indicador_nome or "").strip()
-    if not indicador_nome:
-        indicador_nome = "Indicador"
+    indicador_nome = (indicador_nome or "").strip() or "Indicador"
 
     for page_idx, page_rows in enumerate(pages, start=1):
         table_h = 90 + (len(page_rows) * row_h) + 38
@@ -291,54 +354,44 @@ def gerar_imagens_todas_as_bases_dark(
         img = Image.new("RGB", (W, H), BG)
         draw = ImageDraw.Draw(img)
 
-        rr(draw, (padding, padding, W - padding, H - padding), 26, CARD, outline=STROKE, width=2)
+        rr(draw, (padding, padding, W - padding, H - padding), 26, WHITE, outline=STROKE, width=2)
 
-        # header gradiente
+        # Header gradiente
         hx1, hy1 = padding + 18, padding + 18
         hx2, hy2 = W - padding - 18, padding + header_h
         for i in range(hy2 - hy1):
             t = i / max(1, (hy2 - hy1))
             c = (
-                int(GREEN2[0] + (GREEN1[0] - GREEN2[0]) * t),
-                int(GREEN2[1] + (GREEN1[1] - GREEN2[1]) * t),
-                int(GREEN2[2] + (GREEN1[2] - GREEN2[2]) * t),
+                int(RED_SOFT[0] + (RED_MAIN[0] - RED_SOFT[0]) * t),
+                int(RED_SOFT[1] + (RED_MAIN[1] - RED_SOFT[1]) * t),
+                int(RED_SOFT[2] + (RED_MAIN[2] - RED_SOFT[2]) * t),
             )
             draw.line([(hx1, hy1 + i), (hx2, hy1 + i)], fill=c)
 
-        # Título: Coordenador
-        draw.text((hx1 + 22, hy1 + 14), f"{coord}", fill=(255, 255, 255), font=f_title)
-
-        # Linha do indicador (NOVO)
-        draw.text(
-            (hx1 + 22, hy1 + 56),
-            f"Indicador: {indicador_nome}",
-            fill=(230, 255, 245),
-            font=f_sub_bold
-        )
-
-        # Data + paginação (ajustado para descer)
+        draw.text((hx1 + 22, hy1 + 14), f"{coord}", fill=WHITE, font=f_title)
+        draw.text((hx1 + 22, hy1 + 56), f"Indicador: {indicador_nome}", fill=WHITE, font=f_sub_bold)
         draw.text(
             (hx1 + 22, hy1 + 86),
             f"Atualizado: {DATA_HUMANA}   •   Página {page_idx}/{total_pages}",
-            fill=(230, 255, 245),
-            font=f_sub
+            fill=WHITE,
+            font=f_sub,
         )
 
-        # cards métricas
+        # Cards
         cx1 = padding + 18
         cy1 = hy2 + gap
         cwidth = (hx2 - hx1 - 2 * gap) // 3
 
-        def metric(x, label, value):
-            rr(draw, (x, cy1, x + cwidth, cy1 + cards_h), 18, (17, 20, 28), outline=STROKE, width=2)
+        def metric(x, label, value, value_color=TXT):
+            rr(draw, (x, cy1, x + cwidth, cy1 + cards_h), 18, CARD_SOFT, outline=STROKE, width=2)
             draw.text((x + 16, cy1 + 14), label, fill=MUTED, font=f_card_label)
-            draw.text((x + 16, cy1 + 44), value, fill=TXT, font=f_card_value)
+            draw.text((x + 16, cy1 + 44), value, fill=value_color, font=f_card_value)
 
         metric(cx1, "Total de pedidos", f"{total_pedidos:,}".replace(",", "."))
         metric(cx1 + cwidth + gap, "Bases avaliadas", f"{total_bases:,}".replace(",", "."))
-        metric(cx1 + (cwidth + gap) * 2, "Custo total", money_br(custo_total))
+        metric(cx1 + (cwidth + gap) * 2, "Custo total", money_br(custo_total), value_color=RED_SOFT)
 
-        # tabela
+        # Tabela
         tx1 = padding + 18
         ty1 = cy1 + cards_h + gap
         tx2 = W - padding - 18
@@ -349,7 +402,7 @@ def gerar_imagens_todas_as_bases_dark(
         col_rank = tx1 + 10
         col_base = tx1 + 90
         col_qtd = tx2 - 360
-        col_custo_right = tx2 - 16  # custo alinhado à direita
+        col_custo_right = tx2 - 16
 
         draw.text((col_rank, ty1 + 58), "#", fill=MUTED, font=f_head)
         draw.text((col_base, ty1 + 58), "Base", fill=MUTED, font=f_head)
@@ -398,7 +451,7 @@ def gerar_imagens_todas_as_bases_dark(
 
     return out_paths
 # =========================
-# BLOCO 3/3 — FEISHU TOKEN+UPLOAD + CARD (SÓ NOME) + MAIN
+# BLOCO 3/3 — FEISHU TOKEN+UPLOAD + CARD + MAIN
 # =========================
 
 _TOKEN: Dict[str, Any] = {"token": None, "exp": 0}
@@ -454,8 +507,8 @@ def upload_image_get_key(image_path: str) -> str:
 
 def enviar_card_somente_nome_com_imagem(
     webhook: str,
-    nome_coord: str,          # header: SOMENTE isso
-    indicador_nome: str,      # <-- NOVO (opcional no card)
+    nome_coord: str,
+    indicador_nome: str,
     total_pedidos: int,
     custo_total: float,
     bases_avaliadas: int,
@@ -465,14 +518,12 @@ def enviar_card_somente_nome_com_imagem(
 ) -> dict:
     keyword_block = []
     if FEISHU_KEYWORD:
-        keyword_block = [{
-            "tag": "div",
-            "text": {"tag": "lark_md", "content": f"**{FEISHU_KEYWORD}**"}
-        }, {"tag": "hr"}]
+        keyword_block = [
+            {"tag": "div", "text": {"tag": "lark_md", "content": f"**{FEISHU_KEYWORD}**"}},
+            {"tag": "hr"},
+        ]
 
-    indicador_nome = (indicador_nome or "").strip()
-    if not indicador_nome:
-        indicador_nome = "Custos por Base"
+    indicador_nome = (indicador_nome or "").strip() or "Custos por Base"
 
     elementos = [
         *keyword_block,
@@ -496,7 +547,7 @@ def enviar_card_somente_nome_com_imagem(
             "img_key": img_key,
             "alt": {"tag": "plain_text", "content": "Bases ordenadas por custo"},
             "mode": "fit_horizontal",
-            "preview": True
+            "preview": True,
         },
         {"tag": "hr"},
         {
@@ -517,7 +568,7 @@ def enviar_card_somente_nome_com_imagem(
         "card": {
             "config": {"wide_screen_mode": True, "enable_forward": True},
             "header": {
-                "template": "green",
+                "template": "red",  # combina com a paleta
                 "title": {"tag": "plain_text", "content": f"{nome_coord}"},
             },
             "elements": elementos,
@@ -536,18 +587,28 @@ def main():
     df = carregar_excel_auto(file_path)
     print(f"📄 Planilha carregada ({len(df):,} linhas)".replace(",", "."))
 
-    # remover remessas com "-"
+    # remover remessas no formato: 888001568747917-001 (número + hífen + 3 dígitos)
     if "Remessa" in df.columns:
         antes = len(df)
-        df["Remessa"] = df["Remessa"].astype(str).str.strip()
-        df = df[~df["Remessa"].str.contains("-", na=False)]
-        print(f"🧹 Removidas {antes - len(df)} remessas com sufixo '-XX'.")
+
+        s = df["Remessa"].astype(str).str.strip()
+
+        # casa a STRING INTEIRA (evita falso-positivo em textos)
+        # aceita hífen normal "-" e também “–” / “—”
+        padrao = r"^\d{6,}[-–—]\s*\d{3}$"
+
+        mask = s.str.match(padrao, na=False)
+        df = df[~mask]
+
+        print(f"🧹 Removidas {int(mask.sum())} remessas no padrão 'numero-000' (ex: 888...-001).")
+        # Debug opcional:
+        # print("Exemplos removidos:", s[mask].head(10).tolist())
 
     # filtrar regionais
     if "Regional responsável" not in df.columns:
         raise RuntimeError("❌ Coluna 'Regional responsável' não encontrada.")
-    df["Regional responsável"] = df["Regional responsável"].astype(str).str.upper().str.strip()
-    df = df[df["Regional responsável"].isin(["GP", "GO", "PA"])]
+    df["Regional responsável"] = df["Regional responsável"].fillna("").astype(str).str.upper().str.strip()
+    df = df[df["Regional responsável"].isin(REGIONAIS_PERMITIDAS)]
 
     # vincular coordenadores
     df_coord = pd.read_excel(COORDENADOR_PATH, engine="openpyxl")
@@ -562,9 +623,16 @@ def main():
     if "Base responsável" not in df.columns:
         raise RuntimeError("❌ Coluna 'Base responsável' não encontrada na base de custos.")
 
-    df["Base responsável"] = df["Base responsável"].astype(str).str.upper().str.strip()
-    df_coord["Nome da base"] = df_coord["Nome da base"].astype(str).str.upper().str.strip()
+    df["Base responsável"] = df["Base responsável"].fillna("").astype(str).str.upper().str.strip()
+    df_coord["Nome da base"] = df_coord["Nome da base"].fillna("").astype(str).str.upper().str.strip()
 
+    # ✅ CORREÇÃO: evitar duplicação no merge (many-to-many)
+    dup_count = df_coord["Nome da base"].duplicated().sum()
+    if dup_count > 0:
+        print(f"⚠️ Atenção: {dup_count} bases duplicadas em Base_Atualizada.xlsx (usando a 1ª ocorrência).")
+        df_coord = df_coord.drop_duplicates(subset=["Nome da base"], keep="first")
+
+    antes_merge = len(df)
     df = (
         pd.merge(
             df,
@@ -575,11 +643,23 @@ def main():
         )
         .drop(columns=["Nome da base"], errors="ignore")
     )
+    depois_merge = len(df)
     print("👥 Coordenadores vinculados.")
+    if depois_merge != antes_merge:
+        print(f"⚠️ Linhas antes merge: {antes_merge} | depois merge: {depois_merge} (verifique duplicidade no coordenador).")
 
     # custo
     if "Valor a pagar (yuan)" in df.columns:
+        if PARSE_DEBUG:
+            exemplos = df["Valor a pagar (yuan)"].dropna().astype(str).head(10).tolist()
+            print("🔎 Exemplos crus (Valor a pagar):", exemplos)
+
         df["Custo_R$"] = to_float_safe(df["Valor a pagar (yuan)"])
+
+        if PARSE_DEBUG:
+            conv = df["Custo_R$"].head(10).tolist()
+            print("🔎 Convertidos (float):", conv)
+            print("🔎 Max Custo_R$:", float(df["Custo_R$"].max()))
     else:
         df["Custo_R$"] = 0.0
 
@@ -626,9 +706,9 @@ def main():
 
             tbl_all = (
                 df_c.groupby("Base responsável", dropna=False)
-                    .agg(Qtd=("Base responsável", "size"), Custo=("Custo_R$", "sum"))
-                    .reset_index()
-                    .sort_values("Custo", ascending=False)
+                .agg(Qtd=("Base responsável", "size"), Custo=("Custo_R$", "sum"))
+                .reset_index()
+                .sort_values("Custo", ascending=False)
             )
 
             rows_all: List[Tuple[str, int, float]] = [
@@ -638,13 +718,13 @@ def main():
 
             img_paths = gerar_imagens_todas_as_bases_dark(
                 coord=coord,
-                indicador_nome=INDICADOR_NOME,  # <-- AQUI entra o nome do indicador
+                indicador_nome=INDICADOR_NOME,
                 total_pedidos=total_pedidos,
                 custo_total=custo_total,
                 total_bases=total_bases,
                 rows_all=rows_all,
                 out_dir=IMAGENS_DIR,
-                rows_per_page=ROWS_PER_PAGE
+                rows_per_page=ROWS_PER_PAGE,
             )
 
             total_pages = len(img_paths)
@@ -656,13 +736,13 @@ def main():
                 resp = enviar_card_somente_nome_com_imagem(
                     webhook=webhook_coord,
                     nome_coord=coord,
-                    indicador_nome=INDICADOR_NOME,  # <-- opcional no card
+                    indicador_nome=INDICADOR_NOME,
                     total_pedidos=total_pedidos,
                     custo_total=custo_total,
                     bases_avaliadas=total_bases,
                     data_humana=DATA_HUMANA,
                     img_key=img_key,
-                    page_label=page_label
+                    page_label=page_label,
                 )
                 print(f"✅ {coord} -> {page_label} | retorno: {resp}")
                 time.sleep(SLEEP_ENTRE_PAGINAS)
