@@ -314,6 +314,76 @@ def gerar_imagens_todas_as_bases_dark(
         except Exception:
             draw.rectangle(xy, fill=fill, outline=outline, width=width)
 
+    # ====== NOVO: medição + auto-fit + wrap para não cortar texto ======
+    def _measure(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> Tuple[int, int]:
+        text = text or ""
+        try:
+            b = draw.textbbox((0, 0), text, font=font)
+            return int(b[2] - b[0]), int(b[3] - b[1])
+        except Exception:
+            try:
+                # Pillow antigo
+                w, h = draw.textsize(text, font=font)  # type: ignore[attr-defined]
+                return int(w), int(h)
+            except Exception:
+                # fallback bem seguro
+                return int(len(text) * 8), 18
+
+    def _ellipsize(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w: int) -> str:
+        text = text or ""
+        w, _ = _measure(draw, text, font)
+        if w <= max_w:
+            return text
+        ell = "…"
+        lo, hi = 0, len(text)
+        best = ell
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            cand = (text[:mid].rstrip() + ell)
+            if _measure(draw, cand, font)[0] <= max_w:
+                best = cand
+                lo = mid + 1
+            else:
+                hi = mid - 1
+        return best
+
+    def _fit_font(draw: ImageDraw.ImageDraw, text: str, start_size: int, min_size: int, bold: bool, max_w: int):
+        size = start_size
+        while size >= min_size:
+            f = load_font(size, bold=bold)
+            if _measure(draw, text, f)[0] <= max_w:
+                return f
+            size -= 1
+        return load_font(min_size, bold=bold)
+
+    def _wrap_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w: int, max_lines: int = 2) -> List[str]:
+        text = (text or "").strip()
+        if not text:
+            return [""]
+        words = text.split()
+        lines: List[str] = []
+        cur = ""
+        for w in words:
+            cand = (cur + " " + w).strip() if cur else w
+            if _measure(draw, cand, font)[0] <= max_w:
+                cur = cand
+            else:
+                if cur:
+                    lines.append(cur)
+                cur = w
+                if len(lines) >= max_lines - 1:
+                    break
+
+        if cur:
+            lines.append(cur)
+
+        # Se estourou, reticências na última linha
+        if len(lines) > max_lines:
+            lines = lines[:max_lines]
+        if lines:
+            lines[-1] = _ellipsize(draw, lines[-1], font, max_w)
+        return lines
+
     RED_MAIN = (227, 6, 19)      # #E30613
     RED_SOFT = (196, 39, 46)     # #C4272E
     BG = (242, 242, 242)         # #F2F2F2
@@ -328,7 +398,10 @@ def gerar_imagens_todas_as_bases_dark(
 
     W = 1500
     padding = 34
-    header_h = 130
+
+    # ✅ AUMENTEI O HEADER PARA NÃO CORTAR E SUPORTAR 2 LINHAS DE INDICADOR
+    header_h = 175
+
     cards_h = 110
     gap = 16
     row_h = 46
@@ -337,7 +410,6 @@ def gerar_imagens_todas_as_bases_dark(
     total_pages = max(1, len(pages))
     out_paths: List[str] = []
 
-    f_title = load_font(30, bold=True)
     f_sub = load_font(18, bold=False)
     f_sub_bold = load_font(18, bold=True)
     f_card_label = load_font(16, bold=False)
@@ -359,6 +431,7 @@ def gerar_imagens_todas_as_bases_dark(
         # Header gradiente
         hx1, hy1 = padding + 18, padding + 18
         hx2, hy2 = W - padding - 18, padding + header_h
+
         for i in range(hy2 - hy1):
             t = i / max(1, (hy2 - hy1))
             c = (
@@ -368,14 +441,31 @@ def gerar_imagens_todas_as_bases_dark(
             )
             draw.line([(hx1, hy1 + i), (hx2, hy1 + i)], fill=c)
 
-        draw.text((hx1 + 22, hy1 + 14), f"{coord}", fill=WHITE, font=f_title)
-        draw.text((hx1 + 22, hy1 + 56), f"Indicador: {indicador_nome}", fill=WHITE, font=f_sub_bold)
-        draw.text(
-            (hx1 + 22, hy1 + 86),
-            f"Atualizado: {DATA_HUMANA}   •   Página {page_idx}/{total_pages}",
-            fill=WHITE,
-            font=f_sub,
-        )
+        # ✅ HEADER COM AUTO-FIT + WRAP (evita cortar)
+        left = hx1 + 22
+        inner_w = (hx2 - hx1) - 44
+
+        coord_txt = (coord or "").strip()
+        coord_font = _fit_font(draw, coord_txt, start_size=34, min_size=20, bold=True, max_w=inner_w)
+        coord_txt = _ellipsize(draw, coord_txt, coord_font, inner_w)
+
+        y_cursor = hy1 + 12
+        draw.text((left, y_cursor), coord_txt, fill=WHITE, font=coord_font)
+        coord_h = _measure(draw, coord_txt, coord_font)[1]
+        y_cursor += coord_h + 8
+
+        indicador_full = f"Indicador: {indicador_nome}"
+        ind_lines = _wrap_lines(draw, indicador_full, f_sub_bold, inner_w, max_lines=2)
+        for line in ind_lines:
+            draw.text((left, y_cursor), line, fill=WHITE, font=f_sub_bold)
+            y_cursor += _measure(draw, line, f_sub_bold)[1] + 2
+
+        y_cursor += 4
+
+        footer_line = f"Atualizado: {DATA_HUMANA}   •   Página {page_idx}/{total_pages}"
+        footer_font = _fit_font(draw, footer_line, start_size=18, min_size=14, bold=False, max_w=inner_w)
+        footer_line = _ellipsize(draw, footer_line, footer_font, inner_w)
+        draw.text((left, y_cursor), footer_line, fill=WHITE, font=footer_font)
 
         # Cards
         cx1 = padding + 18
@@ -568,7 +658,7 @@ def enviar_card_somente_nome_com_imagem(
         "card": {
             "config": {"wide_screen_mode": True, "enable_forward": True},
             "header": {
-                "template": "red",  # combina com a paleta
+                "template": "red",
                 "title": {"tag": "plain_text", "content": f"{nome_coord}"},
             },
             "elements": elementos,
@@ -589,8 +679,6 @@ def main():
 
     # remover remessas no formato: 888001568747917-001 (número + hífen + 3 dígitos)
     if "Remessa" in df.columns:
-        antes = len(df)
-
         s = df["Remessa"].astype(str).str.strip()
 
         # casa a STRING INTEIRA (evita falso-positivo em textos)
@@ -601,8 +689,6 @@ def main():
         df = df[~mask]
 
         print(f"🧹 Removidas {int(mask.sum())} remessas no padrão 'numero-000' (ex: 888...-001).")
-        # Debug opcional:
-        # print("Exemplos removidos:", s[mask].head(10).tolist())
 
     # filtrar regionais
     if "Regional responsável" not in df.columns:

@@ -483,6 +483,345 @@ def gerar_resumo_por_base(df_periodo: pl.DataFrame) -> pd.DataFrame:
     )
     return resumo.to_pandas().rename(columns={"BASE DE ENTREGA": "Base De Entrega"})
 # =========================
+# BLOCO 2/4 — FUNÇÕES (FERIADOS / PERÍODO / LEITURA / EXPORT / RESUMO)
+# =========================
+
+def normalizar(s) -> str:
+    if s is None:
+        return ""
+    s = str(s).upper().strip()
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    while "  " in s:
+        s = s.replace("  ", " ")
+    return s
+
+
+def pascoa_gregoriana(ano: int) -> date:
+    a = ano % 19
+    b = ano // 100
+    c = ano % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    mes = (h + l - 7 * m + 114) // 31
+    dia = ((h + l - 7 * m + 114) % 31) + 1
+    return date(ano, mes, dia)
+
+
+def feriados_nacionais_br(ano: int) -> Set[date]:
+    fer = {
+        date(ano, 1, 1),
+        date(ano, 4, 21),
+        date(ano, 5, 1),
+        date(ano, 9, 7),
+        date(ano, 10, 12),
+        date(ano, 11, 2),
+        date(ano, 11, 15),
+        date(ano, 11, 20),
+        date(ano, 12, 25),
+    }
+    pascoa = pascoa_gregoriana(ano)
+    fer.add(pascoa - timedelta(days=2))  # Sexta-feira Santa
+    return fer
+
+
+def is_feriado_nacional(d: date) -> bool:
+    if not PULAR_FERIADOS_NACIONAIS:
+        return False
+    if (not PULAR_FERIADOS_EM_FDS) and (d.weekday() in (5, 6)):
+        return False
+    ano = d.year
+    if ano not in _CACHE_FERIADOS:
+        _CACHE_FERIADOS[ano] = feriados_nacionais_br(ano)
+    return d in _CACHE_FERIADOS[ano]
+
+
+def formatar_periodo(inicio: date, fim: date) -> str:
+    if inicio == fim:
+        return inicio.strftime("%d/%m/%Y")
+    return f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}"
+
+
+def formatar_lista_dias(datas: List[date]) -> str:
+    if not datas:
+        return "Fevereiro 2026"
+    dias_pt = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    return ", ".join([f"{dias_pt[d.weekday()]} {d.strftime('%d/%m')}" for d in datas])
+
+
+def periodo_txt_de_datas(datas: List[date]) -> str:
+    if not datas:
+        return "-"
+    return formatar_periodo(min(datas), max(datas))
+
+
+def separar_seg_sab_e_domingo(datas: List[date]) -> Tuple[List[date], List[date]]:
+    datas_dom = [d for d in datas if d.weekday() == 6]
+    datas_seg_sab = [d for d in datas if d.weekday() != 6]
+    return datas_seg_sab, datas_dom
+
+
+def calcular_periodo_base() -> Optional[Tuple[date, date, List[date]]]:
+    hoje = datetime.now().date()
+    dia = hoje.weekday()  # 0=Seg ... 6=Dom
+
+    if dia in (5, 6):
+        logging.warning("⛔ Hoje é sábado ou domingo. Execução cancelada.")
+        return None
+
+    span = 3 if dia == 0 else 1
+    fim = hoje - timedelta(days=1)
+
+    tentativas = 0
+    while True:
+        inicio = fim - timedelta(days=span - 1)
+        datas = [inicio + timedelta(days=i) for i in range((fim - inicio).days + 1)]
+
+        if PULAR_FERIADOS_NACIONAIS:
+            feriados_removidos = [d for d in datas if is_feriado_nacional(d)]
+            datas_ok = [d for d in datas if not is_feriado_nacional(d)]
+            if feriados_removidos:
+                logging.info(
+                    "🗓️ Feriados nacionais ignorados: "
+                    + ", ".join([d.strftime("%Y-%m-%d") for d in feriados_removidos])
+                )
+        else:
+            datas_ok = datas
+
+        if datas_ok:
+            return min(datas_ok), max(datas_ok), datas_ok
+
+        tentativas += 1
+        if tentativas >= 15:
+            logging.warning("⚠️ Não foi possível encontrar datas válidas após recuar 15 dias. Cancelando.")
+            return None
+
+        logging.warning(f"⚠️ Período ({formatar_periodo(inicio, fim)}) vazio após remover feriados. Recuando 1 dia...")
+        fim = fim - timedelta(days=1)
+
+
+def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo: str) -> None:
+    os.makedirs(pasta_destino, exist_ok=True)
+    if not os.path.isdir(pasta_origem):
+        return
+    for arquivo in os.listdir(pasta_origem):
+        if arquivo.startswith(prefixo) and arquivo.endswith(".xlsx"):
+            try:
+                shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo))
+                logging.info(f"📦 Arquivo antigo movido: {arquivo}")
+            except Exception as e:
+                logging.error(f"Erro ao mover {arquivo}: {e}")
+
+
+def arquivar_bases_antigas(pasta_origem: str, pasta_destino: str, prefixo: str) -> None:
+    os.makedirs(pasta_destino, exist_ok=True)
+    if not os.path.isdir(pasta_origem):
+        return
+
+    for arquivo in os.listdir(pasta_origem):
+        if not arquivo.startswith(prefixo):
+            continue
+        if not arquivo.lower().endswith((".xlsx", ".csv", ".parquet")):
+            continue
+        try:
+            shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo))
+            logging.info(f"📦 Base antiga movida: {arquivo}")
+        except Exception as e:
+            logging.error(f"Erro ao mover {arquivo}: {e}")
+
+
+def ler_planilha_rapido(caminho: str) -> pl.DataFrame:
+    try:
+        if caminho.lower().endswith(".csv"):
+            return pl.read_csv(caminho, ignore_errors=True)
+        return pl.read_excel(caminho)
+    except Exception as e:
+        logging.error(f"Falha ao ler {os.path.basename(caminho)}: {e}")
+        return pl.DataFrame()
+
+
+def consolidar_planilhas(pasta_entrada: str) -> pl.DataFrame:
+    arquivos = [
+        os.path.join(pasta_entrada, f)
+        for f in os.listdir(pasta_entrada)
+        if f.lower().endswith(EXTS) and not f.startswith("~$")
+    ]
+    if not arquivos:
+        raise FileNotFoundError("Nenhum arquivo válido encontrado.")
+
+    with ThreadPoolExecutor(max_workers=min(16, len(arquivos))) as ex:
+        dfs = list(ex.map(ler_planilha_rapido, arquivos))
+
+    validos = [df for df in dfs if not df.is_empty()]
+    if not validos:
+        raise ValueError("Falha ao ler todos os arquivos.")
+    return pl.concat(validos, how="vertical_relaxed")
+
+
+def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
+    if coluna not in df.columns:
+        raise KeyError(f"Coluna '{coluna}' não encontrada.")
+
+    tipo = df[coluna].dtype
+    if tipo == pl.Date:
+        return df
+    if tipo == pl.Datetime:
+        return df.with_columns(pl.col(coluna).dt.date().alias(coluna))
+
+    if tipo == pl.Utf8:
+        s = pl.col(coluna).cast(pl.Utf8).str.strip_chars().str.replace_all(r"\s+", " ")
+        formatos = [
+            "%d/%m/%Y %H:%M:%S",
+            "%d/%m/%Y %H:%M",
+            "%d/%m/%Y",
+            "%Y-%m-%d",
+            "%Y/%m/%d",
+            "%d-%m-%Y",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y/%m/%d %H:%M:%S",
+        ]
+        expr = None
+        for f in formatos:
+            tentativa = s.str.strptime(pl.Datetime, f, strict=False)
+            expr = tentativa if expr is None else expr.fill_null(tentativa)
+        return df.with_columns(expr.dt.date().alias(coluna))
+
+    raise TypeError(f"Tipo inválido para coluna '{coluna}': {tipo}")
+
+
+def ajustar_periodo_por_dados(
+    df: pl.DataFrame, coluna_data: str, inicio: date, fim: date, datas: List[date]
+) -> Tuple[date, date, List[date]]:
+    if df.is_empty() or coluna_data not in df.columns:
+        return inicio, fim, datas
+
+    try:
+        qtd = df.filter(pl.col(coluna_data).is_in(datas)).height
+        if qtd > 0:
+            return inicio, fim, datas
+    except Exception:
+        pass
+
+    max_le = None
+    try:
+        max_le = (
+            df.filter(pl.col(coluna_data).is_not_null() & (pl.col(coluna_data) <= fim))
+            .select(pl.col(coluna_data).max())
+            .item()
+        )
+    except Exception:
+        max_le = None
+
+    if max_le is None:
+        try:
+            max_le = df.filter(pl.col(coluna_data).is_not_null()).select(pl.col(coluna_data).max()).item()
+        except Exception:
+            max_le = None
+
+    if max_le is None:
+        return inicio, fim, datas
+
+    if isinstance(max_le, datetime):
+        max_le = max_le.date()
+
+    span = (fim - inicio).days
+    novo_fim = max_le
+    novo_inicio = novo_fim - timedelta(days=span)
+    if novo_inicio > novo_fim:
+        novo_inicio = novo_fim
+
+    novo_datas = [novo_inicio + timedelta(days=i) for i in range((novo_fim - novo_inicio).days + 1)]
+
+    logging.warning(
+        f"⚠️ Nenhum registro para o período calculado ({formatar_periodo(inicio, fim)}). "
+        f"Fallback para última data disponível: {formatar_periodo(novo_inicio, novo_fim)}."
+    )
+    return novo_inicio, novo_fim, novo_datas
+
+
+def exportar_base_consolidada(df_periodo: pl.DataFrame, tag: str = "") -> Dict[str, str]:
+    os.makedirs(PASTA_BASE_CONSOLIDADA, exist_ok=True)
+
+    if tag == "_Domingo":
+        prefixo = "Base_Consolidada_Domingo_"
+        nome_base = f"Base_Consolidada_Domingo_{DATA_HOJE}"
+    else:
+        prefixo = "Base_Consolidada_"
+        nome_base = f"Base_Consolidada_{DATA_HOJE}"
+
+    arq_parquet = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.parquet")
+    arq_csv = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.csv")
+    arq_xlsx = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.xlsx")
+
+    arquivar_bases_antigas(PASTA_BASE_CONSOLIDADA, PASTA_ARQUIVO, prefixo)
+
+    df_periodo.write_parquet(arq_parquet)
+    logging.info(f"✅ Base consolidada (PARQUET) salva em: {arq_parquet}")
+
+    df_periodo.write_csv(arq_csv)
+    logging.info(f"✅ Base consolidada (CSV) salva em: {arq_csv}")
+
+    if df_periodo.height <= (EXCEL_MAX_ROWS - 1):
+        df_pd = df_periodo.to_pandas()
+        with pd.ExcelWriter(arq_xlsx, engine="openpyxl") as w:
+            df_pd.to_excel(w, index=False, sheet_name="Base Consolidada")
+        logging.info(f"✅ Base consolidada (XLSX) salva em: {arq_xlsx}")
+    else:
+        logging.warning("⚠️ XLSX não gerado (limite do Excel). Use PARQUET/CSV.")
+
+    return {"parquet": arq_parquet, "csv": arq_csv, "xlsx": arq_xlsx}
+
+
+def exportar_resumo_excel(resumo_pd: pd.DataFrame, arquivo_saida: str, prefixo: str) -> None:
+    os.makedirs(PASTA_SAIDA, exist_ok=True)
+    arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, prefixo)
+    with pd.ExcelWriter(arquivo_saida, engine="openpyxl") as w:
+        resumo_pd.to_excel(w, index=False, sheet_name="Resumo SLA")
+    logging.info(f"✅ Resumo Excel salvo em: {arquivo_saida}")
+
+
+def montar_arquivos_gerados_md(arquivo_resumo: str, paths_base: Dict[str, str]) -> str:
+    base_xlsx_txt = (
+        f"- Base (XLSX): `{os.path.basename(paths_base['xlsx'])}`\n"
+        if os.path.exists(paths_base["xlsx"])
+        else "- Base (XLSX): *(não gerado — limite do Excel)*\n"
+    )
+    return (
+        "📄 **Arquivos gerados:**\n"
+        f"- Resumo: `{os.path.basename(arquivo_resumo)}`\n"
+        f"- Base (PARQUET): `{os.path.basename(paths_base['parquet'])}`\n"
+        f"- Base (CSV): `{os.path.basename(paths_base['csv'])}`\n"
+        + base_xlsx_txt
+    )
+
+
+def gerar_resumo_por_base(df_periodo: pl.DataFrame) -> pd.DataFrame:
+    if df_periodo.is_empty():
+        return pd.DataFrame(
+            columns=["Base De Entrega", "COORDENADOR", "Total", "Entregues no Prazo", "Fora do Prazo", "% SLA Cumprido"]
+        )
+
+    resumo = (
+        df_periodo.group_by(["BASE DE ENTREGA", "COORDENADOR"])
+        .agg(
+            [
+                pl.len().alias("Total"),
+                pl.col("_ENTREGUE_PRAZO").sum().alias("Entregues no Prazo"),
+                (pl.len() - pl.col("_ENTREGUE_PRAZO").sum()).alias("Fora do Prazo"),
+                (pl.col("_ENTREGUE_PRAZO").sum() / pl.len()).alias("% SLA Cumprido"),
+            ]
+        )
+        .sort("% SLA Cumprido", descending=True)
+    )
+    return resumo.to_pandas().rename(columns={"BASE DE ENTREGA": "Base De Entrega"})
+# =========================
 # BLOCO 3/4 — FEISHU + IMAGEM (PIL) + CARD
 # =========================
 
@@ -607,6 +946,77 @@ def gerar_imagens_sla_tabela(
         except Exception:
             draw.rectangle(xy, fill=fill, outline=outline, width=width)
 
+    # ===== NOVO: medição + auto-fit + ellipsis + wrap (evita cortar título/linhas) =====
+    def _measure(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> Tuple[int, int]:
+        text = text or ""
+        try:
+            b = draw.textbbox((0, 0), text, font=font)
+            return int(b[2] - b[0]), int(b[3] - b[1])
+        except Exception:
+            try:
+                w, h = draw.textsize(text, font=font)  # type: ignore[attr-defined]
+                return int(w), int(h)
+            except Exception:
+                return int(len(text) * 8), 18
+
+    def _ellipsize(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w: int) -> str:
+        text = text or ""
+        w, _ = _measure(draw, text, font)
+        if w <= max_w:
+            return text
+        ell = "…"
+        lo, hi = 0, len(text)
+        best = ell
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            cand = (text[:mid].rstrip() + ell)
+            if _measure(draw, cand, font)[0] <= max_w:
+                best = cand
+                lo = mid + 1
+            else:
+                hi = mid - 1
+        return best
+
+    def _fit_font(draw: ImageDraw.ImageDraw, text: str, start_size: int, min_size: int, bold: bool, max_w: int):
+        size = start_size
+        while size >= min_size:
+            f = load_font(size, bold=bold)
+            if _measure(draw, text, f)[0] <= max_w:
+                return f
+            size -= 1
+        return load_font(min_size, bold=bold)
+
+    def _wrap_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w: int, max_lines: int = 2) -> List[str]:
+        text = (text or "").strip()
+        if not text:
+            return [""]
+
+        words = text.split()
+        lines: List[str] = []
+        cur = ""
+
+        for w in words:
+            cand = (cur + " " + w).strip() if cur else w
+            if _measure(draw, cand, font)[0] <= max_w:
+                cur = cand
+            else:
+                if cur:
+                    lines.append(cur)
+                cur = w
+                if len(lines) >= max_lines - 1:
+                    break
+
+        if cur:
+            lines.append(cur)
+
+        if len(lines) > max_lines:
+            lines = lines[:max_lines]
+
+        if lines:
+            lines[-1] = _ellipsize(draw, lines[-1], font, max_w)
+
+        return lines
+
     # ===== Tema J&T =====
     BG = JT_BG_GRAY
     CARD = JT_WHITE
@@ -618,11 +1028,13 @@ def gerar_imagens_sla_tabela(
 
     W = 1800
     pad = 34
-    header_h = 150
+
+    # ✅ AUMENTEI header para caber sem cortar
+    header_h = 205
+
     row_h = 52
     gap = 18
 
-    f_title = load_font(34, bold=True)
     f_sub = load_font(19, bold=False)
     f_sub_bold = load_font(19, bold=True)
     f_head = load_font(19, bold=True)
@@ -646,6 +1058,7 @@ def gerar_imagens_sla_tabela(
         # Header gradiente vermelho (soft -> main)
         hx1, hy1 = pad + 18, pad + 18
         hx2, hy2 = W - pad - 18, pad + header_h
+
         for i in range(hy2 - hy1):
             t = i / max(1, (hy2 - hy1))
             c = (
@@ -655,24 +1068,37 @@ def gerar_imagens_sla_tabela(
             )
             draw.line([(hx1, hy1 + i), (hx2, hy1 + i)], fill=c)
 
-        title = f"{coord}{titulo_suffix}"
-        draw.text((hx1 + 22, hy1 + 14), title, fill=JT_WHITE, font=f_title)
+        # ✅ HEADER: auto-fit + wrap + ellipsis (não corta mais)
+        left = hx1 + 22
+        inner_w = (hx2 - hx1) - 44
+        y = hy1 + 12
 
-        draw.text((hx1 + 22, hy1 + 58), f"Indicador: {indicador_nome}", fill=JT_WHITE, font=f_sub_bold)
+        title = f"{coord}{titulo_suffix}".strip()
+        f_title_fit = _fit_font(draw, title, start_size=34, min_size=20, bold=True, max_w=inner_w)
+        title = _ellipsize(draw, title, f_title_fit, inner_w)
+        draw.text((left, y), title, fill=JT_WHITE, font=f_title_fit)
+        y += _measure(draw, title, f_title_fit)[1] + 8
 
-        draw.text(
-            (hx1 + 22, hy1 + 88),
-            f"Atualizado: {data_humana}   •   Página {page_idx}/{total_pages}   •   SLA total: {sla_total:.2%}",
-            fill=JT_WHITE,
-            font=f_sub,
+        indicador_full = f"Indicador: {indicador_nome}".strip()
+        f_ind_fit = _fit_font(draw, indicador_full, start_size=19, min_size=14, bold=True, max_w=inner_w)
+        ind_lines = _wrap_lines(draw, indicador_full, f_ind_fit, inner_w, max_lines=2)
+        for line in ind_lines:
+            draw.text((left, y), line, fill=JT_WHITE, font=f_ind_fit)
+            y += _measure(draw, line, f_ind_fit)[1] + 2
+        y += 4
+
+        line_atual = (
+            f"Atualizado: {data_humana}   •   Página {page_idx}/{total_pages}   •   SLA total: {sla_total:.2%}"
         )
+        f_line_fit = _fit_font(draw, line_atual, start_size=19, min_size=13, bold=False, max_w=inner_w)
+        line_atual = _ellipsize(draw, line_atual, f_line_fit, inner_w)
+        draw.text((left, y), line_atual, fill=JT_WHITE, font=f_line_fit)
+        y += _measure(draw, line_atual, f_line_fit)[1] + 4
 
-        draw.text(
-            (hx1 + 22, hy1 + 116),
-            f"Período: {periodo_txt}   •   Dias: {dias_txt}",
-            fill=JT_WHITE,
-            font=f_sub,
-        )
+        line_periodo = f"Período: {periodo_txt}   •   Dias: {dias_txt}"
+        f_per_fit = _fit_font(draw, line_periodo, start_size=19, min_size=13, bold=False, max_w=inner_w)
+        line_periodo = _ellipsize(draw, line_periodo, f_per_fit, inner_w)
+        draw.text((left, y), line_periodo, fill=JT_WHITE, font=f_per_fit)
 
         # Área tabela
         tx1 = pad + 18
@@ -701,27 +1127,27 @@ def gerar_imagens_sla_tabela(
         bbox_h = draw.textbbox((0, 0), sla_head, font=f_head)
         draw.text((col_sla_right - (bbox_h[2] - bbox_h[0]), ty1 + 64), sla_head, fill=MUTED, font=f_head)
 
-        y = ty1 + 102
+        ytbl = ty1 + 102
         start_rank = (page_idx - 1) * rows_per_page
 
         for i, (base, tot, ent, fora, sla) in enumerate(page_rows, start=1):
             bg_row = ROW1 if (i % 2 == 1) else ROW2
-            rr(draw, (tx1 + 12, y - 8, tx2 - 12, y + row_h - 10), 14, bg_row, outline=None)
+            rr(draw, (tx1 + 12, ytbl - 8, tx2 - 12, ytbl + row_h - 10), 14, bg_row, outline=None)
 
             rank = start_rank + i
             base_txt = (base or "")[:78]
             sla_txt = f"{sla:.2%}"
 
-            draw.text((col_rank, y), f"{rank:02d}", fill=TXT, font=f_row)
-            draw.text((col_base, y), base_txt, fill=TXT, font=f_row)
-            draw.text((col_total, y), str(tot), fill=TXT, font=f_row)
-            draw.text((col_ent, y), str(ent), fill=TXT, font=f_row)
-            draw.text((col_fora, y), str(fora), fill=TXT, font=f_row)
+            draw.text((col_rank, ytbl), f"{rank:02d}", fill=TXT, font=f_row)
+            draw.text((col_base, ytbl), base_txt, fill=TXT, font=f_row)
+            draw.text((col_total, ytbl), str(tot), fill=TXT, font=f_row)
+            draw.text((col_ent, ytbl), str(ent), fill=TXT, font=f_row)
+            draw.text((col_fora, ytbl), str(fora), fill=TXT, font=f_row)
 
             bbox = draw.textbbox((0, 0), sla_txt, font=f_row)
-            draw.text((col_sla_right - (bbox[2] - bbox[0]), y), sla_txt, fill=JT_RED_SOFT, font=f_row)
+            draw.text((col_sla_right - (bbox[2] - bbox[0]), ytbl), sla_txt, fill=JT_RED_SOFT, font=f_row)
 
-            y += row_h
+            ytbl += row_h
 
         safe_coord = normalizar(coord).replace(" ", "_")
         filename = f"SLA_{safe_coord}_{DATA_HOJE}_p{page_idx:02d}.png"
@@ -893,7 +1319,6 @@ if __name__ == "__main__":
         coord_df = pl.read_excel(PASTA_COORDENADOR)
 
         # ✅ tentativa de rename mais tolerante
-        # (se já estiver padronizado, não quebra)
         rename_map = {}
         if "Nome da base" in coord_df.columns:
             rename_map["Nome da base"] = "BASE DE ENTREGA"

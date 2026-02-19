@@ -73,7 +73,6 @@ JT_ROW_ALT  = (248, 248, 248)
 
 # (Opcional) cor “boa” para queda (não faz parte da paleta, mas melhora leitura)
 GOOD_GREEN  = (16, 185, 129)
-
 # =========================
 # BLOCO 2/3 — UTIL + FEISHU TOKEN/UPLOAD + IMAGENS (PIL)
 # =========================
@@ -219,6 +218,7 @@ def gerar_imagens_bases(
     Retorna lista de caminhos de imagens (paginadas) com todas as bases, ordenadas por qtd desc.
     ✅ Mostra INDICADOR no header
     ✅ CORES J&T
+    ✅ NÃO CORTA texto (auto-fit + wrap + reticências)
     """
     from PIL import Image, ImageDraw
 
@@ -231,12 +231,6 @@ def gerar_imagens_bases(
     total_pages = (len(items) + rows_per_page - 1) // rows_per_page
     ts = datetime.now().strftime("%d/%m/%Y %H:%M")
 
-    font_title = _load_font(32, bold=True)
-    font_ind = _load_font(18, bold=True)
-    font_sub = _load_font(18, bold=False)
-    font_head = _load_font(18, bold=True)
-    font_row = _load_font(18, bold=False)
-
     # ===== Tema J&T =====
     bg = JT_BG_GRAY
     card = JT_WHITE
@@ -248,7 +242,10 @@ def gerar_imagens_bases(
     # layout
     W = 1400
     pad = 36
-    header_h = 140
+
+    # ✅ AUMENTEI para caber indicador em 2 linhas
+    header_h = 190
+
     table_top = header_h + 26
     row_h = 44
     head_h = 44
@@ -261,6 +258,76 @@ def gerar_imagens_bases(
             draw.rounded_rectangle(xy, radius=r, fill=fill, outline=outline, width=width)
         except Exception:
             draw.rectangle(xy, fill=fill, outline=outline, width=width)
+
+    # ===== Helpers: medir / ellipsis / auto-fit / wrap =====
+    def _measure(draw: ImageDraw.ImageDraw, text_: str, font_) -> Tuple[int, int]:
+        text_ = text_ or ""
+        try:
+            b = draw.textbbox((0, 0), text_, font=font_)
+            return int(b[2] - b[0]), int(b[3] - b[1])
+        except Exception:
+            try:
+                w_, h_ = draw.textsize(text_, font=font_)  # type: ignore[attr-defined]
+                return int(w_), int(h_)
+            except Exception:
+                return int(len(text_) * 8), 18
+
+    def _ellipsize(draw: ImageDraw.ImageDraw, text_: str, font_, max_w: int) -> str:
+        text_ = text_ or ""
+        if _measure(draw, text_, font_)[0] <= max_w:
+            return text_
+        ell = "…"
+        lo, hi = 0, len(text_)
+        best = ell
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            cand = (text_[:mid].rstrip() + ell)
+            if _measure(draw, cand, font_)[0] <= max_w:
+                best = cand
+                lo = mid + 1
+            else:
+                hi = mid - 1
+        return best
+
+    def _fit_font(draw: ImageDraw.ImageDraw, text_: str, start_size: int, min_size: int, bold: bool, max_w: int):
+        size = start_size
+        while size >= min_size:
+            f = _load_font(size, bold=bold)
+            if _measure(draw, text_, f)[0] <= max_w:
+                return f
+            size -= 1
+        return _load_font(min_size, bold=bold)
+
+    def _wrap_lines(draw: ImageDraw.ImageDraw, text_: str, font_, max_w: int, max_lines: int = 2) -> List[str]:
+        text_ = (text_ or "").strip()
+        if not text_:
+            return [""]
+
+        words = text_.split()
+        lines: List[str] = []
+        cur = ""
+
+        for w_ in words:
+            cand = (cur + " " + w_).strip() if cur else w_
+            if _measure(draw, cand, font_)[0] <= max_w:
+                cur = cand
+            else:
+                if cur:
+                    lines.append(cur)
+                cur = w_
+                if len(lines) >= max_lines - 1:
+                    break
+
+        if cur:
+            lines.append(cur)
+
+        if len(lines) > max_lines:
+            lines = lines[:max_lines]
+
+        if lines:
+            lines[-1] = _ellipsize(draw, lines[-1], font_, max_w)
+
+        return lines
 
     for page in range(1, total_pages + 1):
         chunk = items[(page - 1) * rows_per_page: page * rows_per_page]
@@ -285,24 +352,47 @@ def gerar_imagens_bases(
             )
             draw.line([(hx1 + 1, hy1 + i), (hx2 - 1, hy1 + i)], fill=c)
 
-        draw.text((pad, 38), f"{coordenador}", fill=JT_WHITE, font=font_title)
-        draw.text((pad, 78), f"Indicador: {indicador_nome}", fill=JT_WHITE, font=font_ind)
-        draw.text((pad, 108), f"Atualizado: {ts}  •  Página {page}/{total_pages}", fill=JT_WHITE, font=font_sub)
+        # ✅ HEADER SEM CORTE
+        left = pad
+        inner_w = (hx2 - left) - 24  # margem direita interna
+        y = hy1 + 14
+
+        title = (coordenador or "").strip()
+        font_title = _fit_font(draw, title, start_size=32, min_size=18, bold=True, max_w=inner_w)
+        title_draw = _ellipsize(draw, title, font_title, inner_w)
+        draw.text((left, y), title_draw, fill=JT_WHITE, font=font_title)
+        y += _measure(draw, title_draw, font_title)[1] + 8
+
+        ind_full = f"Indicador: {indicador_nome}".strip()
+        font_ind = _fit_font(draw, ind_full, start_size=18, min_size=13, bold=True, max_w=inner_w)
+        ind_lines = _wrap_lines(draw, ind_full, font_ind, inner_w, max_lines=2)
+        for line_txt in ind_lines:
+            draw.text((left, y), line_txt, fill=JT_WHITE, font=font_ind)
+            y += _measure(draw, line_txt, font_ind)[1] + 2
+        y += 6
+
+        sub_full = f"Atualizado: {ts}  •  Página {page}/{total_pages}"
+        font_sub = _fit_font(draw, sub_full, start_size=18, min_size=12, bold=False, max_w=inner_w)
+        sub_draw = _ellipsize(draw, sub_full, font_sub, inner_w)
+        draw.text((left, y), sub_draw, fill=JT_WHITE, font=font_sub)
 
         # table header
         x0 = pad
-        y = table_top
+        yth = table_top
         col_base = 720
         col_qtd = 200
         col_diff = 200
 
-        draw.text((x0, y), "Base", fill=muted, font=font_head)
-        draw.text((x0 + col_base, y), "Qtd", fill=muted, font=font_head)
-        draw.text((x0 + col_base + col_qtd, y), "Δ", fill=muted, font=font_head)
-        draw.line((pad, y + 34, W - pad, y + 34), fill=line, width=2)
+        font_head = _load_font(18, bold=True)
+        font_row = _load_font(18, bold=False)
+
+        draw.text((x0, yth), "Base", fill=muted, font=font_head)
+        draw.text((x0 + col_base, yth), "Qtd", fill=muted, font=font_head)
+        draw.text((x0 + col_base + col_qtd, yth), "Δ", fill=muted, font=font_head)
+        draw.line((pad, yth + 34, W - pad, yth + 34), fill=line, width=2)
 
         # rows
-        y_row = y + head_h
+        y_row = yth + head_h
         for idx, (base, qtd) in enumerate(chunk, 1):
             if idx % 2 == 0:
                 rr(
@@ -344,8 +434,6 @@ def gerar_imagens_bases(
         out_paths.append(out_path)
 
     return out_paths
-
-
 # =========================
 # BLOCO 3/3 — PROCESSAR RELATÓRIO + SNAPSHOT + CARD + MAIN
 # =========================
