@@ -1,1146 +1,676 @@
 # -*- coding: utf-8 -*-
-
-# =========================
-# BLOCO 1/4 — IMPORTS / CONFIG
-# =========================
-
-import os
-import requests
-import warnings
-import polars as pl
 import pandas as pd
-import multiprocessing
-import logging
+import os
+import numpy as np
+from tqdm import tqdm
+from datetime import datetime
 import shutil
-import unicodedata
+import logging
 import time
-from datetime import datetime, timedelta, date
-from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional, Tuple, Dict, Set, Any
+from typing import List, Dict, Optional, Any
 
-warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
+# ==============================================================================
+# --- CONFIGURAÇÃO GERAL ---
+# ==============================================================================
 
+# --- 1. Caminhos Principais ---
+BASE_PATH = r'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Sem Movimentação'
+OUTPUT_BASE_PATH = r'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Jt - Relatórios'
+COORDENADOR_BASE_PATH = r'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador'
+
+# --- 2. Pastas e Arquivos de Entrada ---
+PATH_INPUT_MAIN = os.path.join(BASE_PATH, 'Sem_Movimentação')
+PATH_INPUT_PROBLEMATICOS = os.path.join(BASE_PATH, 'Pacotes Problematicos')
+PATH_INPUT_DEVOLUCAO = os.path.join(BASE_PATH, 'Devolução')
+ARQUIVO_MAPEAMENTO_COORDENADORES = os.path.join(COORDENADOR_BASE_PATH, 'Base_Atualizada.xlsx')
+
+# --- 3. Pastas de Saída ---
+PATH_OUTPUT_REPORTS = OUTPUT_BASE_PATH
+PATH_OUTPUT_ARQUIVO_MORTO = os.path.join(OUTPUT_BASE_PATH, "Arquivo Morto")
+
+# --- 4. Nomes de Arquivos e Colunas ---
+FILENAME_START_MAIN = 'Monitoramento de movimentação em tempo real'
+
+# Colunas principais
+COL_REMESSA = 'Remessa'
+COL_DIAS_PARADO = 'Dias Parado'
+COL_ULTIMA_OPERACAO = 'Tipo da última operação'
+COL_REGIONAL = 'Regional responsável'
+COL_NOME_PROBLEMATICO = 'Nome de pacote problemático'
+COL_HORA_OPERACAO = 'Horário da última operação'
+COL_DEVOLUCAO = 'Devolução'
+COL_STATUS = 'Status'
+COL_MULTA = 'Multa (R$)'
+COL_BASE_RECENTE = 'Nome da base mais recente'
+COL_TRANSITO = 'Trânsito'
+
+# Colunas para mapeamento de coordenadores
+COLUNA_CHAVE_PRINCIPAL = 'Unidade responsável'
+COLUNA_CHAVE_MAPEAMENTO = 'Nome da base'
+COLUNA_INFO_COORDENADOR = 'Coordenadores'
+COLUNA_INFO_FILIAL = 'Filial'
+NOVA_COLUNA_COORDENADOR = 'Coordenadores'
+NOVA_COLUNA_FILIAL = 'Filial'
+
+# --- 5. Regra: “Mercadorias incompletas” (cria relatório separado e REMOVE do principal/Feishu) ---
+INCOMPLETOS_KEY_EXATA = "Mercadorias.que.chegam.incompletos货未到齐"
+INCOMPLETOS_KEY_PARTE_1 = "Mercadorias.que.chegam.incompletos"
+INCOMPLETOS_KEY_PARTE_2 = "货未到齐"
+
+# --- 6. Listas para Regras de Negócio ---
+FRANQUIAS = ["F AGL-GO", "F ALV-AM", "F ALX-AM", "F AMB-MS", "F ANP-GO", "F APG - GO",
+    "F ARQ - RO", "F BAO-PA", "F BSB - DF", "F BSB-DF", "F BSL-AC", "F CDN-AM",
+    "F CEI-DF", "F CGR - MS", "F CGR 02-MS", "F CHR-AM", "F CMV-MT", "F CNC-PA",
+    "F CNF-MT", "F DOM -PA", "F DOU-MS", "F ELD-PA", "F FMA-GO", "F GAI-TO",
+    "F GRP-TO", "F GYN - GO", "F GYN 02-GO", "F GYN 03-GO", "F IGA-PA", "F ITI -PA",
+    "F ITI-PA", "F JCD-PA", "F MCP 02-AP", "F MCP-AP", "F OCD - GO", "F OCD-GO",
+    "F ORL-PA", "F PCA-PA", "F PDR-GO", "F PGM-PA", "F PLN-DF", "F PON-GO",
+    "F POS-GO", "F PVH 02-RO", "F PVH-RO", "F PVL-MT", "F RDC -PA", "F RVD - GO",
+    "F SEN-GO", "F SFX-PA", "F TGA-MT", "F TGT-DF", "F TLA-PA", "F TRD-GO",
+    "F TUR-PA", "F VHL-RO", "F VLP-GO", "F XIG-PA", "F TRM-AM", "F STM-PA",
+    "F JPN 02-RO", "F CAC-RO", "F SVC-RR", "F SNP-MT", "F SJA-GO", "F SBS-DF", "F SBN-DF", "F SAM-DF",
+    "F ROO-MT", "F RFI-DF", "F RBR-AC", "F RBR 02-AC", "F PVL 02-MT", "F PVH 03-RO",
+    "F PTD-MT", "F PPA-MS", "F PNA-TO", "F PLA-GO", "F PDT-TO", "F PDP-PA",
+    "F PAZ-AM", "F NMB-PA", "F NDI-MS", "F MTB-PA", "F MRL-AM", "F MDR-PA",
+    "F MDO-RO", "F MAC-AP", "F JRG-GO", "F JPN-RO", "F JAU-RO", "F IPX-PA",
+    "F HMT-AM", "F GYN 04-GO", "F GUA-DF", "F GNS-PA", "F GFN-PA", "F EMA-DF",
+    "F CTL-GO", "F CRX-GO", "F CRH-PA", "F CGR 04-MS", "F CGR 03-MS", "F CDN 02-AM",
+    "F CCR-MT", "F BVB-RR", "F BTS-RO", "F ARQ 02-RO", "F ANA-PA", "F AGB-MT",
+    "F AGB 02-MT"]
+
+UNIDADES_SC_DC = ["DC AGB-MT", "DC CGR-MS", "DC GYN-GO", "DC JUI-MT", "DC PVH-RO", "DC RBR-AC", "DF BSB", "GYN -GO",
+                  "MT CGB"]
+
+BASES_FLUXO_INVERSO = ["VLP -GO", "VHL-RO", "VGR-MT", "VGR 02-MT", "URC -GO", "TRD -GO", "TLL -MS", "TGT -DF",
+                       "TGA -MT", "TAR -AC", "SRS -MT", "SNP -MT", "SMD -AC", "SMB -GO", "SMA -GO", "SJA -GO",
+                       "SGO -MS", "SEN-GO", "SBN -DF", "SAMS -DF", "SAD -GO", "RVD -GO", "ROO -MT", "RFI -DF",
+                       "RDM -RO", "RBR -AC", "RBR 02-AC", "QUI -GO", "QRN -MT", "PVL -MT", "PVH -RO", "PVH 02-RO",
+                       "PTD -MT", "PRG -GO", "PRB -MS", "POS -GO", "PON -GO", "PNT-MS", "PLN -GO", "PLDF -DF",
+                       "PA GYN-GO", "OCD-GO", "NVT -MT", "NVR -MS", "NDI -MS", "MT CGB", "MDT -MT", "LUZ -GO",
+                       "LRV -MT", "JUI -MT", "JTI -GO", "JRD -MS", "JPN -RO", "ITR -GO", "IPR -GO", "GYN -GO",
+                       "GYN 07-GO", "GYN 06-GO", "GYN 05-GO", "GYN 04-GO", "GYN 03-GO", "GYN 02-GO", "GUA -DF", "GP",
+                       "GNT -MT", "GNA -GO", "GAM -DF", "FMA -GO", "FAI -GO", "F TRD-GO", "F RVD - GO", "F OCD - GO",
+                       "F GYN - GO", "F FMA-GO", "F CGR - MS", "F BSB-DF", "F BSB - DF", "F APG - GO", "F AGL-GO",
+                       "EMA -DF", "DOU -MS", "CZS -AC", "CXM -MS", "CTN -GO", "CTL -GO", "CRB -MS", "CNF -MT", "CMP-MT",
+                       "CHS -MS", "CGR -MS", "CGR 05-MS", "CGR 04-MS", "CGR 03-MS", "CGR 02-MS", "CGB 05-MT",
+                       "CGB 04-MT", "CGB 03-MT", "CGB 02-MT", "CEIS -DF", "CEIN -DF", "CCR -MT", "CAPI -GO", "CAN -GO",
+                       "BSB -DF", "BGA -MT", "ATF -MT", "ARQ -RO", "ARI -MT", "AQD -MS", "APG -GO", "ANP -GO",
+                       "AMB -MS", "AGL -GO", "AGB -MT"]
+
+DESTINOS_FLUXO_INVERSO = ["MAO -AM", "DC AGB-MT", "DC CGR-MS", "DC GYN-GO", "DC JUI-MT", "DC MAO-AM", "DC MRB-PA",
+                          "DC PMW-TO", "DC PVH-RO", "DC RBR-AC", "DC STM-PA", "DF BSB"]
+
+BASES_CD = BASES_FLUXO_INVERSO
+
+# --- Logging ---
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("../sla_processor.log", encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-os.environ["POLARS_MAX_THREADS"] = str(multiprocessing.cpu_count())
-
-# ============================================================
-# Caminhos
-# ============================================================
-PASTA_ENTRADA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\SLA - Entrega Realizada"
-PASTA_COORDENADOR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
-PASTA_SAIDA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\SLA - Entrega Realizada"
-
-# Arquivo morto (para relatórios e bases antigas)
-PASTA_ARQUIVO = os.path.join(PASTA_SAIDA, "Arquivo Morto")
-
-# pasta específica para base consolidada (original + alterações)
-PASTA_BASE_CONSOLIDADA = os.path.join(PASTA_SAIDA, "Base Consolidada")
-
-# pasta para imagens por coordenador
-PASTA_IMAGENS = os.path.join(PASTA_SAIDA, "Imagens_Coordenadores_SLA")
-
-DATA_HOJE = datetime.now().strftime("%Y%m%d")
-
-# Resumo principal (Seg–Sáb)
-ARQUIVO_SAIDA = os.path.join(PASTA_SAIDA, f"Resumo_Consolidado_{DATA_HOJE}.xlsx")
-
-# Resumo Domingo (se existir)
-ARQUIVO_SAIDA_DOMINGO = os.path.join(PASTA_SAIDA, f"Resumo_Consolidado_Domingo_{DATA_HOJE}.xlsx")
-
-# Limite de linhas do Excel
-EXCEL_MAX_ROWS = 1_048_576
-
-LINK_PASTA = (
-    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/"
-    "IgCkMQtn4udmRZAFJTit7pkaAVAudAyWYHic-zXIKMlQz1Q?e=d3eOd5"
-)
-
-# ============================================================
-# 🏷️ NOME DO INDICADOR (VAI APARECER NA IMAGEM E NO CARD)
-# ============================================================
-INDICADOR_NOME = "SLA Entrega Realizada — %SLA por Base (pior → melhor)"
-
-# ✅ COLE AQUI SEUS WEBHOOKS
-COORDENADOR_WEBHOOKS = {
-    "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/3663dd30-722c-45d6-9e3c-1d4e2838f112",
-    "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/0b907801-c73e-4de8-9f84-682d7b54f6fd",
-    "Anderson Matheus": "https://open.feishu.cn/open-apis/bot/v2/hook/261cefd4-5528-4760-b18e-49a0249718c7",
-    "Marcelo Medina": "https://open.feishu.cn/open-apis/bot/v2/hook/b749fd36-d287-460e-b1e2-c78bfb4c1946",
-    "Odária Fereira": "https://open.feishu.cn/open-apis/bot/v2/hook/48c4db73-b5a4-4007-96af-f5d28301f0c1",
-    "Rodrigo Castro": "https://open.feishu.cn/open-apis/bot/v2/hook/606ed22b-dc49-451d-9bfe-0a8829dbe76e",
-    "Orlean Nascimento": "https://open.feishu.cn/open-apis/bot/v2/hook/840f79b0-1eff-42fe-aae0-433c9edbad80",
-    "Fabio Souza": "https://open.feishu.cn/open-apis/bot/v2/hook/ca2c260c-f69c-472d-9757-279db52a79b8",
-    "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/63751a67-efe8-40e4-b841-b290a4819836",
-    "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/3ddc5962-2d32-4b2d-92d9-a4bc95ac3393",
-    "Ana Cunha": "https://open.feishu.cn/open-apis/bot/v2/hook/b2ec868f-3149-4808-af53-9e0c6d2cd94e",
-    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/a53ad30e-17dd-4330-93db-15138b20d8f2",
-}
-
-EXTS = (".xlsx", ".xls", ".csv")
-COL_DATA_BASE = "DATA PREVISTA DE ENTREGA"
-
-# ============================================================
-# ✅ Controle de feriados nacionais
-# ============================================================
-PULAR_FERIADOS_NACIONAIS = True
-PULAR_FERIADOS_EM_FDS = False
-_CACHE_FERIADOS: Dict[int, Set[date]] = {}
-
-# ============================================================
-# ✅ FEISHU (UPLOAD DE IMAGEM)
-# ============================================================
-FEISHU_BASE_DOMAIN = "https://open.feishu.cn"
-FEISHU_APP_ID = os.getenv("FEISHU_APP_ID", "cli_a906d2d682f8dbd8").strip()
-FEISHU_APP_SECRET = os.getenv("FEISHU_APP_SECRET", "Fzh1cr6K55a3oQUBV9wCZd6AWiZH5ONw").strip()
-
-# quantas linhas por página na imagem
-IMG_ROWS_PER_PAGE = int(os.getenv("IMG_ROWS_PER_PAGE", "22"))
-
-# cache token
-_TOKEN_CACHE = {"token": None, "exp": 0}
-
-# ============================================================
-# 🎨 PALETA J&T (RGB)
-# ============================================================
-JT_RED_MAIN = (227, 6, 19)      # #E30613
-JT_RED_SOFT = (196, 39, 46)     # #C4272E
-JT_BG_GRAY  = (242, 242, 242)   # #F2F2F2
-JT_TEXT     = (51, 51, 51)      # #333333
-JT_WHITE    = (255, 255, 255)   # #FFFFFF
-
-JT_STROKE   = (220, 220, 220)
-JT_MUTED    = (110, 110, 110)
-JT_ROW_ALT  = (248, 248, 248)
-
-# ============================================================
-# HTTP (retry simples)
-# ============================================================
-def _post_with_retry(url: str, json_payload: dict, timeout: int = 25, tries: int = 7) -> requests.Response:
-    last = None
-    for i in range(1, tries + 1):
-        try:
-            return requests.post(url, json=json_payload, timeout=timeout)
-        except Exception as e:
-            last = e
-            time.sleep(0.7 * i)
-    raise RuntimeError(f"Falha POST {url} após {tries} tentativas. Último erro: {last}")
-
-
-def _post_multipart_with_retry(url: str, data: dict, files: dict, headers: dict, timeout: int = 90, tries: int = 7) -> requests.Response:
-    last = None
-    for i in range(1, tries + 1):
-        try:
-            return requests.post(url, data=data, files=files, headers=headers, timeout=timeout)
-        except Exception as e:
-            last = e
-            time.sleep(0.7 * i)
-    raise RuntimeError(f"Falha UPLOAD {url} após {tries} tentativas. Último erro: {last}")
-# =========================
-# BLOCO 2/4 — FUNÇÕES (FERIADOS / PERÍODO / LEITURA / EXPORT / RESUMO)
-# =========================
-
-def normalizar(s) -> str:
-    if s is None:
-        return ""
-    s = str(s).upper().strip()
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(c for c in s if not unicodedata.combining(c))
-    while "  " in s:
-        s = s.replace("  ", " ")
-    return s
-
-
-def pascoa_gregoriana(ano: int) -> date:
-    a = ano % 19
-    b = ano // 100
-    c = ano % 100
-    d = b // 4
-    e = b % 4
-    f = (b + 8) // 25
-    g = (b - f + 1) // 3
-    h = (19 * a + b - d - g + 15) % 30
-    i = c // 4
-    k = c % 4
-    l = (32 + 2 * e + 2 * i - h - k) % 7
-    m = (a + 11 * h + 22 * l) // 451
-    mes = (h + l - 7 * m + 114) // 31
-    dia = ((h + l - 7 * m + 114) % 31) + 1
-    return date(ano, mes, dia)
-
-
-def feriados_nacionais_br(ano: int) -> Set[date]:
-    fer = {
-        date(ano, 1, 1),
-        date(ano, 4, 21),
-        date(ano, 5, 1),
-        date(ano, 9, 7),
-        date(ano, 10, 12),
-        date(ano, 11, 2),
-        date(ano, 11, 15),
-        date(ano, 11, 20),
-        date(ano, 12, 25),
-    }
-    pascoa = pascoa_gregoriana(ano)
-    fer.add(pascoa - timedelta(days=2))  # Sexta-feira Santa
-    return fer
-
-
-def is_feriado_nacional(d: date) -> bool:
-    if not PULAR_FERIADOS_NACIONAIS:
-        return False
-    if (not PULAR_FERIADOS_EM_FDS) and (d.weekday() in (5, 6)):
-        return False
-    ano = d.year
-    if ano not in _CACHE_FERIADOS:
-        _CACHE_FERIADOS[ano] = feriados_nacionais_br(ano)
-    return d in _CACHE_FERIADOS[ano]
-
-
-def formatar_periodo(inicio: date, fim: date) -> str:
-    if inicio == fim:
-        return inicio.strftime("%d/%m/%Y")
-    return f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}"
-
-
-def formatar_lista_dias(datas: List[date]) -> str:
-    if not datas:
-        return "-"
-    dias_pt = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
-    return ", ".join([f"{dias_pt[d.weekday()]} {d.strftime('%d/%m')}" for d in datas])
-
-
-def periodo_txt_de_datas(datas: List[date]) -> str:
-    if not datas:
-        return "-"
-    return formatar_periodo(min(datas), max(datas))
-
-
-def separar_seg_sab_e_domingo(datas: List[date]) -> Tuple[List[date], List[date]]:
-    datas_dom = [d for d in datas if d.weekday() == 6]
-    datas_seg_sab = [d for d in datas if d.weekday() != 6]
-    return datas_seg_sab, datas_dom
-
-
-def calcular_periodo_base() -> Optional[Tuple[date, date, List[date]]]:
-    hoje = datetime.now().date()
-    dia = hoje.weekday()  # 0=Seg ... 6=Dom
-
-    if dia in (5, 6):
-        logging.warning("⛔ Hoje é sábado ou domingo. Execução cancelada.")
-        return None
-
-    span = 3 if dia == 0 else 1
-    fim = hoje - timedelta(days=1)
-
-    tentativas = 0
-    while True:
-        inicio = fim - timedelta(days=span - 1)
-        datas = [inicio + timedelta(days=i) for i in range((fim - inicio).days + 1)]
-
-        if PULAR_FERIADOS_NACIONAIS:
-            feriados_removidos = [d for d in datas if is_feriado_nacional(d)]
-            datas_ok = [d for d in datas if not is_feriado_nacional(d)]
-            if feriados_removidos:
-                logging.info(
-                    "🗓️ Feriados nacionais ignorados: "
-                    + ", ".join([d.strftime("%Y-%m-%d") for d in feriados_removidos])
-                )
+# ==============================================================================
+# --- AVISO DE TÉRMINO (LOG + PRINT + NOTIFICAÇÃO + BEEP) ---
+# ==============================================================================
+def avisar_termino(titulo: str, mensagem: str, sucesso: bool = True) -> None:
+    """
+    Aviso no fim do processo:
+    - log + print
+    - notificação do Windows (se plyer/win10toast estiver instalado)
+    - beep (winsound) quando possível
+    """
+    try:
+        # 1) Log + Print
+        if sucesso:
+            logging.info(f"✅ {titulo} - {mensagem}")
         else:
-            datas_ok = datas
+            logging.error(f"❌ {titulo} - {mensagem}")
+        print(f"\n{titulo}\n{mensagem}\n")
 
-        if datas_ok:
-            return min(datas_ok), max(datas_ok), datas_ok
-
-        tentativas += 1
-        if tentativas >= 15:
-            logging.warning("⚠️ Não foi possível encontrar datas válidas após recuar 15 dias. Cancelando.")
-            return None
-
-        logging.warning(f"⚠️ Período ({formatar_periodo(inicio, fim)}) vazio após remover feriados. Recuando 1 dia...")
-        fim = fim - timedelta(days=1)
-
-
-def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo: str) -> None:
-    os.makedirs(pasta_destino, exist_ok=True)
-    if not os.path.isdir(pasta_origem):
-        return
-    for arquivo in os.listdir(pasta_origem):
-        if arquivo.startswith(prefixo) and arquivo.endswith(".xlsx"):
-            try:
-                shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo))
-                logging.info(f"📦 Arquivo antigo movido: {arquivo}")
-            except Exception as e:
-                logging.error(f"Erro ao mover {arquivo}: {e}")
-
-
-def arquivar_bases_antigas(pasta_origem: str, pasta_destino: str, prefixo: str) -> None:
-    os.makedirs(pasta_destino, exist_ok=True)
-    if not os.path.isdir(pasta_origem):
-        return
-
-    for arquivo in os.listdir(pasta_origem):
-        if not arquivo.startswith(prefixo):
-            continue
-        if not arquivo.lower().endswith((".xlsx", ".csv", ".parquet")):
-            continue
+        # 2) Notificação (opcional) via plyer
         try:
-            shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo))
-            logging.info(f"📦 Base antiga movida: {arquivo}")
-        except Exception as e:
-            logging.error(f"Erro ao mover {arquivo}: {e}")
+            from plyer import notification  # pip install plyer
+            notification.notify(
+                title=titulo,
+                message=mensagem,
+                app_name="Relatórios J&T",
+                timeout=10
+            )
+        except Exception:
+            pass
 
+        # 3) Notificação (opcional) via win10toast
+        try:
+            from win10toast import ToastNotifier  # pip install win10toast
+            toaster = ToastNotifier()
+            toaster.show_toast(titulo, mensagem, duration=10, threaded=True)
+        except Exception:
+            pass
 
-def ler_planilha_rapido(caminho: str) -> pl.DataFrame:
-    try:
-        if caminho.lower().endswith(".csv"):
-            return pl.read_csv(caminho, ignore_errors=True)
-        return pl.read_excel(caminho)
-    except Exception as e:
-        logging.error(f"Falha ao ler {os.path.basename(caminho)}: {e}")
-        return pl.DataFrame()
+        # 4) Beep do Windows (quando disponível)
+        try:
+            import winsound
+            # Sons diferentes para sucesso/erro
+            winsound.MessageBeep(winsound.MB_ICONASTERISK if sucesso else winsound.MB_ICONHAND)
+        except Exception:
+            # fallback: bell no terminal
+            try:
+                print("\a", end="")
+            except Exception:
+                pass
 
-
-def consolidar_planilhas(pasta_entrada: str) -> pl.DataFrame:
-    arquivos = [
-        os.path.join(pasta_entrada, f)
-        for f in os.listdir(pasta_entrada)
-        if f.lower().endswith(EXTS) and not f.startswith("~$")
-    ]
-    if not arquivos:
-        raise FileNotFoundError("Nenhum arquivo válido encontrado.")
-
-    with ThreadPoolExecutor(max_workers=min(16, len(arquivos))) as ex:
-        dfs = list(ex.map(ler_planilha_rapido, arquivos))
-
-    validos = [df for df in dfs if not df.is_empty()]
-    if not validos:
-        raise ValueError("Falha ao ler todos os arquivos.")
-    return pl.concat(validos, how="vertical_relaxed")
-
-
-def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
-    if coluna not in df.columns:
-        raise KeyError(f"Coluna '{coluna}' não encontrada.")
-
-    tipo = df[coluna].dtype
-    if tipo == pl.Date:
-        return df
-    if tipo == pl.Datetime:
-        return df.with_columns(pl.col(coluna).dt.date().alias(coluna))
-
-    if tipo == pl.Utf8:
-        s = pl.col(coluna).cast(pl.Utf8).str.strip_chars().str.replace_all(r"\s+", " ")
-        formatos = [
-            "%d/%m/%Y %H:%M:%S",
-            "%d/%m/%Y %H:%M",
-            "%d/%m/%Y",
-            "%Y-%m-%d",
-            "%Y/%m/%d",
-            "%d-%m-%Y",
-            "%Y-%m-%d %H:%M:%S",
-            "%Y/%m/%d %H:%M:%S",
-        ]
-        expr = None
-        for f in formatos:
-            tentativa = s.str.strptime(pl.Datetime, f, strict=False)
-            expr = tentativa if expr is None else expr.fill_null(tentativa)
-        return df.with_columns(expr.dt.date().alias(coluna))
-
-    raise TypeError(f"Tipo inválido para coluna '{coluna}': {tipo}")
-
-
-def ajustar_periodo_por_dados(
-    df: pl.DataFrame, coluna_data: str, inicio: date, fim: date, datas: List[date]
-) -> Tuple[date, date, List[date]]:
-    if df.is_empty() or coluna_data not in df.columns:
-        return inicio, fim, datas
-
-    try:
-        qtd = df.filter(pl.col(coluna_data).is_in(datas)).height
-        if qtd > 0:
-            return inicio, fim, datas
     except Exception:
+        # não deixa o processo falhar por causa do aviso
         pass
 
-    max_le = None
+
+def encontrar_arquivo_principal(pasta: str, inicio_nome: str) -> Optional[str]:
     try:
-        max_le = (
-            df.filter(pl.col(coluna_data).is_not_null() & (pl.col(coluna_data) <= fim))
-            .select(pl.col(coluna_data).max())
-            .item()
-        )
-    except Exception:
-        max_le = None
+        for nome_arquivo in os.listdir(pasta):
+            if nome_arquivo.startswith(inicio_nome) and nome_arquivo.endswith(('.xlsx', '.xls')):
+                logging.info(f"Arquivo principal encontrado: {nome_arquivo}")
+                return os.path.join(pasta, nome_arquivo)
+    except FileNotFoundError:
+        logging.error(f"A pasta de leitura '{pasta}' não foi encontrada.")
+        return None
 
-    if max_le is None:
-        try:
-            max_le = df.filter(pl.col(coluna_data).is_not_null()).select(pl.col(coluna_data).max()).item()
-        except Exception:
-            max_le = None
-
-    if max_le is None:
-        return inicio, fim, datas
-
-    if isinstance(max_le, datetime):
-        max_le = max_le.date()
-
-    span = (fim - inicio).days
-    novo_fim = max_le
-    novo_inicio = novo_fim - timedelta(days=span)
-    if novo_inicio > novo_fim:
-        novo_inicio = novo_fim
-
-    novo_datas = [novo_inicio + timedelta(days=i) for i in range((novo_fim - novo_inicio).days + 1)]
-
-    logging.warning(
-        f"⚠️ Nenhum registro para o período calculado ({formatar_periodo(inicio, fim)}). "
-        f"Fallback para última data disponível: {formatar_periodo(novo_inicio, novo_fim)}."
-    )
-    return novo_inicio, novo_fim, novo_datas
+    logging.warning(f"Nenhum arquivo começando com '{inicio_nome}' foi encontrado em '{pasta}'.")
+    return None
 
 
-def exportar_base_consolidada(df_periodo: pl.DataFrame, tag: str = "") -> Dict[str, str]:
-    os.makedirs(PASTA_BASE_CONSOLIDADA, exist_ok=True)
+def carregar_planilhas_de_pasta(caminho_pasta: str, descricao_tqdm: str) -> pd.DataFrame:
+    lista_dfs = []
+    nome_pasta = os.path.basename(caminho_pasta)
+    logging.info(f"Lendo planilhas da pasta: {nome_pasta}")
 
-    if tag == "_Domingo":
-        prefixo = "Base_Consolidada_Domingo_"
-        nome_base = f"Base_Consolidada_Domingo_{DATA_HOJE}"
-    else:
-        prefixo = "Base_Consolidada_"
-        nome_base = f"Base_Consolidada_{DATA_HOJE}"
-
-    arq_parquet = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.parquet")
-    arq_csv = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.csv")
-    arq_xlsx = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.xlsx")
-
-    arquivar_bases_antigas(PASTA_BASE_CONSOLIDADA, PASTA_ARQUIVO, prefixo)
-
-    df_periodo.write_parquet(arq_parquet)
-    logging.info(f"✅ Base consolidada (PARQUET) salva em: {arq_parquet}")
-
-    df_periodo.write_csv(arq_csv)
-    logging.info(f"✅ Base consolidada (CSV) salva em: {arq_csv}")
-
-    if df_periodo.height <= (EXCEL_MAX_ROWS - 1):
-        df_pd = df_periodo.to_pandas()
-        with pd.ExcelWriter(arq_xlsx, engine="openpyxl") as w:
-            df_pd.to_excel(w, index=False, sheet_name="Base Consolidada")
-        logging.info(f"✅ Base consolidada (XLSX) salva em: {arq_xlsx}")
-    else:
-        logging.warning("⚠️ XLSX não gerado (limite do Excel). Use PARQUET/CSV.")
-
-    return {"parquet": arq_parquet, "csv": arq_csv, "xlsx": arq_xlsx}
-
-
-def exportar_resumo_excel(resumo_pd: pd.DataFrame, arquivo_saida: str, prefixo: str) -> None:
-    os.makedirs(PASTA_SAIDA, exist_ok=True)
-    arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, prefixo)
-    with pd.ExcelWriter(arquivo_saida, engine="openpyxl") as w:
-        resumo_pd.to_excel(w, index=False, sheet_name="Resumo SLA")
-    logging.info(f"✅ Resumo Excel salvo em: {arquivo_saida}")
-
-
-def montar_arquivos_gerados_md(arquivo_resumo: str, paths_base: Dict[str, str]) -> str:
-    base_xlsx_txt = (
-        f"- Base (XLSX): `{os.path.basename(paths_base['xlsx'])}`\n"
-        if os.path.exists(paths_base["xlsx"])
-        else "- Base (XLSX): *(não gerado — limite do Excel)*\n"
-    )
-    return (
-        "📄 **Arquivos gerados:**\n"
-        f"- Resumo: `{os.path.basename(arquivo_resumo)}`\n"
-        f"- Base (PARQUET): `{os.path.basename(paths_base['parquet'])}`\n"
-        f"- Base (CSV): `{os.path.basename(paths_base['csv'])}`\n"
-        + base_xlsx_txt
-    )
-
-
-def gerar_resumo_por_base(df_periodo: pl.DataFrame) -> pd.DataFrame:
-    if df_periodo.is_empty():
-        return pd.DataFrame(
-            columns=["Base De Entrega", "COORDENADOR", "Total", "Entregues no Prazo", "Fora do Prazo", "% SLA Cumprido"]
-        )
-
-    resumo = (
-        df_periodo.group_by(["BASE DE ENTREGA", "COORDENADOR"])
-        .agg(
-            [
-                pl.len().alias("Total"),
-                pl.col("_ENTREGUE_PRAZO").sum().alias("Entregues no Prazo"),
-                (pl.len() - pl.col("_ENTREGUE_PRAZO").sum()).alias("Fora do Prazo"),
-                (pl.col("_ENTREGUE_PRAZO").sum() / pl.len()).alias("% SLA Cumprido"),
-            ]
-        )
-        .sort("% SLA Cumprido", descending=True)
-    )
-    return resumo.to_pandas().rename(columns={"BASE DE ENTREGA": "Base De Entrega"})
-# =========================
-# BLOCO 3/4 — FEISHU + IMAGEM (PIL) + CARD
-# =========================
-
-def _feishu_enabled() -> bool:
-    return bool(FEISHU_APP_ID and FEISHU_APP_SECRET)
-
-
-def feishu_get_token() -> str:
-    if not _feishu_enabled():
-        raise RuntimeError("Defina FEISHU_APP_ID e FEISHU_APP_SECRET (env) para enviar imagens.")
-
-    now = int(time.time())
-    if _TOKEN_CACHE["token"] and now < int(_TOKEN_CACHE["exp"]):
-        return _TOKEN_CACHE["token"]
-
-    url = f"{FEISHU_BASE_DOMAIN}/open-apis/auth/v3/tenant_access_token/internal"
-    payload = {"app_id": FEISHU_APP_ID, "app_secret": FEISHU_APP_SECRET}
-    r = _post_with_retry(url, payload, timeout=25)
-    data = r.json() if r.content else {}
-
-    if data.get("code") != 0:
-        raise RuntimeError(f"Token Feishu falhou: {data}")
-
-    token = data.get("tenant_access_token")
-    exp = int(data.get("expire", 0))
-    if not token:
-        raise RuntimeError(f"Resposta sem tenant_access_token: {data}")
-
-    _TOKEN_CACHE["token"] = token
-    _TOKEN_CACHE["exp"] = now + max(0, exp - 60)
-    return token
-
-
-def feishu_upload_image_get_key(image_path: str) -> str:
-    token = feishu_get_token()
-    url = f"{FEISHU_BASE_DOMAIN}/open-apis/im/v1/images"
-    headers = {"Authorization": f"Bearer {token}"}
-
-    with open(image_path, "rb") as f:
-        r = _post_multipart_with_retry(
-            url,
-            data={"image_type": "message"},
-            files={"image": (os.path.basename(image_path), f)},
-            headers=headers,
-            timeout=90,
-        )
-
-    data = r.json() if r.content else {}
-    if data.get("code") != 0:
-        if data.get("code") == 234007:
-            raise RuntimeError(
-                "Upload falhou (234007): seu APP não está com BOT habilitado.\n"
-                "Feishu Dev Console: Add Features > Bot (Add) e publique a versão (Test).\n"
-                "Permissão típica: im:resource (upload image)."
-            )
-        raise RuntimeError(f"Upload imagem falhou: {data}")
-
-    image_key = (data.get("data") or {}).get("image_key")
-    if not image_key:
-        raise RuntimeError(f"Upload OK mas sem image_key: {data}")
-    return image_key
-
-
-def _chunk(items: List[Any], n: int) -> List[List[Any]]:
-    return [items[i:i + n] for i in range(0, len(items), n)]
-
-
-def gerar_imagens_sla_tabela(
-    coord: str,
-    indicador_nome: str,
-    titulo_suffix: str,
-    periodo_txt: str,
-    dias_txt: str,
-    sub: pd.DataFrame,
-    sla_total: float,
-    out_dir: str,
-    rows_per_page: int = 22,
-    file_suffix: str = "",  # ✅ NOVO: evita sobrescrever (ex: "_Domingo")
-) -> List[str]:
-    """
-    Imagem: tabela com TODAS as bases do coordenador (sem gráfico/barra).
-    Tema J&T (vermelho/cinza claro/texto escuro).
-    """
     try:
-        from PIL import Image, ImageDraw, ImageFont
-    except Exception:
-        raise RuntimeError("Falta Pillow. Instale: pip install pillow")
+        arquivos = [f for f in os.listdir(caminho_pasta) if f.endswith(('.xlsx', '.xls'))]
+        if not arquivos:
+            logging.warning(f"Nenhum arquivo Excel encontrado na pasta '{nome_pasta}'.")
+            return pd.DataFrame()
 
-    os.makedirs(out_dir, exist_ok=True)
-
-    sub2 = sub.copy()
-    sub2 = sub2.sort_values("% SLA Cumprido", ascending=True)  # pior -> melhor
-
-    rows = []
-    for _, r in sub2.iterrows():
-        base = str(r.get("Base De Entrega", "")).strip()
-        tot = int(float(r.get("Total", 0) or 0))
-        ent = int(float(r.get("Entregues no Prazo", 0) or 0))
-        fora = int(float(r.get("Fora do Prazo", 0) or 0))
-        sla = float(r.get("% SLA Cumprido", 0) or 0)
-        rows.append((base, tot, ent, fora, sla))
-
-    pages = _chunk(rows, rows_per_page)
-    if not pages:
-        return []
-
-    def load_font(size: int, bold: bool = False):
-        candidates = [
-            ("segoeuib.ttf" if bold else "segoeui.ttf"),
-            ("arialbd.ttf" if bold else "arial.ttf"),
-            ("calibrib.ttf" if bold else "calibri.ttf"),
-        ]
-        for name in candidates:
+        for arquivo in tqdm(arquivos, desc=descricao_tqdm):
+            caminho_completo = os.path.join(caminho_pasta, arquivo)
             try:
-                return ImageFont.truetype(name, size)
-            except Exception:
+                abas = pd.read_excel(caminho_completo, sheet_name=None)
+                lista_dfs.extend(abas.values())
+            except Exception as e:
+                logging.error(f"Falha ao ler o arquivo '{arquivo}' da pasta '{nome_pasta}': {e}")
                 continue
-        return ImageFont.load_default()
 
-    def rr(draw: ImageDraw.ImageDraw, xy, r, fill, outline=None, width=1):
-        try:
-            draw.rounded_rectangle(xy, radius=r, fill=fill, outline=outline, width=width)
-        except Exception:
-            draw.rectangle(xy, fill=fill, outline=outline, width=width)
+        if not lista_dfs:
+            return pd.DataFrame()
 
-    # ===== NOVO: medição + auto-fit + ellipsis + wrap (evita cortar título/linhas) =====
-    def _measure(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> Tuple[int, int]:
-        text = text or ""
-        try:
-            b = draw.textbbox((0, 0), text, font=font)
-            return int(b[2] - b[0]), int(b[3] - b[1])
-        except Exception:
-            try:
-                w, h = draw.textsize(text, font=font)  # type: ignore[attr-defined]
-                return int(w), int(h)
-            except Exception:
-                return int(len(text) * 8), 18
+        df_consolidado = pd.concat(lista_dfs, ignore_index=True)
+        logging.info(f"Total de {len(df_consolidado)} registros consolidados de '{nome_pasta}'.")
+        return df_consolidado
 
-    def _ellipsize(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w: int) -> str:
-        text = text or ""
-        w, _ = _measure(draw, text, font)
-        if w <= max_w:
-            return text
-        ell = "…"
-        lo, hi = 0, len(text)
-        best = ell
-        while lo <= hi:
-            mid = (lo + hi) // 2
-            cand = (text[:mid].rstrip() + ell)
-            if _measure(draw, cand, font)[0] <= max_w:
-                best = cand
-                lo = mid + 1
-            else:
-                hi = mid - 1
-        return best
+    except FileNotFoundError:
+        logging.error(f"A pasta '{caminho_pasta}' não foi encontrada. Processo interrompido.")
+        raise
+    except Exception as e:
+        logging.error(f"Ocorreu um erro inesperado ao ler os arquivos da pasta '{nome_pasta}': {e}")
+        raise
 
-    def _fit_font(draw: ImageDraw.ImageDraw, text: str, start_size: int, min_size: int, bold: bool, max_w: int):
-        size = start_size
-        while size >= min_size:
-            f = load_font(size, bold=bold)
-            if _measure(draw, text, f)[0] <= max_w:
-                return f
-            size -= 1
-        return load_font(min_size, bold=bold)
 
-    def _wrap_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w: int, max_lines: int = 2) -> List[str]:
-        text = (text or "").strip()
-        if not text:
-            return [""]
+def aplicar_regras_transito(df: pd.DataFrame) -> pd.DataFrame:
+    logging.info("Aplicando regras de trânsito...")
 
-        words = text.split()
-        lines: List[str] = []
-        cur = ""
+    if COL_BASE_RECENTE not in df.columns:
+        logging.warning(f"Coluna '{COL_BASE_RECENTE}' não encontrada. As regras de trânsito não serão aplicadas.")
+        df[COL_TRANSITO] = "COLUNA DE BASE RECENTE NÃO ENCONTRADA"
+        return df
 
-        for w in words:
-            cand = (cur + " " + w).strip() if cur else w
-            if _measure(draw, cand, font)[0] <= max_w:
-                cur = cand
-            else:
-                if cur:
-                    lines.append(cur)
-                cur = w
-                if len(lines) >= max_lines - 1:
-                    break
+    cond_em_transito = df[COL_ULTIMA_OPERACAO] == "发件扫描/Bipe de expedição"
+    is_fluxo_inverso = df[COL_BASE_RECENTE].isin(BASES_FLUXO_INVERSO) & df[COL_REGIONAL].isin(DESTINOS_FLUXO_INVERSO)
+    origem_sc_bre = df[COL_BASE_RECENTE] == 'SC BRE'
+    destino_pvh = df[COL_REGIONAL].astype(str).str.contains('PVH-RO', na=False, case=False)
 
-        if cur:
-            lines.append(cur)
+    prazo_fluxo_inverso_estourado = df[COL_DIAS_PARADO] >= 3
+    prazo_5_dias_estourado = df[COL_DIAS_PARADO] >= 5
+    prazo_3_dias_estourado = df[COL_DIAS_PARADO] >= 3
 
-        if len(lines) > max_lines:
-            lines = lines[:max_lines]
+    conditions = [
+        cond_em_transito & is_fluxo_inverso & prazo_fluxo_inverso_estourado,
+        cond_em_transito & is_fluxo_inverso & ~prazo_fluxo_inverso_estourado,
+        cond_em_transito & origem_sc_bre & prazo_5_dias_estourado,
+        cond_em_transito & origem_sc_bre & ~prazo_5_dias_estourado,
+        cond_em_transito & ~origem_sc_bre & destino_pvh & prazo_5_dias_estourado,
+        cond_em_transito & ~origem_sc_bre & destino_pvh & ~prazo_5_dias_estourado,
+        cond_em_transito & ~origem_sc_bre & ~destino_pvh & prazo_3_dias_estourado,
+        cond_em_transito & ~origem_sc_bre & ~destino_pvh & ~prazo_3_dias_estourado,
+    ]
+    choices = [
+        "VERIFICAR COM TRANSPORTE: VEÍCULO NÃO CHEGOU (FLUXO INVERSO)",
+        "EM TRÂNSITO (FLUXO INVERSO)",
+        "FALTA BIPE DE RECEBIMENTO (EXPEDIDO E NÃO CHEGOU)",
+        "EM TRÂNSITO PARA A BASE",
+        "FALTA BIPE DE RECEBIMENTO (EXPEDIDO E NÃO CHEGOU)",
+        "EM TRÂNSITO PARA A BASE",
+        "FALTA BIPE DE RECEBIMENTO (EXPEDIDO E NÃO CHEGOU)",
+        "EM TRÂNSITO PARA A BASE",
+    ]
 
-        if lines:
-            lines[-1] = _ellipsize(draw, lines[-1], font, max_w)
+    df[COL_TRANSITO] = np.select(conditions, choices, default='')
+    logging.info("Regras de trânsito aplicadas com sucesso.")
+    return df
 
-        return lines
 
-    # ===== Tema J&T =====
-    BG = JT_BG_GRAY
-    CARD = JT_WHITE
-    STROKE = JT_STROKE
-    TXT = JT_TEXT
-    MUTED = JT_MUTED
-    ROW1 = JT_WHITE
-    ROW2 = JT_ROW_ALT
+def aplicar_regras_status(df: pd.DataFrame) -> pd.DataFrame:
+    logging.info("Aplicando regras de status...")
 
-    W = 1800
-    pad = 34
+    is_problematico = df[COL_ULTIMA_OPERACAO] == "问题件扫描/Bipe de pacote problemático"
+    is_envio_errado_cd = df[COL_BASE_RECENTE].isin(BASES_CD) & df[COL_REGIONAL].isin(BASES_CD)
 
-    header_h = 205
-    row_h = 52
-    gap = 18
+    regras: List[Dict[str, Any]] = []
 
-    f_head = load_font(19, bold=True)
-    f_row = load_font(19, bold=False)
+    # 1) PROBLEMÁTICOS — Extravio
+    regras += [
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO] == "Extravio.interno.内部遗失"),
+         "status": "PEDIDO EXTRAVIADO"},
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO] == "Encomenda.expedido.mas.não.chegou.有发未到件") &
+                     (df[COL_DIAS_PARADO] >= 3),
+         "status": "ALERTA DE EXTRAVIO: ABRIR CHAMADO INTERNO (HÁ MAIS DE 3 DIAS)"},
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO] == "Encomenda.expedido.mas.não.chegou.有发未到件"),
+         "status": "ATENÇÃO: RISCO DE EXTRAVIO (AGUARDANDO CHEGADA)"},
+    ]
 
-    out_paths: List[str] = []
-    total_pages = len(pages)
-    data_humana = datetime.now().strftime("%d/%m/%Y %H:%M")
+    # Retidos
+    regras += [
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO] == "retidos.留仓") & (df[COL_DIAS_PARADO] >= 3),
+         "status": "ATENÇÃO: PACOTE RETIDO NO PISO (HÁ MAIS DE 3 DIAS)"},
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO] == "retidos.留仓"),
+         "status": "ATENÇÃO: PACOTE RETIDO NO PISO"},
+    ]
 
-    indicador_nome = (indicador_nome or "").strip() or "SLA Entrega Realizada"
+    # Endereço
+    regras += [
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO].isin([
+            "Endereço.incorreto地址信息错误",
+            "Impossibilidade.de.chegar.no.endereço.informado客户地址无法进入",
+            "Endereço.incompleto地址信息不详",
+            "Impossibilidade.de.chegar.no.endereço.informado.de.coleta.客户地址无法进入C"
+        ])) & (df[COL_DIAS_PARADO] >= 8),
+         "status": "SOLICITAR DEVOLUÇÃO (ENDEREÇO/ACESSO INCORRETO, HÁ MAIS DE 8 DIAS)"},
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO].isin([
+            "Endereço.incorreto地址信息错误",
+            "Impossibilidade.de.chegar.no.endereço.informado客户地址无法进入",
+            "Endereço.incompleto地址信息不详",
+            "Impossibilidade.de.chegar.no.endereço.informado.de.coleta.客户地址无法进入C"
+        ])),
+         "status": "ATENÇÃO: AGUARDANDO DEVOLUÇÃO (ENDEREÇO/ACESSO INCORRETO)"},
+    ]
 
-    for page_idx, page_rows in enumerate(pages, start=1):
-        table_h = 130 + (len(page_rows) * row_h) + 40
-        H = pad * 2 + header_h + gap + table_h
+    # Tentativas / ausência
+    regras += [
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO] ==
+                                       "Ausência.de.destinatário.nas.várias.tentativas.de.entrega多次派送客户不在"),
+         "status": "VERIFICAR 3 TENTATIVAS DE ENTREGA. SE OK, SOLICITAR DEVOLUÇÃO. SENÃO, REALIZAR NOVA TENTATIVA."},
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO] == "Ausência.do.destinatário客户不在") &
+                     (df[COL_DIAS_PARADO] >= 2),
+         "status": "ATENÇÃO: DEVOLVER À BASE (AUSÊNCIA, HÁ MAIS DE 2 DIAS)"},
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO] == "Ausência.do.destinatário客户不在"),
+         "status": "ATENÇÃO: DEVOLUÇÃO À BASE PENDENTE (AUSÊNCIA)"},
+    ]
 
-        img = Image.new("RGB", (W, H), BG)
-        draw = ImageDraw.Draw(img)
+    # Recusa / mudança
+    regras += [
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO].isin([
+            "Recusa.de.recebimento.pelo.cliente.(destinatário)无理由拒收",
+            "O.destinatário.mudou.o.endereço.收件人搬家"
+        ])) & (df[COL_DIAS_PARADO] >= 2),
+         "status": "ATENÇÃO: DEVOLVER À BASE (RECUSA/MUDANÇA DE ENDEREÇO, HÁ MAIS DE 2 DIAS)"},
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO].isin([
+            "Recusa.de.recebimento.pelo.cliente.(destinatário)无理由拒收",
+            "O.destinatário.mudou.o.endereço.收件人搬家"
+        ])),
+         "status": "ATENÇÃO: DEVOLUÇÃO À BASE PENDENTE (RECUSA/MUDANÇA DE ENDEREÇO)"},
+    ]
 
-        rr(draw, (pad, pad, W - pad, H - pad), 26, CARD, outline=STROKE, width=2)
+    # Outros problemáticos
+    regras += [
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO].isin([
+            "Pacote.fora.do.padrão.三边尺寸超限",
+            "Embalagem.não.conforme.包装不规范"
+        ])),
+         "status": "SOLICITAR DEVOLUÇÃO IMEDIATA (FORA DO PADRÃO / EMBALAGEM NÃO CONFORME)"},
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO] == "Mercadorias.que.chegam.incompletos货未到齐") &
+                     (df[COL_DIAS_PARADO] >= 2),
+         "status": "ENVIAR PARA O FLUXO INVERSO (INCOMPLETO, HÁ MAIS DE 2 DIAS)"},
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO] == "Pacotes.retidos.por.anomalias.异常拦截件") &
+                     (df[COL_DIAS_PARADO] >= 3),
+         "status": "ENVIAR PARA A QUALIDADE (ANOMALIA, HÁ MAIS DE 3 DIAS)"},
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO] == "Pacotes.retidos.por.anomalias.异常拦截件"),
+         "status": "ATENÇÃO: ANOMALIA EM ANÁLISE"},
+        {"condicao": is_problematico & (df[COL_NOME_PROBLEMATICO] == "Devolução.退回件"),
+         "status": "ENVIAR PARA SC/DC (DEVOLUÇÃO APROVADA)"},
+    ]
 
-        # Header gradiente vermelho (soft -> main)
-        hx1, hy1 = pad + 18, pad + 18
-        hx2, hy2 = W - pad - 18, pad + header_h
+    # 2) OPERAÇÕES NORMAIS
+    regras += [
+        {"condicao": (df[COL_ULTIMA_OPERACAO] == "出仓扫描/Bipe de saída para entrega") &
+                     (df[COL_REGIONAL].isin(FRANQUIAS)) & (df[COL_DIAS_PARADO] >= 2),
+         "status": "ATRASO NA ENTREGA (FRANQUIA)"},
+        {"condicao": (df[COL_ULTIMA_OPERACAO] == "出仓扫描/Bipe de saída para entrega") &
+                     (df[COL_REGIONAL].isin(FRANQUIAS)),
+         "status": "EM ROTA DE ENTREGA (FRANQUIA)"},
+        {"condicao": (df[COL_ULTIMA_OPERACAO] == "出仓扫描/Bipe de saída para entrega") &
+                     (~df[COL_REGIONAL].isin(FRANQUIAS)) & (df[COL_DIAS_PARADO] >= 2),
+         "status": "ATENÇÃO: ATRASO NA ENTREGA (BASE PRÓPRIA)"},
+        {"condicao": (df[COL_ULTIMA_OPERACAO] == "出仓扫描/Bipe de saída para entrega"),
+         "status": "EM ROTA DE ENTREGA (BASE PRÓPRIA)"},
+    ]
 
-        for i in range(hy2 - hy1):
-            t = i / max(1, (hy2 - hy1))
-            c = (
-                int(JT_RED_SOFT[0] + (JT_RED_MAIN[0] - JT_RED_SOFT[0]) * t),
-                int(JT_RED_SOFT[1] + (JT_RED_MAIN[1] - JT_RED_SOFT[1]) * t),
-                int(JT_RED_SOFT[2] + (JT_RED_MAIN[2] - JT_RED_SOFT[2]) * t),
+    # 3) ENVIO ERRADO (CDs)
+    regras += [
+        {"condicao": is_envio_errado_cd &
+                     (df[COL_NOME_PROBLEMATICO] == "Mercadorias.do.cliente.não.estão.completas.客户货物未备齐"),
+         "status": "ENVIAR PARA O FLUXO INVERSO (INCOMPLETO, HÁ MAIS DE 2 DIAS)"},
+        {"condicao": is_envio_errado_cd & (df[COL_NOME_PROBLEMATICO] == "Ausência.do.destinatário客户不在"),
+         "status": "VERIFICAR 3 TENTATIVAS DE ENTREGA. SE OK, SOLICITAR DEVOLUÇÃO. SENÃO, REALIZAR NOVA TENTATIVA."},
+        {"condicao": is_envio_errado_cd,
+         "status": "ENVIO ERRADO - ENTRE CDs"},
+    ]
+
+    conditions = [r["condicao"] for r in regras]
+    choices = [r["status"] for r in regras]
+
+    df[COL_STATUS] = np.select(
+        conditions,
+        choices,
+        default=df[COL_ULTIMA_OPERACAO].astype(str).str.upper()
+    )
+
+    logging.info("Regras aplicadas com sucesso.")
+    return df
+def calcular_multa(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        logging.info("Nenhum pacote com 6+ dias para cálculo de multa.")
+        return df
+
+    logging.info("Calculando multa para pacotes com 6 ou mais dias parados...")
+    df_copy = df.copy()
+
+    condicoes_multa = [
+        df_copy[COL_DIAS_PARADO] >= 30,
+        df_copy[COL_DIAS_PARADO].between(14, 29),
+        df_copy[COL_DIAS_PARADO].between(10, 13),
+        df_copy[COL_DIAS_PARADO].between(7, 9),
+        df_copy[COL_DIAS_PARADO] == 6,
+        df_copy[COL_DIAS_PARADO] == 5,
+        df_copy[COL_DIAS_PARADO] == 4,
+        df_copy[COL_DIAS_PARADO] == 3,
+        df_copy[COL_DIAS_PARADO] == 2,
+    ]
+    valores_multa = [30, 14, 10, 7, 6, 5, 4, 3, 2]
+
+    df_copy[COL_MULTA] = np.select(condicoes_multa, valores_multa, default=0)
+    logging.info("Multa calculada por item.")
+    return df_copy
+
+
+def processar_dados(df_main: pd.DataFrame, df_problematicos: pd.DataFrame, df_devolucao: pd.DataFrame) -> pd.DataFrame:
+    colunas_necessarias = [
+        COL_REMESSA, COL_ULTIMA_OPERACAO, COL_REGIONAL, COL_NOME_PROBLEMATICO, COL_HORA_OPERACAO, COL_BASE_RECENTE
+    ]
+    if not all(col in df_main.columns for col in colunas_necessarias):
+        colunas_faltantes = set(colunas_necessarias) - set(df_main.columns)
+        logging.critical(f"O arquivo principal não contém as colunas obrigatórias: {colunas_faltantes}.")
+        return pd.DataFrame()
+
+    df = df_main.copy()
+    df[COL_REMESSA] = df[COL_REMESSA].astype(str)
+
+    # 1) Problemáticos
+    if not df_problematicos.empty:
+        if 'Número de pedido JMS' in df_problematicos.columns:
+            df_problematicos['Número de pedido JMS'] = df_problematicos['Número de pedido JMS'].astype(str)
+
+        if 'Tempo de digitalização' in df_problematicos.columns:
+            df_problematicos['Tempo de digitalização'] = pd.to_datetime(df_problematicos['Tempo de digitalização'], errors='coerce')
+
+        df_problematicos = df_problematicos.sort_values('Tempo de digitalização').dropna(subset=['Número de pedido JMS'])
+
+        summary = df_problematicos.groupby('Número de pedido JMS').agg(
+            Qtd_Problematicas=('Número de pedido JMS', 'size'),
+            Ultima_Problematica_Detalhada=('Tipo de nível II de pacote problemático', 'last')
+        ).reset_index()
+
+        df = df.merge(summary, left_on=COL_REMESSA, right_on='Número de pedido JMS', how='left')
+        df.drop(columns=['Número de pedido JMS'], inplace=True, errors='ignore')
+        logging.info("Dados de pacotes problemáticos integrados.")
+    else:
+        logging.info("Sem dados de pacotes problemáticos para integrar.")
+
+    df['Última Problemática Detalhada'] = df.get('Ultima_Problematica_Detalhada', pd.Series(index=df.index)).fillna('-')
+    df['Qtd Problemáticas'] = df.get('Qtd_Problematicas', pd.Series(index=df.index)).fillna(0).astype(int)
+
+    # 2) Devolução
+    df[COL_DEVOLUCAO] = 'DEVOLUÇÃO NÃO SOLICITADA'
+    if not df_devolucao.empty and 'Número de pedido JMS' in df_devolucao.columns:
+        df_devolucao['Número de pedido JMS'] = df_devolucao['Número de pedido JMS'].astype(str)
+
+        mapa_traducao = {'待审核': 'EM PROCESSO DE APROVAÇÃO', '驳回': 'PEDIDO DE DEVOLUÇÃO RECUSADO', '已审核': 'DEVOLUÇÃO APROVADA'}
+        if 'Estado de solicitação' in df_devolucao.columns:
+            df_devolucao['Status_Traduzido'] = df_devolucao['Estado de solicitação'].map(mapa_traducao)
+
+            df_devolucao_info = (
+                df_devolucao.dropna(subset=['Status_Traduzido'])[['Número de pedido JMS', 'Status_Traduzido']]
+                .drop_duplicates(subset='Número de pedido JMS', keep='last')
             )
-            draw.line([(hx1, hy1 + i), (hx2, hy1 + i)], fill=c)
 
-        # HEADER: auto-fit + wrap + ellipsis
-        left = hx1 + 22
-        inner_w = (hx2 - hx1) - 44
-        y = hy1 + 12
+            df = df.merge(df_devolucao_info, left_on=COL_REMESSA, right_on='Número de pedido JMS', how='left')
+            df[COL_DEVOLUCAO] = df['Status_Traduzido'].fillna(df[COL_DEVOLUCAO])
+            df.drop(columns=['Número de pedido JMS', 'Status_Traduzido'], inplace=True, errors='ignore')
+            logging.info("Dados de devolução integrados.")
+    else:
+        logging.info("Sem dados de devolução para integrar.")
 
-        title = f"{coord}{titulo_suffix}".strip()
-        f_title_fit = _fit_font(draw, title, start_size=34, min_size=20, bold=True, max_w=inner_w)
-        title = _ellipsize(draw, title, f_title_fit, inner_w)
-        draw.text((left, y), title, fill=JT_WHITE, font=f_title_fit)
-        y += _measure(draw, title, f_title_fit)[1] + 8
+    # 3) Dias Parado
+    logging.info("Calculando dias parados...")
+    df[COL_HORA_OPERACAO] = pd.to_datetime(df[COL_HORA_OPERACAO], errors='coerce')
+    df[COL_DIAS_PARADO] = (datetime.now() - df[COL_HORA_OPERACAO]).dt.days.fillna(0).astype(int)
 
-        indicador_full = f"Indicador: {indicador_nome}".strip()
-        f_ind_fit = _fit_font(draw, indicador_full, start_size=19, min_size=14, bold=True, max_w=inner_w)
-        ind_lines = _wrap_lines(draw, indicador_full, f_ind_fit, inner_w, max_lines=2)
-        for line in ind_lines:
-            draw.text((left, y), line, fill=JT_WHITE, font=f_ind_fit)
-            y += _measure(draw, line, f_ind_fit)[1] + 2
-        y += 4
+    # 4) Regras
+    df = aplicar_regras_status(df)
+    df = aplicar_regras_transito(df)
 
-        line_atual = (
-            f"Atualizado: {data_humana}   •   Página {page_idx}/{total_pages}   •   SLA total: {sla_total:.2%}"
-        )
-        f_line_fit = _fit_font(draw, line_atual, start_size=19, min_size=13, bold=False, max_w=inner_w)
-        line_atual = _ellipsize(draw, line_atual, f_line_fit, inner_w)
-        draw.text((left, y), line_atual, fill=JT_WHITE, font=f_line_fit)
-        y += _measure(draw, line_atual, f_line_fit)[1] + 4
+    # 5) Priorização devolução
+    df.loc[df[COL_DEVOLUCAO] != 'DEVOLUÇÃO NÃO SOLICITADA', COL_STATUS] = df[COL_DEVOLUCAO]
+    cond_aprovado_em_rota = (df[COL_STATUS] == 'DEVOLUÇÃO APROVADA') & (df[COL_ULTIMA_OPERACAO] == "出仓扫描/Bipe de saída para entrega")
+    df.loc[cond_aprovado_em_rota, COL_STATUS] = 'DEVOLUÇÃO APROVADA, MAS O PACOTE ESTÁ EM ROTA'
 
-        line_periodo = f"Período: {periodo_txt}   •   Dias: {dias_txt}"
-        f_per_fit = _fit_font(draw, line_periodo, start_size=19, min_size=13, bold=False, max_w=inner_w)
-        line_periodo = _ellipsize(draw, line_periodo, f_per_fit, inner_w)
-        draw.text((left, y), line_periodo, fill=JT_WHITE, font=f_per_fit)
+    condicao_aprovado = df[COL_STATUS].isin(['DEVOLUÇÃO APROVADA', 'DEVOLUÇÃO APROVADA, MAS O PACOTE ESTÁ EM ROTA'])
+    df.loc[condicao_aprovado, COL_TRANSITO] = ''
 
-        # Área tabela
-        tx1 = pad + 18
-        ty1 = hy2 + gap
-        tx2 = W - pad - 18
-        rr(draw, (tx1, ty1, tx2, H - pad - 18), 20, JT_WHITE, outline=STROKE, width=2)
+    df.rename(columns={COL_REGIONAL: COLUNA_CHAVE_PRINCIPAL}, inplace=True)
 
-        draw.text((tx1 + 18, ty1 + 14), "Todas as bases — %SLA (pior → melhor)", fill=TXT, font=f_head)
-        draw.line((tx1 + 12, ty1 + 52, tx2 - 12, ty1 + 52), fill=STROKE, width=2)
+    ordem_colunas = [
+        COL_REMESSA, COLUNA_CHAVE_PRINCIPAL, COL_DIAS_PARADO, COL_ULTIMA_OPERACAO,
+        COL_HORA_OPERACAO, COL_STATUS, COL_TRANSITO, COL_DEVOLUCAO,
+        'Qtd Problemáticas', 'Última Problemática Detalhada'
+    ]
+    colunas_existentes = [col for col in df.columns if col not in ordem_colunas]
+    df = df[ordem_colunas + colunas_existentes]
 
-        # colunas
-        col_rank = tx1 + 18
-        col_base = tx1 + 90
-        col_total = tx2 - 560
-        col_ent = tx2 - 420
-        col_fora = tx2 - 290
-        col_sla_right = tx2 - 22
-
-        draw.text((col_rank, ty1 + 64), "#", fill=MUTED, font=f_head)
-        draw.text((col_base, ty1 + 64), "Base", fill=MUTED, font=f_head)
-        draw.text((col_total, ty1 + 64), "Total", fill=MUTED, font=f_head)
-        draw.text((col_ent, ty1 + 64), "No Prazo", fill=MUTED, font=f_head)
-        draw.text((col_fora, ty1 + 64), "Fora", fill=MUTED, font=f_head)
-
-        sla_head = "%SLA"
-        bbox_h = draw.textbbox((0, 0), sla_head, font=f_head)
-        draw.text((col_sla_right - (bbox_h[2] - bbox_h[0]), ty1 + 64), sla_head, fill=MUTED, font=f_head)
-
-        ytbl = ty1 + 102
-        start_rank = (page_idx - 1) * rows_per_page
-
-        for i, (base, tot, ent, fora, sla) in enumerate(page_rows, start=1):
-            bg_row = ROW1 if (i % 2 == 1) else ROW2
-            rr(draw, (tx1 + 12, ytbl - 8, tx2 - 12, ytbl + row_h - 10), 14, bg_row, outline=None)
-
-            rank = start_rank + i
-            base_txt = (base or "")[:78]
-            sla_txt = f"{sla:.2%}"
-
-            draw.text((col_rank, ytbl), f"{rank:02d}", fill=TXT, font=f_row)
-            draw.text((col_base, ytbl), base_txt, fill=TXT, font=f_row)
-            draw.text((col_total, ytbl), str(tot), fill=TXT, font=f_row)
-            draw.text((col_ent, ytbl), str(ent), fill=TXT, font=f_row)
-            draw.text((col_fora, ytbl), str(fora), fill=TXT, font=f_row)
-
-            bbox = draw.textbbox((0, 0), sla_txt, font=f_row)
-            draw.text((col_sla_right - (bbox[2] - bbox[0]), ytbl), sla_txt, fill=JT_RED_SOFT, font=f_row)
-
-            ytbl += row_h
-
-        safe_coord = normalizar(coord).replace(" ", "_")
-        fs = (file_suffix or "").strip()
-        filename = f"SLA_{safe_coord}{fs}_{DATA_HOJE}_p{page_idx:02d}.png"
-        out_path = os.path.join(out_dir, filename)
-        img.save(out_path, "PNG")
-        out_paths.append(out_path)
-
-    return out_paths
+    return df
 
 
-def enviar_card_feishu(
-    webhook: str,
-    coord: str,
-    indicador_nome: str,
-    periodo_txt: str,
-    dias_txt: str,
-    sla: float,
-    bases: int,
-    arquivos_gerados_md: str,
-    image_key: Optional[str] = None,
-    page_label: Optional[str] = None,
-    titulo_suffix: str = "",
-) -> bool:
-    """
-    Card: título = nome do coordenador.
-    Mostra resumo + (opcional) imagem.
-    """
+def adicionar_info_coordenador(df_principal: pd.DataFrame) -> pd.DataFrame:
+    if df_principal.empty:
+        logging.warning("DataFrame de entrada está vazio. Pulando adição de coordenadores.")
+        return df_principal
+
     try:
-        if not webhook:
-            logging.warning(f"⚠️ Webhook vazio para {coord}. Pulei.")
-            return False
+        logging.info(f"Lendo arquivo de mapeamento: {os.path.basename(ARQUIVO_MAPEAMENTO_COORDENADORES)}")
+        df_mapeamento = pd.read_excel(ARQUIVO_MAPEAMENTO_COORDENADORES)
+    except FileNotFoundError:
+        logging.error(f"ERRO CRÍTICO: Arquivo de mapeamento '{ARQUIVO_MAPEAMENTO_COORDENADORES}' não encontrado.")
+        raise
+    except Exception as e:
+        logging.error(f"Ocorreu um erro ao ler o arquivo de mapeamento: {e}.")
+        raise
 
-        titulo = f"{coord}{titulo_suffix}"
-        indicador_nome = (indicador_nome or "").strip() or "SLA Entrega Realizada"
+    mapa_coordenador = pd.Series(df_mapeamento[COLUNA_INFO_COORDENADOR].values,
+                                 index=df_mapeamento[COLUNA_CHAVE_MAPEAMENTO]).to_dict()
+    mapa_filial = pd.Series(df_mapeamento[COLUNA_INFO_FILIAL].values,
+                            index=df_mapeamento[COLUNA_CHAVE_MAPEAMENTO]).to_dict()
 
-        body = (
-            f"📌 **Indicador:** {indicador_nome}\n"
-            f"📅 **Período:** {periodo_txt}\n"
-            f"🗓️ **Dias:** {dias_txt}\n"
-            f"📈 **SLA:** {sla:.2%}\n"
-            f"🏢 **Bases:** {bases}\n"
-        )
-        if page_label:
-            body += f"🖼️ **Imagem:** {page_label}\n"
-        body += "\n" + arquivos_gerados_md
+    key_series = df_principal[COLUNA_CHAVE_PRINCIPAL]
+    if isinstance(key_series, pd.DataFrame):
+        logging.warning(f"Colunas duplicadas para '{COLUNA_CHAVE_PRINCIPAL}'. Usando a primeira ocorrência.")
+        key_series = key_series.iloc[:, 0]
 
-        elements = []
-        if image_key:
-            elements.append(
-                {
-                    "tag": "img",
-                    "img_key": image_key,
-                    "alt": {"tag": "plain_text", "content": "Tabela SLA por Base"},
-                    "mode": "fit_horizontal",
-                    "preview": True,
-                }
-            )
-            elements.append({"tag": "hr"})
+    df_principal[NOVA_COLUNA_COORDENADOR] = key_series.map(mapa_coordenador).fillna('NÃO ENCONTRADO')
+    df_principal[NOVA_COLUNA_FILIAL] = key_series.map(mapa_filial).fillna('NÃO ENCONTRADA')
 
-        elements.append({"tag": "div", "text": {"tag": "lark_md", "content": body}})
-        elements.append({"tag": "hr"})
-        elements.append(
-            {
-                "tag": "action",
-                "actions": [
-                    {
-                        "tag": "button",
-                        "text": {"tag": "plain_text", "content": "📂 Abrir Pasta (Resumo/Base)"},
-                        "url": LINK_PASTA,
-                        "type": "primary",
-                    }
-                ],
-            }
-        )
+    logging.info("Informações de coordenador e filial adicionadas.")
+    return df_principal
 
-        payload = {
-            "msg_type": "interactive",
-            "card": {
-                "config": {"wide_screen_mode": True},
-                "header": {
-                    "template": "red",  # ✅ J&T
-                    "title": {"tag": "plain_text", "content": titulo},
-                },
-                "elements": elements,
-            },
+
+def _mask_incompletos(df: pd.DataFrame) -> pd.Series:
+    """
+    Máscara robusta para detectar "Mercadorias incompletas" na coluna Nome de pacote problemático.
+    """
+    if df.empty or COL_NOME_PROBLEMATICO not in df.columns:
+        return pd.Series([False] * len(df), index=df.index)
+
+    s = df[COL_NOME_PROBLEMATICO].astype(str).fillna("").str.strip()
+    return (
+        (s == INCOMPLETOS_KEY_EXATA) |
+        (s.str.contains(INCOMPLETOS_KEY_PARTE_1, na=False)) |
+        (s.str.contains(INCOMPLETOS_KEY_PARTE_2, na=False))
+    )
+
+
+def salvar_relatorios(df_final: pd.DataFrame, pasta_saida: str) -> pd.DataFrame:
+    """
+    - Salva relatório separado de Mercadorias incompletas
+    - REMOVE incompletos do relatório principal (0-4 / 5+)
+    - Retorna df_principal (já sem incompletos) para usar no card do Feishu
+    """
+    if df_final.empty:
+        logging.warning("⚠️ Nenhum dado para salvar relatórios.")
+        return df_final
+
+    data_hoje = datetime.now().strftime("%Y-%m-%d")
+
+    # 0) Separa INCOMPLETOS e remove do principal
+    mask_incompletos = _mask_incompletos(df_final)
+    df_incompletos = df_final[mask_incompletos].copy()
+    df_principal = df_final[~mask_incompletos].copy()
+
+    # 1) Salva relatório de INCOMPLETOS (se houver)
+    if not df_incompletos.empty:
+        arquivo_incompletos = os.path.join(pasta_saida, f"Relatório Mercadorias incompletas_{data_hoje}.xlsx")
+        df_incompletos.to_excel(arquivo_incompletos, index=False)
+        logging.info(f"✅ Relatório Mercadorias incompletas salvo: {arquivo_incompletos}")
+    else:
+        logging.info("Sem registros de Mercadorias incompletas para salvar.")
+
+    # 🔍 Debug: resumo por faixa de dias (AGORA no principal, sem incompletos)
+    try:
+        resumo = {
+            "0-4 dias (principal)": (df_principal[COL_DIAS_PARADO] <= 4).sum(),
+            "5+ dias (principal)": (df_principal[COL_DIAS_PARADO] >= 5).sum(),
+            "Total (principal)": len(df_principal),
+            "Incompletos (separado)": len(df_incompletos)
         }
+        logging.info(f"📊 Resumo Dias Parados: {resumo}")
+    except Exception as e:
+        logging.error(f"Erro ao gerar resumo de debug: {e}")
 
-        r = _post_with_retry(webhook, payload, timeout=25)
-        if r.status_code != 200:
-            logging.error(f"❌ ERRO ao enviar card para {coord}. Status: {r.status_code}. Resp: {r.text}")
-            return False
+    # 2) Relatório 0–4 dias (SEM incompletos)
+    df_0_4 = df_principal[df_principal[COL_DIAS_PARADO] <= 4]
+    if not df_0_4.empty:
+        arquivo_0_4 = os.path.join(pasta_saida, f"Relatório Sem Movimentação (0-4 dias)_{data_hoje}.xlsx")
+        df_0_4.to_excel(arquivo_0_4, index=False)
+        logging.info(f"Relatório 0-4 dias salvo: {arquivo_0_4}")
 
-        logging.info(f"📨 Card enviado para {coord}{titulo_suffix}")
-        return True
+    # 3) Relatório 5+ dias (SEM incompletos)
+    df_5_plus = df_principal[df_principal[COL_DIAS_PARADO] >= 5]
+    if not df_5_plus.empty:
+        df_5_plus = calcular_multa(df_5_plus)
+        arquivo_5_plus = os.path.join(pasta_saida, f"Relatório Sem Movimentação (5+ dias)_{data_hoje}.xlsx")
+        df_5_plus.to_excel(arquivo_5_plus, index=False)
+        logging.info(f"✅ Relatório 5+ dias salvo: {arquivo_5_plus}")
+    else:
+        logging.warning("⚠️ Nenhum pedido encontrado com 5+ dias parados (principal).")
+
+    # Retorna o principal já filtrado -> use isso no FEISHU CARD
+    return df_principal
+
+
+def mover_para_arquivo_morto(pasta_origem: str, pasta_destino: str):
+    if not os.path.exists(pasta_destino):
+        os.makedirs(pasta_destino)
+
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    arquivos = [f for f in os.listdir(pasta_origem) if f.endswith(('.xlsx', '.xls'))]
+
+    arquivos_hoje = [f for f in arquivos if hoje in f]
+    arquivos_hoje.sort(key=lambda f: os.path.getmtime(os.path.join(pasta_origem, f)))
+
+    if len(arquivos_hoje) > 1:
+        for arquivo in arquivos_hoje[:-1]:
+            try:
+                shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo))
+                logging.info(f"📦 Arquivo duplicado de hoje movido: {arquivo}")
+            except Exception as e:
+                logging.error(f"Erro ao mover o arquivo {arquivo}: {e}")
+
+    for arquivo in arquivos:
+        if arquivo not in arquivos_hoje:
+            try:
+                shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo))
+                logging.info(f"📦 Arquivo antigo movido para Arquivo Morto: {arquivo}")
+            except Exception as e:
+                logging.error(f"Erro ao mover o arquivo {arquivo}: {e}")
+
+
+def main():
+    t0 = time.perf_counter()
+    logging.info("--- INICIANDO PROCESSO DE GERAÇÃO DE RELATÓRIOS ---")
+
+    try:
+        caminho_arquivo_original = encontrar_arquivo_principal(PATH_INPUT_MAIN, FILENAME_START_MAIN)
+        if not caminho_arquivo_original:
+            logging.critical("Arquivo principal não encontrado. Processo interrompido.")
+            raise FileNotFoundError("Arquivo principal não encontrado.")
+
+        df_main = pd.read_excel(caminho_arquivo_original)
+        df_problematicos = carregar_planilhas_de_pasta(PATH_INPUT_PROBLEMATICOS, "Consolidando problemáticos")
+        df_devolucao = carregar_planilhas_de_pasta(PATH_INPUT_DEVOLUCAO, "Consolidando devoluções")
+
+        df_final = processar_dados(df_main, df_problematicos, df_devolucao)
+        df_final = adicionar_info_coordenador(df_final)
+
+        # Move relatórios antigos antes de salvar novos
+        mover_para_arquivo_morto(PATH_OUTPUT_REPORTS, PATH_OUTPUT_ARQUIVO_MORTO)
+
+        # Salva relatórios e pega o DF PRINCIPAL (SEM incompletos) para o Feishu
+        df_para_feishu = salvar_relatorios(df_final, PATH_OUTPUT_REPORTS)
+
+        logging.info(f"DF para Feishu (principal, sem incompletos): {len(df_para_feishu)} linhas")
+        logging.info("--- PROCESSO CONCLUÍDO COM SUCESSO! ---")
+
+        dt = time.perf_counter() - t0
+        avisar_termino(
+            titulo="Processo finalizado ✅",
+            mensagem=f"Relatórios gerados com sucesso. Tempo total: {dt:.1f}s",
+            sucesso=True
+        )
 
     except Exception as e:
-        logging.error(f"❌ Falha envio card {coord}{titulo_suffix}: {e}")
-        return False
-
-
-def processar_parte_e_enviar(
-    parte_nome: str,
-    df_parte: pl.DataFrame,
-    datas_parte: List[date],
-    arquivo_resumo: str,
-    prefixo_resumo: str,
-    tag_base: str,
-    titulo_suffix: str,
-    file_suffix_imagem: str,
-) -> None:
-    """
-    Gera base + resumo + envia cards (com/sem imagem) para uma parte do período.
-    Ex: Seg–Sáb (titulo_suffix="") ou Domingo (titulo_suffix=" — Domingo")
-    """
-    if not datas_parte:
-        logging.warning(f"⚠️ {parte_nome}: lista de datas vazia. Pulei.")
-        return
-
-    if df_parte is None or df_parte.is_empty():
-        logging.warning(f"⚠️ {parte_nome}: dataframe vazio. Pulei export/envio.")
-        return
-
-    periodo_txt_parte = periodo_txt_de_datas(datas_parte)
-    dias_txt_parte = formatar_lista_dias(datas_parte)
-
-    logging.info(f"🧾 {parte_nome}: Período: {periodo_txt_parte} | Dias: {dias_txt_parte} | Registros: {df_parte.height}")
-
-    # Export base + resumo
-    paths_base = exportar_base_consolidada(df_parte, tag=tag_base)
-    arquivos_md = montar_arquivos_gerados_md(arquivo_resumo, paths_base)
-
-    resumo_pd = gerar_resumo_por_base(df_parte)
-    exportar_resumo_excel(resumo_pd, arquivo_resumo, prefixo=prefixo_resumo)
-
-    # Envio por coordenador
-    for coord, webhook in COORDENADOR_WEBHOOKS.items():
-        if resumo_pd.empty:
-            continue
-
-        sub = resumo_pd[resumo_pd["COORDENADOR"].apply(normalizar) == normalizar(coord)]
-        if sub.empty:
-            logging.warning(f"⚠️ Nenhuma base encontrada para {coord} ({parte_nome})")
-            continue
-
-        bases = sub["Base De Entrega"].nunique()
-        total = float(sub["Total"].sum()) if "Total" in sub.columns else 0.0
-        ent = float(sub["Entregues no Prazo"].sum()) if "Entregues no Prazo" in sub.columns else 0.0
-        sla = (ent / total) if total > 0 else 0.0
-
-        img_paths = gerar_imagens_sla_tabela(
-            coord=coord,
-            indicador_nome=INDICADOR_NOME,
-            titulo_suffix=titulo_suffix,
-            periodo_txt=periodo_txt_parte,
-            dias_txt=dias_txt_parte,
-            sub=sub,
-            sla_total=sla,
-            out_dir=PASTA_IMAGENS,
-            rows_per_page=IMG_ROWS_PER_PAGE,
-            file_suffix=file_suffix_imagem,
+        dt = time.perf_counter() - t0
+        logging.exception("❌ PROCESSO FINALIZADO COM ERRO.")
+        avisar_termino(
+            titulo="Processo finalizado com erro ❌",
+            mensagem=f"Falha ao gerar relatórios: {e}\nTempo até falhar: {dt:.1f}s",
+            sucesso=False
         )
+        raise
 
-        if img_paths and _feishu_enabled():
-            for i, p in enumerate(img_paths, start=1):
-                img_key = feishu_upload_image_get_key(p)
-                enviar_card_feishu(
-                    webhook=webhook,
-                    coord=coord,
-                    indicador_nome=INDICADOR_NOME,
-                    periodo_txt=periodo_txt_parte,
-                    dias_txt=dias_txt_parte,
-                    sla=sla,
-                    bases=bases,
-                    arquivos_gerados_md=arquivos_md,
-                    image_key=img_key,
-                    page_label=f"{i}/{len(img_paths)}",
-                    titulo_suffix=titulo_suffix,
-                )
-                time.sleep(0.35)
-        else:
-            enviar_card_feishu(
-                webhook=webhook,
-                coord=coord,
-                indicador_nome=INDICADOR_NOME,
-                periodo_txt=periodo_txt_parte,
-                dias_txt=dias_txt_parte,
-                sla=sla,
-                bases=bases,
-                arquivos_gerados_md=arquivos_md,
-                image_key=None,
-                page_label=None,
-                titulo_suffix=titulo_suffix,
-            )
-            # =========================
-            # BLOCO 4/4 — MAIN
-            # =========================
 
-            if __name__ == "__main__":
-                logging.info("🚀 Iniciando processamento SLA (v2.16 — Seg–Sáb e Domingo separados)...")
-
-                try:
-                    os.makedirs(PASTA_SAIDA, exist_ok=True)
-                    os.makedirs(PASTA_ARQUIVO, exist_ok=True)
-                    os.makedirs(PASTA_BASE_CONSOLIDADA, exist_ok=True)
-                    os.makedirs(PASTA_IMAGENS, exist_ok=True)
-
-                    periodo = calcular_periodo_base()
-                    if periodo is None:
-                        raise SystemExit(0)
-
-                    inicio, fim, datas = periodo
-
-                    logging.info(f"📅 Período (após feriados) usado para SLA: {formatar_periodo(inicio, fim)}")
-                    logging.info(f"🗓️ Dias considerados: {formatar_lista_dias(datas)}")
-                    logging.info(f"📌 Datas (ISO): {', '.join([d.strftime('%Y-%m-%d') for d in datas])}")
-
-                    df = consolidar_planilhas(PASTA_ENTRADA)
-                    logging.info(f"📥 Registros carregados: {df.height}")
-
-                    df = df.rename({c: c.strip().upper() for c in df.columns})
-                    df = garantir_coluna_data(df, COL_DATA_BASE)
-
-                    inicio, fim, datas = ajustar_periodo_por_dados(df, COL_DATA_BASE, inicio, fim, datas)
-
-                    logging.info(f"📅 Período FINAL usado para cálculo SLA: {formatar_periodo(inicio, fim)}")
-                    logging.info(f"🗓️ Dias considerados (FINAL): {formatar_lista_dias(datas)}")
-
-                    datas_seg_sab, datas_domingo = separar_seg_sab_e_domingo(datas)
-                    if datas_domingo:
-                        logging.info("🧩 Domingo presente no período (vai gerar separado).")
-                    else:
-                        logging.info("🧩 Não há domingo no período. Vai gerar apenas Seg–Sáb.")
-
-                    # Detectar coluna ENTREGUE NO PRAZO
-                    colunas = list(df.columns)
-                    col_upper = [c.upper() for c in colunas]
-                    possiveis = ["ENTREGUE NO PRAZO?", "ENTREGUE NO PRAZO？"]
-
-                    col_entregue = None
-                    for nome in possiveis:
-                        if nome in col_upper:
-                            col_entregue = colunas[col_upper.index(nome)]
-                            break
-                    if not col_entregue:
-                        raise KeyError(f"❌ Coluna ENTREGUE NO PRAZO não encontrada.\nColunas: {df.columns}")
-
-                    logging.info(f"📌 Coluna detectada: {col_entregue}")
-
-                    df = df.with_columns(
-                        pl.when(pl.col(col_entregue).cast(pl.Utf8).str.to_uppercase() == "Y")
-                        .then(1)
-                        .otherwise(0)
-                        .alias("_ENTREGUE_PRAZO")
-                    )
-
-                    df_periodo_all = df.filter(pl.col(COL_DATA_BASE).is_in(datas))
-                    logging.info(f"📊 Registros para o período total: {df_periodo_all.height}")
-
-                    # Coordenadores
-                    coord_df = pl.read_excel(PASTA_COORDENADOR)
-
-                    # rename tolerante
-                    rename_map = {}
-                    if "Nome da base" in coord_df.columns:
-                        rename_map["Nome da base"] = "BASE DE ENTREGA"
-                    if "Coordenadores" in coord_df.columns:
-                        rename_map["Coordenadores"] = "COORDENADOR"
-                    if "Coordenador" in coord_df.columns and "COORDENADOR" not in rename_map.values():
-                        rename_map["Coordenador"] = "COORDENADOR"
-                    if rename_map:
-                        coord_df = coord_df.rename(rename_map)
-
-                    if "BASE DE ENTREGA" not in coord_df.columns or "COORDENADOR" not in coord_df.columns:
-                        raise KeyError(
-                            f"❌ Base_Atualizada.xlsx precisa ter 'BASE DE ENTREGA' e 'COORDENADOR'. Colunas: {coord_df.columns}"
-                        )
-
-                    # normalizar base para join
-                    df_periodo_all = df_periodo_all.with_columns(
-                        pl.col("BASE DE ENTREGA").map_elements(normalizar, return_dtype=pl.Utf8).alias("BASE_NORM")
-                    )
-                    coord_df = coord_df.with_columns(
-                        pl.col("BASE DE ENTREGA").map_elements(normalizar, return_dtype=pl.Utf8).alias("BASE_NORM")
-                    )
-
-                    # evitar duplicação (many-to-many)
-                    coord_df = coord_df.unique(subset=["BASE_NORM"], keep="first")
-
-                    df_periodo_all = df_periodo_all.join(coord_df.select(["BASE_NORM", "COORDENADOR"]), on="BASE_NORM",
-                                                         how="left")
-
-                    sem_coord = df_periodo_all.filter(pl.col("COORDENADOR").is_null()).height
-                    logging.info(f"🧩 Registros sem coordenador após join (período total): {sem_coord}")
-
-                    # =========================
-                    # ✅ PARTE 1: SEG–SÁB
-                    # =========================
-                    df_seg_sab = (
-                        df_periodo_all.filter(pl.col(COL_DATA_BASE).is_in(datas_seg_sab))
-                        if datas_seg_sab
-                        else pl.DataFrame()
-                    )
-                    logging.info(f"📦 Registros Seg–Sáb: {df_seg_sab.height if hasattr(df_seg_sab, 'height') else 0}")
-
-                    processar_parte_e_enviar(
-                        parte_nome="Seg–Sáb",
-                        df_parte=df_seg_sab,
-                        datas_parte=datas_seg_sab,
-                        arquivo_resumo=ARQUIVO_SAIDA,
-                        prefixo_resumo="Resumo_Consolidado_",
-                        tag_base="",
-                        titulo_suffix="",
-                        file_suffix_imagem="",
-                    )
-
-                    # =========================
-                    # ✅ PARTE 2: DOMINGO (SE EXISTIR)
-                    # =========================
-                    if datas_domingo:
-                        df_domingo = df_periodo_all.filter(pl.col(COL_DATA_BASE).is_in(datas_domingo))
-                        logging.info(f"📦 Registros Domingo: {df_domingo.height}")
-
-                        processar_parte_e_enviar(
-                            parte_nome="Domingo",
-                            df_parte=df_domingo,
-                            datas_parte=datas_domingo,
-                            arquivo_resumo=ARQUIVO_SAIDA_DOMINGO,
-                            prefixo_resumo="Resumo_Consolidado_Domingo_",
-                            tag_base="_Domingo",
-                            titulo_suffix=" — Domingo",
-                            file_suffix_imagem="_Domingo",
-                        )
-
-                    logging.info("🏁 Processamento concluído.")
-
-                except Exception as e:
-                    logging.critical(f"❌ ERRO FATAL: {e}", exc_info=True)
+if __name__ == "__main__":
+    main()

@@ -212,7 +212,7 @@ def formatar_periodo(inicio: date, fim: date) -> str:
 
 def formatar_lista_dias(datas: List[date]) -> str:
     if not datas:
-        return "Fevereiro 2026"
+        return "-"
     dias_pt = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
     return ", ".join([f"{dias_pt[d.weekday()]} {d.strftime('%d/%m')}" for d in datas])
 
@@ -268,26 +268,31 @@ def calcular_periodo_base() -> Optional[Tuple[date, date, List[date]]]:
         fim = fim - timedelta(days=1)
 
 
-def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo: str) -> None:
+def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo: str, excluir_contains: Optional[str] = None) -> None:
     os.makedirs(pasta_destino, exist_ok=True)
     if not os.path.isdir(pasta_origem):
         return
     for arquivo in os.listdir(pasta_origem):
-        if arquivo.startswith(prefixo) and arquivo.endswith(".xlsx"):
-            try:
-                shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo))
-                logging.info(f"📦 Arquivo antigo movido: {arquivo}")
-            except Exception as e:
-                logging.error(f"Erro ao mover {arquivo}: {e}")
+        if not (arquivo.startswith(prefixo) and arquivo.endswith(".xlsx")):
+            continue
+        if excluir_contains and (excluir_contains.lower() in arquivo.lower()):
+            continue
+        try:
+            shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo))
+            logging.info(f"📦 Arquivo antigo movido: {arquivo}")
+        except Exception as e:
+            logging.error(f"Erro ao mover {arquivo}: {e}")
 
 
-def arquivar_bases_antigas(pasta_origem: str, pasta_destino: str, prefixo: str) -> None:
+def arquivar_bases_antigas(pasta_origem: str, pasta_destino: str, prefixo: str, excluir_contains: Optional[str] = None) -> None:
     os.makedirs(pasta_destino, exist_ok=True)
     if not os.path.isdir(pasta_origem):
         return
 
     for arquivo in os.listdir(pasta_origem):
         if not arquivo.startswith(prefixo):
+            continue
+        if excluir_contains and (excluir_contains.lower() in arquivo.lower()):
             continue
         if not arquivo.lower().endswith((".xlsx", ".csv", ".parquet")):
             continue
@@ -413,15 +418,18 @@ def exportar_base_consolidada(df_periodo: pl.DataFrame, tag: str = "") -> Dict[s
     if tag == "_Domingo":
         prefixo = "Base_Consolidada_Domingo_"
         nome_base = f"Base_Consolidada_Domingo_{DATA_HOJE}"
+        excluir_contains = None
     else:
         prefixo = "Base_Consolidada_"
         nome_base = f"Base_Consolidada_{DATA_HOJE}"
+        # ✅ evita arquivar arquivos de Domingo quando gerar Seg–Sáb
+        excluir_contains = "Domingo"
 
     arq_parquet = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.parquet")
     arq_csv = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.csv")
     arq_xlsx = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.xlsx")
 
-    arquivar_bases_antigas(PASTA_BASE_CONSOLIDADA, PASTA_ARQUIVO, prefixo)
+    arquivar_bases_antigas(PASTA_BASE_CONSOLIDADA, PASTA_ARQUIVO, prefixo, excluir_contains=excluir_contains)
 
     df_periodo.write_parquet(arq_parquet)
     logging.info(f"✅ Base consolidada (PARQUET) salva em: {arq_parquet}")
@@ -440,348 +448,9 @@ def exportar_base_consolidada(df_periodo: pl.DataFrame, tag: str = "") -> Dict[s
     return {"parquet": arq_parquet, "csv": arq_csv, "xlsx": arq_xlsx}
 
 
-def exportar_resumo_excel(resumo_pd: pd.DataFrame, arquivo_saida: str, prefixo: str) -> None:
+def exportar_resumo_excel(resumo_pd: pd.DataFrame, arquivo_saida: str, prefixo: str, excluir_contains: Optional[str] = None) -> None:
     os.makedirs(PASTA_SAIDA, exist_ok=True)
-    arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, prefixo)
-    with pd.ExcelWriter(arquivo_saida, engine="openpyxl") as w:
-        resumo_pd.to_excel(w, index=False, sheet_name="Resumo SLA")
-    logging.info(f"✅ Resumo Excel salvo em: {arquivo_saida}")
-
-
-def montar_arquivos_gerados_md(arquivo_resumo: str, paths_base: Dict[str, str]) -> str:
-    base_xlsx_txt = (
-        f"- Base (XLSX): `{os.path.basename(paths_base['xlsx'])}`\n"
-        if os.path.exists(paths_base["xlsx"])
-        else "- Base (XLSX): *(não gerado — limite do Excel)*\n"
-    )
-    return (
-        "📄 **Arquivos gerados:**\n"
-        f"- Resumo: `{os.path.basename(arquivo_resumo)}`\n"
-        f"- Base (PARQUET): `{os.path.basename(paths_base['parquet'])}`\n"
-        f"- Base (CSV): `{os.path.basename(paths_base['csv'])}`\n"
-        + base_xlsx_txt
-    )
-
-
-def gerar_resumo_por_base(df_periodo: pl.DataFrame) -> pd.DataFrame:
-    if df_periodo.is_empty():
-        return pd.DataFrame(
-            columns=["Base De Entrega", "COORDENADOR", "Total", "Entregues no Prazo", "Fora do Prazo", "% SLA Cumprido"]
-        )
-
-    resumo = (
-        df_periodo.group_by(["BASE DE ENTREGA", "COORDENADOR"])
-        .agg(
-            [
-                pl.len().alias("Total"),
-                pl.col("_ENTREGUE_PRAZO").sum().alias("Entregues no Prazo"),
-                (pl.len() - pl.col("_ENTREGUE_PRAZO").sum()).alias("Fora do Prazo"),
-                (pl.col("_ENTREGUE_PRAZO").sum() / pl.len()).alias("% SLA Cumprido"),
-            ]
-        )
-        .sort("% SLA Cumprido", descending=True)
-    )
-    return resumo.to_pandas().rename(columns={"BASE DE ENTREGA": "Base De Entrega"})
-# =========================
-# BLOCO 2/4 — FUNÇÕES (FERIADOS / PERÍODO / LEITURA / EXPORT / RESUMO)
-# =========================
-
-def normalizar(s) -> str:
-    if s is None:
-        return ""
-    s = str(s).upper().strip()
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(c for c in s if not unicodedata.combining(c))
-    while "  " in s:
-        s = s.replace("  ", " ")
-    return s
-
-
-def pascoa_gregoriana(ano: int) -> date:
-    a = ano % 19
-    b = ano // 100
-    c = ano % 100
-    d = b // 4
-    e = b % 4
-    f = (b + 8) // 25
-    g = (b - f + 1) // 3
-    h = (19 * a + b - d - g + 15) % 30
-    i = c // 4
-    k = c % 4
-    l = (32 + 2 * e + 2 * i - h - k) % 7
-    m = (a + 11 * h + 22 * l) // 451
-    mes = (h + l - 7 * m + 114) // 31
-    dia = ((h + l - 7 * m + 114) % 31) + 1
-    return date(ano, mes, dia)
-
-
-def feriados_nacionais_br(ano: int) -> Set[date]:
-    fer = {
-        date(ano, 1, 1),
-        date(ano, 4, 21),
-        date(ano, 5, 1),
-        date(ano, 9, 7),
-        date(ano, 10, 12),
-        date(ano, 11, 2),
-        date(ano, 11, 15),
-        date(ano, 11, 20),
-        date(ano, 12, 25),
-    }
-    pascoa = pascoa_gregoriana(ano)
-    fer.add(pascoa - timedelta(days=2))  # Sexta-feira Santa
-    return fer
-
-
-def is_feriado_nacional(d: date) -> bool:
-    if not PULAR_FERIADOS_NACIONAIS:
-        return False
-    if (not PULAR_FERIADOS_EM_FDS) and (d.weekday() in (5, 6)):
-        return False
-    ano = d.year
-    if ano not in _CACHE_FERIADOS:
-        _CACHE_FERIADOS[ano] = feriados_nacionais_br(ano)
-    return d in _CACHE_FERIADOS[ano]
-
-
-def formatar_periodo(inicio: date, fim: date) -> str:
-    if inicio == fim:
-        return inicio.strftime("%d/%m/%Y")
-    return f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}"
-
-
-def formatar_lista_dias(datas: List[date]) -> str:
-    if not datas:
-        return "Fevereiro 2026"
-    dias_pt = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
-    return ", ".join([f"{dias_pt[d.weekday()]} {d.strftime('%d/%m')}" for d in datas])
-
-
-def periodo_txt_de_datas(datas: List[date]) -> str:
-    if not datas:
-        return "-"
-    return formatar_periodo(min(datas), max(datas))
-
-
-def separar_seg_sab_e_domingo(datas: List[date]) -> Tuple[List[date], List[date]]:
-    datas_dom = [d for d in datas if d.weekday() == 6]
-    datas_seg_sab = [d for d in datas if d.weekday() != 6]
-    return datas_seg_sab, datas_dom
-
-
-def calcular_periodo_base() -> Optional[Tuple[date, date, List[date]]]:
-    hoje = datetime.now().date()
-    dia = hoje.weekday()  # 0=Seg ... 6=Dom
-
-    if dia in (5, 6):
-        logging.warning("⛔ Hoje é sábado ou domingo. Execução cancelada.")
-        return None
-
-    span = 3 if dia == 0 else 1
-    fim = hoje - timedelta(days=1)
-
-    tentativas = 0
-    while True:
-        inicio = fim - timedelta(days=span - 1)
-        datas = [inicio + timedelta(days=i) for i in range((fim - inicio).days + 1)]
-
-        if PULAR_FERIADOS_NACIONAIS:
-            feriados_removidos = [d for d in datas if is_feriado_nacional(d)]
-            datas_ok = [d for d in datas if not is_feriado_nacional(d)]
-            if feriados_removidos:
-                logging.info(
-                    "🗓️ Feriados nacionais ignorados: "
-                    + ", ".join([d.strftime("%Y-%m-%d") for d in feriados_removidos])
-                )
-        else:
-            datas_ok = datas
-
-        if datas_ok:
-            return min(datas_ok), max(datas_ok), datas_ok
-
-        tentativas += 1
-        if tentativas >= 15:
-            logging.warning("⚠️ Não foi possível encontrar datas válidas após recuar 15 dias. Cancelando.")
-            return None
-
-        logging.warning(f"⚠️ Período ({formatar_periodo(inicio, fim)}) vazio após remover feriados. Recuando 1 dia...")
-        fim = fim - timedelta(days=1)
-
-
-def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo: str) -> None:
-    os.makedirs(pasta_destino, exist_ok=True)
-    if not os.path.isdir(pasta_origem):
-        return
-    for arquivo in os.listdir(pasta_origem):
-        if arquivo.startswith(prefixo) and arquivo.endswith(".xlsx"):
-            try:
-                shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo))
-                logging.info(f"📦 Arquivo antigo movido: {arquivo}")
-            except Exception as e:
-                logging.error(f"Erro ao mover {arquivo}: {e}")
-
-
-def arquivar_bases_antigas(pasta_origem: str, pasta_destino: str, prefixo: str) -> None:
-    os.makedirs(pasta_destino, exist_ok=True)
-    if not os.path.isdir(pasta_origem):
-        return
-
-    for arquivo in os.listdir(pasta_origem):
-        if not arquivo.startswith(prefixo):
-            continue
-        if not arquivo.lower().endswith((".xlsx", ".csv", ".parquet")):
-            continue
-        try:
-            shutil.move(os.path.join(pasta_origem, arquivo), os.path.join(pasta_destino, arquivo))
-            logging.info(f"📦 Base antiga movida: {arquivo}")
-        except Exception as e:
-            logging.error(f"Erro ao mover {arquivo}: {e}")
-
-
-def ler_planilha_rapido(caminho: str) -> pl.DataFrame:
-    try:
-        if caminho.lower().endswith(".csv"):
-            return pl.read_csv(caminho, ignore_errors=True)
-        return pl.read_excel(caminho)
-    except Exception as e:
-        logging.error(f"Falha ao ler {os.path.basename(caminho)}: {e}")
-        return pl.DataFrame()
-
-
-def consolidar_planilhas(pasta_entrada: str) -> pl.DataFrame:
-    arquivos = [
-        os.path.join(pasta_entrada, f)
-        for f in os.listdir(pasta_entrada)
-        if f.lower().endswith(EXTS) and not f.startswith("~$")
-    ]
-    if not arquivos:
-        raise FileNotFoundError("Nenhum arquivo válido encontrado.")
-
-    with ThreadPoolExecutor(max_workers=min(16, len(arquivos))) as ex:
-        dfs = list(ex.map(ler_planilha_rapido, arquivos))
-
-    validos = [df for df in dfs if not df.is_empty()]
-    if not validos:
-        raise ValueError("Falha ao ler todos os arquivos.")
-    return pl.concat(validos, how="vertical_relaxed")
-
-
-def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
-    if coluna not in df.columns:
-        raise KeyError(f"Coluna '{coluna}' não encontrada.")
-
-    tipo = df[coluna].dtype
-    if tipo == pl.Date:
-        return df
-    if tipo == pl.Datetime:
-        return df.with_columns(pl.col(coluna).dt.date().alias(coluna))
-
-    if tipo == pl.Utf8:
-        s = pl.col(coluna).cast(pl.Utf8).str.strip_chars().str.replace_all(r"\s+", " ")
-        formatos = [
-            "%d/%m/%Y %H:%M:%S",
-            "%d/%m/%Y %H:%M",
-            "%d/%m/%Y",
-            "%Y-%m-%d",
-            "%Y/%m/%d",
-            "%d-%m-%Y",
-            "%Y-%m-%d %H:%M:%S",
-            "%Y/%m/%d %H:%M:%S",
-        ]
-        expr = None
-        for f in formatos:
-            tentativa = s.str.strptime(pl.Datetime, f, strict=False)
-            expr = tentativa if expr is None else expr.fill_null(tentativa)
-        return df.with_columns(expr.dt.date().alias(coluna))
-
-    raise TypeError(f"Tipo inválido para coluna '{coluna}': {tipo}")
-
-
-def ajustar_periodo_por_dados(
-    df: pl.DataFrame, coluna_data: str, inicio: date, fim: date, datas: List[date]
-) -> Tuple[date, date, List[date]]:
-    if df.is_empty() or coluna_data not in df.columns:
-        return inicio, fim, datas
-
-    try:
-        qtd = df.filter(pl.col(coluna_data).is_in(datas)).height
-        if qtd > 0:
-            return inicio, fim, datas
-    except Exception:
-        pass
-
-    max_le = None
-    try:
-        max_le = (
-            df.filter(pl.col(coluna_data).is_not_null() & (pl.col(coluna_data) <= fim))
-            .select(pl.col(coluna_data).max())
-            .item()
-        )
-    except Exception:
-        max_le = None
-
-    if max_le is None:
-        try:
-            max_le = df.filter(pl.col(coluna_data).is_not_null()).select(pl.col(coluna_data).max()).item()
-        except Exception:
-            max_le = None
-
-    if max_le is None:
-        return inicio, fim, datas
-
-    if isinstance(max_le, datetime):
-        max_le = max_le.date()
-
-    span = (fim - inicio).days
-    novo_fim = max_le
-    novo_inicio = novo_fim - timedelta(days=span)
-    if novo_inicio > novo_fim:
-        novo_inicio = novo_fim
-
-    novo_datas = [novo_inicio + timedelta(days=i) for i in range((novo_fim - novo_inicio).days + 1)]
-
-    logging.warning(
-        f"⚠️ Nenhum registro para o período calculado ({formatar_periodo(inicio, fim)}). "
-        f"Fallback para última data disponível: {formatar_periodo(novo_inicio, novo_fim)}."
-    )
-    return novo_inicio, novo_fim, novo_datas
-
-
-def exportar_base_consolidada(df_periodo: pl.DataFrame, tag: str = "") -> Dict[str, str]:
-    os.makedirs(PASTA_BASE_CONSOLIDADA, exist_ok=True)
-
-    if tag == "_Domingo":
-        prefixo = "Base_Consolidada_Domingo_"
-        nome_base = f"Base_Consolidada_Domingo_{DATA_HOJE}"
-    else:
-        prefixo = "Base_Consolidada_"
-        nome_base = f"Base_Consolidada_{DATA_HOJE}"
-
-    arq_parquet = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.parquet")
-    arq_csv = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.csv")
-    arq_xlsx = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.xlsx")
-
-    arquivar_bases_antigas(PASTA_BASE_CONSOLIDADA, PASTA_ARQUIVO, prefixo)
-
-    df_periodo.write_parquet(arq_parquet)
-    logging.info(f"✅ Base consolidada (PARQUET) salva em: {arq_parquet}")
-
-    df_periodo.write_csv(arq_csv)
-    logging.info(f"✅ Base consolidada (CSV) salva em: {arq_csv}")
-
-    if df_periodo.height <= (EXCEL_MAX_ROWS - 1):
-        df_pd = df_periodo.to_pandas()
-        with pd.ExcelWriter(arq_xlsx, engine="openpyxl") as w:
-            df_pd.to_excel(w, index=False, sheet_name="Base Consolidada")
-        logging.info(f"✅ Base consolidada (XLSX) salva em: {arq_xlsx}")
-    else:
-        logging.warning("⚠️ XLSX não gerado (limite do Excel). Use PARQUET/CSV.")
-
-    return {"parquet": arq_parquet, "csv": arq_csv, "xlsx": arq_xlsx}
-
-
-def exportar_resumo_excel(resumo_pd: pd.DataFrame, arquivo_saida: str, prefixo: str) -> None:
-    os.makedirs(PASTA_SAIDA, exist_ok=True)
-    arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, prefixo)
+    arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, prefixo, excluir_contains=excluir_contains)
     with pd.ExcelWriter(arquivo_saida, engine="openpyxl") as w:
         resumo_pd.to_excel(w, index=False, sheet_name="Resumo SLA")
     logging.info(f"✅ Resumo Excel salvo em: {arquivo_saida}")
@@ -899,6 +568,7 @@ def gerar_imagens_sla_tabela(
     sla_total: float,
     out_dir: str,
     rows_per_page: int = 22,
+    file_suffix: str = "",  # evita sobrescrever (ex: "_Domingo")
 ) -> List[str]:
     """
     Imagem: tabela com TODAS as bases do coordenador (sem gráfico/barra).
@@ -946,7 +616,6 @@ def gerar_imagens_sla_tabela(
         except Exception:
             draw.rectangle(xy, fill=fill, outline=outline, width=width)
 
-    # ===== NOVO: medição + auto-fit + ellipsis + wrap (evita cortar título/linhas) =====
     def _measure(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> Tuple[int, int]:
         text = text or ""
         try:
@@ -1017,7 +686,6 @@ def gerar_imagens_sla_tabela(
 
         return lines
 
-    # ===== Tema J&T =====
     BG = JT_BG_GRAY
     CARD = JT_WHITE
     STROKE = JT_STROKE
@@ -1029,14 +697,10 @@ def gerar_imagens_sla_tabela(
     W = 1800
     pad = 34
 
-    # ✅ AUMENTEI header para caber sem cortar
     header_h = 205
-
     row_h = 52
     gap = 18
 
-    f_sub = load_font(19, bold=False)
-    f_sub_bold = load_font(19, bold=True)
     f_head = load_font(19, bold=True)
     f_row = load_font(19, bold=False)
 
@@ -1055,7 +719,6 @@ def gerar_imagens_sla_tabela(
 
         rr(draw, (pad, pad, W - pad, H - pad), 26, CARD, outline=STROKE, width=2)
 
-        # Header gradiente vermelho (soft -> main)
         hx1, hy1 = pad + 18, pad + 18
         hx2, hy2 = W - pad - 18, pad + header_h
 
@@ -1068,7 +731,6 @@ def gerar_imagens_sla_tabela(
             )
             draw.line([(hx1, hy1 + i), (hx2, hy1 + i)], fill=c)
 
-        # ✅ HEADER: auto-fit + wrap + ellipsis (não corta mais)
         left = hx1 + 22
         inner_w = (hx2 - hx1) - 44
         y = hy1 + 12
@@ -1087,9 +749,7 @@ def gerar_imagens_sla_tabela(
             y += _measure(draw, line, f_ind_fit)[1] + 2
         y += 4
 
-        line_atual = (
-            f"Atualizado: {data_humana}   •   Página {page_idx}/{total_pages}   •   SLA total: {sla_total:.2%}"
-        )
+        line_atual = f"Atualizado: {data_humana}   •   Página {page_idx}/{total_pages}   •   SLA total: {sla_total:.2%}"
         f_line_fit = _fit_font(draw, line_atual, start_size=19, min_size=13, bold=False, max_w=inner_w)
         line_atual = _ellipsize(draw, line_atual, f_line_fit, inner_w)
         draw.text((left, y), line_atual, fill=JT_WHITE, font=f_line_fit)
@@ -1100,7 +760,6 @@ def gerar_imagens_sla_tabela(
         line_periodo = _ellipsize(draw, line_periodo, f_per_fit, inner_w)
         draw.text((left, y), line_periodo, fill=JT_WHITE, font=f_per_fit)
 
-        # Área tabela
         tx1 = pad + 18
         ty1 = hy2 + gap
         tx2 = W - pad - 18
@@ -1109,7 +768,6 @@ def gerar_imagens_sla_tabela(
         draw.text((tx1 + 18, ty1 + 14), "Todas as bases — %SLA (pior → melhor)", fill=TXT, font=f_head)
         draw.line((tx1 + 12, ty1 + 52, tx2 - 12, ty1 + 52), fill=STROKE, width=2)
 
-        # colunas
         col_rank = tx1 + 18
         col_base = tx1 + 90
         col_total = tx2 - 560
@@ -1150,7 +808,8 @@ def gerar_imagens_sla_tabela(
             ytbl += row_h
 
         safe_coord = normalizar(coord).replace(" ", "_")
-        filename = f"SLA_{safe_coord}_{DATA_HOJE}_p{page_idx:02d}.png"
+        fs = (file_suffix or "").strip()
+        filename = f"SLA_{safe_coord}{fs}_{DATA_HOJE}_p{page_idx:02d}.png"
         out_path = os.path.join(out_dir, filename)
         img.save(out_path, "PNG")
         out_paths.append(out_path)
@@ -1171,10 +830,6 @@ def enviar_card_feishu(
     page_label: Optional[str] = None,
     titulo_suffix: str = "",
 ) -> bool:
-    """
-    Card: título = nome do coordenador.
-    Mostra resumo + (opcional) imagem.
-    """
     try:
         if not webhook:
             logging.warning(f"⚠️ Webhook vazio para {coord}. Pulei.")
@@ -1227,10 +882,7 @@ def enviar_card_feishu(
             "msg_type": "interactive",
             "card": {
                 "config": {"wide_screen_mode": True},
-                "header": {
-                    "template": "red",  # ✅ J&T
-                    "title": {"tag": "plain_text", "content": titulo},
-                },
+                "header": {"template": "red", "title": {"tag": "plain_text", "content": titulo}},
                 "elements": elements,
             },
         }
@@ -1240,18 +892,114 @@ def enviar_card_feishu(
             logging.error(f"❌ ERRO ao enviar card para {coord}. Status: {r.status_code}. Resp: {r.text}")
             return False
 
-        logging.info(f"📨 Card enviado para {coord}")
+        logging.info(f"📨 Card enviado para {coord}{titulo_suffix}")
         return True
 
     except Exception as e:
-        logging.error(f"❌ Falha envio card {coord}: {e}")
+        logging.error(f"❌ Falha envio card {coord}{titulo_suffix}: {e}")
         return False
+
+
+def processar_parte_e_enviar(
+    parte_nome: str,
+    df_parte: pl.DataFrame,
+    datas_parte: List[date],
+    arquivo_resumo: str,
+    prefixo_resumo: str,
+    tag_base: str,
+    titulo_suffix: str,
+    file_suffix_imagem: str,
+) -> None:
+    """
+    Gera base + resumo + envia cards (com/sem imagem) para uma parte do período.
+    Ex: Seg–Sáb (titulo_suffix="") ou Domingo (titulo_suffix=" — Domingo")
+    """
+    if not datas_parte:
+        logging.warning(f"⚠️ {parte_nome}: lista de datas vazia. Pulei.")
+        return
+
+    if df_parte is None or df_parte.is_empty():
+        logging.warning(f"⚠️ {parte_nome}: dataframe vazio. Pulei export/envio.")
+        return
+
+    periodo_txt_parte = periodo_txt_de_datas(datas_parte)
+    dias_txt_parte = formatar_lista_dias(datas_parte)
+
+    logging.info(f"🧾 {parte_nome}: Período: {periodo_txt_parte} | Dias: {dias_txt_parte} | Registros: {df_parte.height}")
+
+    paths_base = exportar_base_consolidada(df_parte, tag=tag_base)
+    arquivos_md = montar_arquivos_gerados_md(arquivo_resumo, paths_base)
+
+    resumo_pd = gerar_resumo_por_base(df_parte)
+
+    # ✅ evita arquivar/resumo de Domingo quando gerar Seg–Sáb
+    excluir_contains = "Domingo" if tag_base != "_Domingo" else None
+    exportar_resumo_excel(resumo_pd, arquivo_resumo, prefixo=prefixo_resumo, excluir_contains=excluir_contains)
+
+    for coord, webhook in COORDENADOR_WEBHOOKS.items():
+        if resumo_pd.empty:
+            continue
+
+        sub = resumo_pd[resumo_pd["COORDENADOR"].apply(normalizar) == normalizar(coord)]
+        if sub.empty:
+            logging.warning(f"⚠️ Nenhuma base encontrada para {coord} ({parte_nome})")
+            continue
+
+        bases = sub["Base De Entrega"].nunique()
+        total = float(sub["Total"].sum()) if "Total" in sub.columns else 0.0
+        ent = float(sub["Entregues no Prazo"].sum()) if "Entregues no Prazo" in sub.columns else 0.0
+        sla = (ent / total) if total > 0 else 0.0
+
+        img_paths = gerar_imagens_sla_tabela(
+            coord=coord,
+            indicador_nome=INDICADOR_NOME,
+            titulo_suffix=titulo_suffix,
+            periodo_txt=periodo_txt_parte,
+            dias_txt=dias_txt_parte,
+            sub=sub,
+            sla_total=sla,
+            out_dir=PASTA_IMAGENS,
+            rows_per_page=IMG_ROWS_PER_PAGE,
+            file_suffix=file_suffix_imagem,
+        )
+
+        if img_paths and _feishu_enabled():
+            for i, p in enumerate(img_paths, start=1):
+                img_key = feishu_upload_image_get_key(p)
+                enviar_card_feishu(
+                    webhook=webhook,
+                    coord=coord,
+                    indicador_nome=INDICADOR_NOME,
+                    periodo_txt=periodo_txt_parte,
+                    dias_txt=dias_txt_parte,
+                    sla=sla,
+                    bases=bases,
+                    arquivos_gerados_md=arquivos_md,
+                    image_key=img_key,
+                    page_label=f"{i}/{len(img_paths)}",
+                    titulo_suffix=titulo_suffix,
+                )
+                time.sleep(0.35)
+        else:
+            enviar_card_feishu(
+                webhook=webhook,
+                coord=coord,
+                indicador_nome=INDICADOR_NOME,
+                periodo_txt=periodo_txt_parte,
+                dias_txt=dias_txt_parte,
+                sla=sla,
+                bases=bases,
+                arquivos_gerados_md=arquivos_md,
+                image_key=None,
+                page_label=None,
+                titulo_suffix=titulo_suffix,
+            )
 # =========================
 # BLOCO 4/4 — MAIN
 # =========================
 
 if __name__ == "__main__":
-    logging.info("🚀 Iniciando processamento SLA (v2.15 — separa Domingo)...")
+    logging.info("🚀 Iniciando processamento SLA (v2.17 — Seg–Sáb sempre / Domingo opcional)...")
 
     try:
         os.makedirs(PASTA_SAIDA, exist_ok=True)
@@ -1264,11 +1012,14 @@ if __name__ == "__main__":
             raise SystemExit(0)
 
         inicio, fim, datas = periodo
-        periodo_txt = formatar_periodo(inicio, fim)
-        dias_txt = formatar_lista_dias(datas)
 
-        logging.info(f"📅 Período (após feriados) usado para SLA: {periodo_txt}")
-        logging.info(f"🗓️ Dias considerados: {dias_txt}")
+        # ✅ AGORA: não encerra se não tiver domingo
+        datas_seg_sab_pre, datas_domingo_pre = separar_seg_sab_e_domingo(datas)
+        if not datas_domingo_pre:
+            logging.info("ℹ️ Período calculado não contém domingo — vai gerar somente Seg–Sáb (ou dias úteis do período).")
+
+        logging.info(f"📅 Período (após feriados) usado para SLA: {formatar_periodo(inicio, fim)}")
+        logging.info(f"🗓️ Dias considerados: {formatar_lista_dias(datas)}")
         logging.info(f"📌 Datas (ISO): {', '.join([d.strftime('%Y-%m-%d') for d in datas])}")
 
         df = consolidar_planilhas(PASTA_ENTRADA)
@@ -1278,17 +1029,16 @@ if __name__ == "__main__":
         df = garantir_coluna_data(df, COL_DATA_BASE)
 
         inicio, fim, datas = ajustar_periodo_por_dados(df, COL_DATA_BASE, inicio, fim, datas)
-        periodo_txt = formatar_periodo(inicio, fim)
-        dias_txt = formatar_lista_dias(datas)
 
-        logging.info(f"📅 Período FINAL usado para cálculo SLA: {periodo_txt}")
-        logging.info(f"🗓️ Dias considerados (FINAL): {dias_txt}")
+        logging.info(f"📅 Período FINAL usado para cálculo SLA: {formatar_periodo(inicio, fim)}")
+        logging.info(f"🗓️ Dias considerados (FINAL): {formatar_lista_dias(datas)}")
 
         datas_seg_sab, datas_domingo = separar_seg_sab_e_domingo(datas)
+
         if datas_domingo:
             logging.info("🧩 Domingo presente no período (vai gerar separado).")
         else:
-            logging.info("🧩 Não há domingo no período. Vai gerar apenas Seg–Sáb.")
+            logging.info("🧩 Sem domingo no período (vai gerar apenas Seg–Sáb).")
 
         # Detectar coluna ENTREGUE NO PRAZO
         colunas = list(df.columns)
@@ -1313,12 +1063,12 @@ if __name__ == "__main__":
         )
 
         df_periodo_all = df.filter(pl.col(COL_DATA_BASE).is_in(datas))
-        logging.info(f"📊 Registros para {periodo_txt}: {df_periodo_all.height}")
+        logging.info(f"📊 Registros para o período total: {df_periodo_all.height}")
 
         # coordenadores
         coord_df = pl.read_excel(PASTA_COORDENADOR)
 
-        # ✅ tentativa de rename mais tolerante
+        # tentativa de rename mais tolerante
         rename_map = {}
         if "Nome da base" in coord_df.columns:
             rename_map["Nome da base"] = "BASE DE ENTREGA"
@@ -1330,7 +1080,9 @@ if __name__ == "__main__":
             coord_df = coord_df.rename(rename_map)
 
         if "BASE DE ENTREGA" not in coord_df.columns or "COORDENADOR" not in coord_df.columns:
-            raise KeyError(f"❌ Base_Atualizada.xlsx precisa ter 'BASE DE ENTREGA' e 'COORDENADOR'. Colunas: {coord_df.columns}")
+            raise KeyError(
+                f"❌ Base_Atualizada.xlsx precisa ter 'BASE DE ENTREGA' e 'COORDENADOR'. Colunas: {coord_df.columns}"
+            )
 
         # normalizar base para join
         df_periodo_all = df_periodo_all.with_columns(
@@ -1340,7 +1092,7 @@ if __name__ == "__main__":
             pl.col("BASE DE ENTREGA").map_elements(normalizar, return_dtype=pl.Utf8).alias("BASE_NORM")
         )
 
-        # ✅ evitar duplicação no join (many-to-many)
+        # evitar duplicação no join (many-to-many)
         coord_df = coord_df.unique(subset=["BASE_NORM"], keep="first")
 
         df_periodo_all = df_periodo_all.join(coord_df.select(["BASE_NORM", "COORDENADOR"]), on="BASE_NORM", how="left")
@@ -1348,77 +1100,46 @@ if __name__ == "__main__":
         sem_coord = df_periodo_all.filter(pl.col("COORDENADOR").is_null()).height
         logging.info(f"🧩 Registros sem coordenador após join (período total): {sem_coord}")
 
-        # separar seg-sab
+        # separar seg-sab / domingo
         df_seg_sab = df_periodo_all.filter(pl.col(COL_DATA_BASE).is_in(datas_seg_sab)) if datas_seg_sab else pl.DataFrame()
+        df_domingo = df_periodo_all.filter(pl.col(COL_DATA_BASE).is_in(datas_domingo)) if datas_domingo else pl.DataFrame()
+
         logging.info(f"📦 Registros Seg–Sáb: {df_seg_sab.height if hasattr(df_seg_sab, 'height') else 0}")
+        logging.info(f"📦 Registros Domingo: {df_domingo.height if hasattr(df_domingo, 'height') else 0}")
 
-        # export base + resumo (seg-sab)
-        paths_base_seg_sab = exportar_base_consolidada(df_seg_sab, tag="")
-        arquivos_md_seg_sab = montar_arquivos_gerados_md(ARQUIVO_SAIDA, paths_base_seg_sab)
-
-        resumo_seg_sab = gerar_resumo_por_base(df_seg_sab)
-        exportar_resumo_excel(resumo_seg_sab, ARQUIVO_SAIDA, prefixo="Resumo_Consolidado_")
-
-        # envio por coordenador (seg-sab)
-        for coord, webhook in COORDENADOR_WEBHOOKS.items():
-            if resumo_seg_sab.empty:
-                continue
-
-            sub = resumo_seg_sab[resumo_seg_sab["COORDENADOR"].apply(normalizar) == normalizar(coord)]
-            if sub.empty:
-                logging.warning(f"⚠️ Nenhuma base encontrada para {coord} (Seg–Sáb)")
-                continue
-
-            bases = sub["Base De Entrega"].nunique()
-            total = float(sub["Total"].sum()) if "Total" in sub.columns else 0.0
-            ent = float(sub["Entregues no Prazo"].sum()) if "Entregues no Prazo" in sub.columns else 0.0
-            sla = (ent / total) if total > 0 else 0.0
-
-            img_paths = gerar_imagens_sla_tabela(
-                coord=coord,
-                indicador_nome=INDICADOR_NOME,
+        # ✅ GERA SEMPRE SEG–SÁB
+        if datas_seg_sab and not df_seg_sab.is_empty():
+            processar_parte_e_enviar(
+                parte_nome="Seg–Sáb",
+                df_parte=df_seg_sab,
+                datas_parte=datas_seg_sab,
+                arquivo_resumo=ARQUIVO_SAIDA,
+                prefixo_resumo="Resumo_Consolidado_",
+                tag_base="",
                 titulo_suffix="",
-                periodo_txt=periodo_txt,
-                dias_txt=dias_txt,
-                sub=sub,
-                sla_total=sla,
-                out_dir=PASTA_IMAGENS,
-                rows_per_page=IMG_ROWS_PER_PAGE,
+                file_suffix_imagem="",
             )
+        else:
+            logging.warning("⚠️ Sem dados para Seg–Sáb no período. Nada a exportar/enviar (Seg–Sáb).")
 
-            if img_paths and _feishu_enabled():
-                for i, p in enumerate(img_paths, start=1):
-                    img_key = feishu_upload_image_get_key(p)
-                    enviar_card_feishu(
-                        webhook=webhook,
-                        coord=coord,
-                        indicador_nome=INDICADOR_NOME,
-                        periodo_txt=periodo_txt,
-                        dias_txt=dias_txt,
-                        sla=sla,
-                        bases=bases,
-                        arquivos_gerados_md=arquivos_md_seg_sab,
-                        image_key=img_key,
-                        page_label=f"{i}/{len(img_paths)}",
-                        titulo_suffix="",
-                    )
-                    time.sleep(0.35)
-            else:
-                enviar_card_feishu(
-                    webhook=webhook,
-                    coord=coord,
-                    indicador_nome=INDICADOR_NOME,
-                    periodo_txt=periodo_txt,
-                    dias_txt=dias_txt,
-                    sla=sla,
-                    bases=bases,
-                    arquivos_gerados_md=arquivos_md_seg_sab,
-                    image_key=None,
-                    page_label=None,
-                    titulo_suffix="",
-                )
+        # ✅ DOMINGO SÓ SE EXISTIR
+        if datas_domingo and not df_domingo.is_empty():
+            processar_parte_e_enviar(
+                parte_nome="Domingo",
+                df_parte=df_domingo,
+                datas_parte=datas_domingo,
+                arquivo_resumo=ARQUIVO_SAIDA_DOMINGO,
+                prefixo_resumo="Resumo_Consolidado_Domingo_",
+                tag_base="_Domingo",
+                titulo_suffix=" — Domingo",
+                file_suffix_imagem="_Domingo",
+            )
+        else:
+            logging.info("ℹ️ Domingo não presente (ou sem dados) — não gerou a parte de Domingo.")
 
         logging.info("🏁 Processamento concluído.")
 
+    except SystemExit:
+        raise
     except Exception as e:
         logging.critical(f"❌ ERRO FATAL: {e}", exc_info=True)
