@@ -51,7 +51,7 @@ DIAGNOSTICO_SCHEMA = True
 # LISTA DE BASES VÁLIDAS
 # ==========================================================
 BASES_VALIDAS = [ 'F CHR-AM', 'F CAC-RO', 'F PDR-GO','F PVH-RO', 'F ARQ - RO',
-                  'F AGB-MT', 'F GYN 03-GO','MAO -AM', 'RBR 02-AC', 'F RBR-AC', 'IPR -GO',
+                  'F AGB-MT', 'F GYN 03-GO', 'F RBR-AC', 'IPR -GO',
                   'F GYN - GO','F VHL-RO', 'F PON-GO', 'F ANP-GO','F GYN 02-GO','F CDN-AM',
                   'F AGL-GO', 'F APG - GO', 'F RVD - GO', 'F PDT-TO', 'F PLN-DF','F SEN-GO','F PVL-MT',
                   'F TRD-GO', 'F CEI-DF','F CNF-MT', 'F FMA-GO','F ALV-AM','F POS-GO','F PPA-MS','F MAC-AP',

@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime
 
 # ======== CONFIG (ajuste aqui se quiser) ========
-PASTA_ALVO = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\QUALIDADE_ FILIAL GO - BASE DE DADOS\01. OPERAÇÃO CD\11. ENTREGA REALIZADA - LISTA"
+PASTA_ALVO = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\QUALIDADE_ FILIAL GO - BASE DE DADOS\04. QUALIDADE\12. BASE DE DADOS - SEM MOV NOVO"
 RECURSIVO = True  # True = entra em subpastas também
 EXTENSOES = {".xlsx", ".xlsm", ".xlsb", ".xls"}
 
