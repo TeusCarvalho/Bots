@@ -35,7 +35,14 @@ os.environ["POLARS_MAX_THREADS"] = str(multiprocessing.cpu_count())
 # Caminhos
 # ============================================================
 PASTA_ENTRADA = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\03 - SLA - Entrega Realizada LM"
-PASTA_COORDENADOR = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\01 - Coordenador"
+
+# ✅ Pode ser PASTA ou ARQUIVO
+# Exemplo pasta:
+CAMINHO_COORDENADOR = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\01 - Coordenador"
+
+# Exemplo arquivo direto:
+# CAMINHO_COORDENADOR = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\01 - Coordenador\Base_Atualizada.xlsx"
+
 PASTA_SAIDA = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\SLA - Coordenadores LM"
 
 # Arquivo morto (para relatórios e bases antigas)
@@ -67,7 +74,7 @@ LINK_PASTA = (
 # ============================================================
 INDICADOR_NOME = "SLA Entrega Realizada — %SLA por Base (pior → melhor)"
 
-# ✅ COLE AQUI SEUS WEBHOOKS
+# ✅ COLE AQUI SEUS WEBHOOKS ATUAIS
 COORDENADOR_WEBHOOKS = {
     "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/3663dd30-722c-45d6-9e3c-1d4e2838f112",
     "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/0b907801-c73e-4de8-9f84-682d7b54f6fd",
@@ -80,8 +87,8 @@ COORDENADOR_WEBHOOKS = {
     "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/63751a67-efe8-40e4-b841-b290a4819836",
     "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/3ddc5962-2d32-4b2d-92d9-a4bc95ac3393",
     "Ana Cunha": "https://open.feishu.cn/open-apis/bot/v2/hook/b2ec868f-3149-4808-af53-9e0c6d2cd94e",
-    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/a53ad30e-17dd-4330-93db-15138b20d8f2",
-}
+    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/a53ad30e-17dd-4330-93db-15138b20d8f2", }
+
 
 EXTS = (".xlsx", ".xls", ".csv")
 COL_DATA_BASE = "DATA PREVISTA DE ENTREGA"
@@ -155,6 +162,62 @@ def normalizar(s) -> str:
     while "  " in s:
         s = s.replace("  ", " ")
     return s
+
+
+def localizar_arquivo_coordenador(caminho: str) -> str:
+    """
+    Aceita:
+    - caminho direto para arquivo .xlsx/.xls
+    - caminho para pasta contendo o arquivo de coordenador
+
+    Prioriza nomes como:
+    - Base_Atualizada
+    - Coordenador
+    - Base
+    - Mapeamento
+
+    Se houver vários, pega o mais prioritário e mais recente.
+    """
+    if not caminho or not str(caminho).strip():
+        raise ValueError("CAMINHO_COORDENADOR está vazio.")
+
+    caminho = os.path.abspath(caminho)
+
+    if os.path.isfile(caminho):
+        if not caminho.lower().endswith((".xlsx", ".xls")):
+            raise ValueError(f"O arquivo informado em CAMINHO_COORDENADOR não é Excel: {caminho}")
+        logging.info(f"📎 Arquivo de coordenador informado diretamente: {caminho}")
+        return caminho
+
+    if not os.path.isdir(caminho):
+        raise FileNotFoundError(f"CAMINHO_COORDENADOR não existe: {caminho}")
+
+    arquivos = [
+        os.path.join(caminho, f)
+        for f in os.listdir(caminho)
+        if f.lower().endswith((".xlsx", ".xls")) and not f.startswith("~$")
+    ]
+
+    if not arquivos:
+        raise FileNotFoundError(f"Nenhum arquivo Excel encontrado em: {caminho}")
+
+    prioridades = ["BASE_ATUALIZADA", "COORDENADOR", "BASE", "MAPEAMENTO"]
+
+    def prioridade_arquivo(p: str) -> Tuple[int, float, str]:
+        nome = normalizar(os.path.basename(p))
+        idx = len(prioridades)
+        for i, termo in enumerate(prioridades):
+            if termo in nome:
+                idx = i
+                break
+        # mais recente primeiro
+        return (idx, -os.path.getmtime(p), os.path.basename(p).lower())
+
+    arquivos.sort(key=prioridade_arquivo)
+    escolhido = arquivos[0]
+
+    logging.info(f"📎 Arquivo de coordenador localizado automaticamente: {escolhido}")
+    return escolhido
 
 
 def pascoa_gregoriana(ano: int) -> date:
@@ -421,7 +484,6 @@ def exportar_base_consolidada(df_periodo: pl.DataFrame, tag: str = "") -> Dict[s
     else:
         prefixo = "Base_Consolidada_"
         nome_base = f"Base_Consolidada_{DATA_HOJE}"
-        # ✅ evita arquivar arquivos de Domingo quando gerar Seg–Sáb
         excluir_contains = "Domingo"
 
     arq_parquet = os.path.join(PASTA_BASE_CONSOLIDADA, f"{nome_base}.parquet")
@@ -567,12 +629,8 @@ def gerar_imagens_sla_tabela(
     sla_total: float,
     out_dir: str,
     rows_per_page: int = 22,
-    file_suffix: str = "",  # evita sobrescrever (ex: "_Domingo")
+    file_suffix: str = "",
 ) -> List[str]:
-    """
-    Imagem: tabela com TODAS as bases do coordenador (sem gráfico/barra).
-    Tema J&T (vermelho/cinza claro/texto escuro).
-    """
     try:
         from PIL import Image, ImageDraw, ImageFont
     except Exception:
@@ -581,7 +639,7 @@ def gerar_imagens_sla_tabela(
     os.makedirs(out_dir, exist_ok=True)
 
     sub2 = sub.copy()
-    sub2 = sub2.sort_values("% SLA Cumprido", ascending=True)  # pior -> melhor
+    sub2 = sub2.sort_values("% SLA Cumprido", ascending=True)
 
     rows = []
     for _, r in sub2.iterrows():
@@ -909,10 +967,6 @@ def processar_parte_e_enviar(
     titulo_suffix: str,
     file_suffix_imagem: str,
 ) -> None:
-    """
-    Gera base + resumo + envia cards (com/sem imagem) para uma parte do período.
-    Ex: Seg–Sáb (titulo_suffix="") ou Domingo (titulo_suffix=" — Domingo")
-    """
     if not datas_parte:
         logging.warning(f"⚠️ {parte_nome}: lista de datas vazia. Pulei.")
         return
@@ -927,13 +981,13 @@ def processar_parte_e_enviar(
     logging.info(f"🧾 {parte_nome}: Período: {periodo_txt_parte} | Dias: {dias_txt_parte} | Registros: {df_parte.height}")
 
     paths_base = exportar_base_consolidada(df_parte, tag=tag_base)
-    arquivos_md = montar_arquivos_gerados_md(arquivo_resumo, paths_base)
 
     resumo_pd = gerar_resumo_por_base(df_parte)
 
-    # ✅ evita arquivar/resumo de Domingo quando gerar Seg–Sáb
     excluir_contains = "Domingo" if tag_base != "_Domingo" else None
     exportar_resumo_excel(resumo_pd, arquivo_resumo, prefixo=prefixo_resumo, excluir_contains=excluir_contains)
+
+    arquivos_md = montar_arquivos_gerados_md(arquivo_resumo, paths_base)
 
     for coord, webhook in COORDENADOR_WEBHOOKS.items():
         if resumo_pd.empty:
@@ -998,7 +1052,7 @@ def processar_parte_e_enviar(
 # =========================
 
 if __name__ == "__main__":
-    logging.info("🚀 Iniciando processamento SLA (v2.17 — Seg–Sáb sempre / Domingo opcional)...")
+    logging.info("🚀 Iniciando processamento SLA (v2.18 — leitura robusta do arquivo de coordenador)...")
 
     try:
         os.makedirs(PASTA_SAIDA, exist_ok=True)
@@ -1012,7 +1066,6 @@ if __name__ == "__main__":
 
         inicio, fim, datas = periodo
 
-        # ✅ AGORA: não encerra se não tiver domingo
         datas_seg_sab_pre, datas_domingo_pre = separar_seg_sab_e_domingo(datas)
         if not datas_domingo_pre:
             logging.info("ℹ️ Período calculado não contém domingo — vai gerar somente Seg–Sáb (ou dias úteis do período).")
@@ -1049,6 +1102,7 @@ if __name__ == "__main__":
             if nome in col_upper:
                 col_entregue = colunas[col_upper.index(nome)]
                 break
+
         if not col_entregue:
             raise KeyError(f"❌ Coluna ENTREGUE NO PRAZO não encontrada.\nColunas: {df.columns}")
 
@@ -1064,23 +1118,52 @@ if __name__ == "__main__":
         df_periodo_all = df.filter(pl.col(COL_DATA_BASE).is_in(datas))
         logging.info(f"📊 Registros para o período total: {df_periodo_all.height}")
 
-        # coordenadores
-        coord_df = pl.read_excel(PASTA_COORDENADOR)
+        # ============================================================
+        # Coordenadores
+        # ============================================================
+        arquivo_coord = localizar_arquivo_coordenador(CAMINHO_COORDENADOR)
+        coord_df = pl.read_excel(arquivo_coord)
+
+        logging.info(f"📎 Base de coordenadores carregada: {arquivo_coord}")
+        logging.info(f"📥 Registros base coordenador: {coord_df.height}")
+
+        # limpar nomes de colunas
+        coord_df = coord_df.rename({c: c.strip() for c in coord_df.columns})
 
         # tentativa de rename mais tolerante
         rename_map = {}
         if "Nome da base" in coord_df.columns:
             rename_map["Nome da base"] = "BASE DE ENTREGA"
+        if "NOME DA BASE" in coord_df.columns:
+            rename_map["NOME DA BASE"] = "BASE DE ENTREGA"
         if "Coordenadores" in coord_df.columns:
             rename_map["Coordenadores"] = "COORDENADOR"
+        if "COORDENADORES" in coord_df.columns:
+            rename_map["COORDENADORES"] = "COORDENADOR"
         if "Coordenador" in coord_df.columns and "COORDENADOR" not in rename_map.values():
             rename_map["Coordenador"] = "COORDENADOR"
+
         if rename_map:
             coord_df = coord_df.rename(rename_map)
 
+        # se ainda não encontrou, tenta por normalização
+        cols_norm = {normalizar(c): c for c in coord_df.columns}
+
+        if "BASE DE ENTREGA" not in coord_df.columns:
+            if "NOME DA BASE" in cols_norm:
+                coord_df = coord_df.rename({cols_norm["NOME DA BASE"]: "BASE DE ENTREGA"})
+            elif "BASE DE ENTREGA" in cols_norm:
+                coord_df = coord_df.rename({cols_norm["BASE DE ENTREGA"]: "BASE DE ENTREGA"})
+
+        if "COORDENADOR" not in coord_df.columns:
+            if "COORDENADORES" in cols_norm:
+                coord_df = coord_df.rename({cols_norm["COORDENADORES"]: "COORDENADOR"})
+            elif "COORDENADOR" in cols_norm:
+                coord_df = coord_df.rename({cols_norm["COORDENADOR"]: "COORDENADOR"})
+
         if "BASE DE ENTREGA" not in coord_df.columns or "COORDENADOR" not in coord_df.columns:
             raise KeyError(
-                f"❌ Base_Atualizada.xlsx precisa ter 'BASE DE ENTREGA' e 'COORDENADOR'. Colunas: {coord_df.columns}"
+                f"❌ O arquivo de coordenador precisa ter 'BASE DE ENTREGA' e 'COORDENADOR'. Colunas encontradas: {coord_df.columns}"
             )
 
         # normalizar base para join
@@ -1094,7 +1177,11 @@ if __name__ == "__main__":
         # evitar duplicação no join (many-to-many)
         coord_df = coord_df.unique(subset=["BASE_NORM"], keep="first")
 
-        df_periodo_all = df_periodo_all.join(coord_df.select(["BASE_NORM", "COORDENADOR"]), on="BASE_NORM", how="left")
+        df_periodo_all = df_periodo_all.join(
+            coord_df.select(["BASE_NORM", "COORDENADOR"]),
+            on="BASE_NORM",
+            how="left",
+        )
 
         sem_coord = df_periodo_all.filter(pl.col("COORDENADOR").is_null()).height
         logging.info(f"🧩 Registros sem coordenador após join (período total): {sem_coord}")
@@ -1142,3 +1229,4 @@ if __name__ == "__main__":
         raise
     except Exception as e:
         logging.critical(f"❌ ERRO FATAL: {e}", exc_info=True)
+        raise

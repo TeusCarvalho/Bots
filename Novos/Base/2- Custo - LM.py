@@ -22,17 +22,15 @@ warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 # ======================================================
 # ⚙️ CONFIGURAÇÕES (AJUSTE AQUI)
 # ======================================================
-BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Custo - Coordenador"
-COORDENADOR_PATH = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
+BASE_DIR = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\02 - Custo - Coordenador"
+COORDENADOR_PATH = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\01 - Coordenador\Base_Atualizada.xlsx"
 
-OUTPUT_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Custos - Coordenadores"
+OUTPUT_DIR = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Custo - Coordenador LM"
 ARQUIVO_MORTO = os.path.join(OUTPUT_DIR, "Arquivo Morto")
 IMAGENS_DIR = os.path.join(OUTPUT_DIR, "Imagens_Coordenadores")
 
 LINK_PASTA = (
-    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/"
-    "matheus_carvalho_jtexpressdf_onmicrosoft_com/"
-    "IgAcZvPQH2w4Sq4XjYZiL5g1AfacXr80tUhQHJzX8QGR92I?e=Yc0rtm"
+    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/IgC-eggsBQa8RaipUTMncPN2AV5655MizZg4mN_qzMkx0-Q?e=hcKSwg"
 )
 
 # ======================================================

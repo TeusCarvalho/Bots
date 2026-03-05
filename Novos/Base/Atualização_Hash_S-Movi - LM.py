@@ -38,12 +38,11 @@ COORDENADOR_WEBHOOKS = {
     "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/5ea0a62d-3e94-47d0-8914-59f722feff5b",
 }
 
-REPORTS_FOLDER_PATH = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Jt - Relatórios"
+REPORTS_FOLDER_PATH = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Sem_Movimentação - LM"
 HASH_FILE = os.path.join(os.path.dirname(__file__), "../ultimo_relatorio.json")
 
 LINK_RELATORIO = (
-    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/"
-    "matheus_carvalho_jtexpressdf_onmicrosoft_com/Ek3KdqMIdX5EodE-3JwCQnsBAMiJ574BsxAR--oYBNN0-g?e=dfqBzT"
+    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/IgBjYhTX-imSQKw7j2RKp9M6AZjMTBT-NFfPY-u-WPCgzkU?e=tfVi3V"
 )
 
 # Onde salvar as imagens geradas
