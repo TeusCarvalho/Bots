@@ -12,7 +12,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # =================== CONFIG ===================
-BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Semanal\1. Shipping Time"
+BASE_DIR = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\Semanal\1. Shipping Time\Semana_Atual"
 OUTPUT_DIR = os.path.join(BASE_DIR, "Output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

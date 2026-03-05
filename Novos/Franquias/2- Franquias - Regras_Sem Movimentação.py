@@ -10,9 +10,9 @@ from typing import List, Dict, Any, Optional
 # CONFIGURAÇÕES GERAIS
 # =====================================================================
 
-BASE_PATH = r'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Sem Movimentação'
-OUTPUT_BASE_PATH = r'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Sem Movimentação'
-COORDENADOR_BASE_PATH = r'C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador'
+BASE_PATH = r'C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\02 - Sem Movimentação'
+OUTPUT_BASE_PATH = r'C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Sem_Movimentação - Franquia'
+COORDENADOR_BASE_PATH = r'C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\01 - Coordenador'
 
 PATH_INPUT_MAIN = os.path.join(BASE_PATH, 'Sem_Movimentação')
 PATH_OUTPUT_REPORTS = OUTPUT_BASE_PATH

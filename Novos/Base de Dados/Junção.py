@@ -1,25 +1,3 @@
-# -*- coding: utf-8 -*-
-# =========================
-# BLOCO 1/4 — IMPORTS / CONFIG / UI / DATA NO NOME
-# =========================
-"""
-unir_planilhas.py
-
-Junta várias planilhas (Excel/CSV) em uma base única, mantendo TODAS as colunas (outer union).
-- Lê: .xlsx, .xlsm, .xls, .csv
-- Excel: por padrão lê TODAS as abas
-- Adiciona colunas de rastreio: _arquivo, _aba
-- Extrai data do nome do arquivo e salva em: _data_raw_nome e _data_arquivo_nome (YYYY-MM-DD)
-- Exporta: .csv / .parquet / .xlsx
-- Excel: se ultrapassar o limite por aba, divide automaticamente em várias abas.
-
-Uso (com janelas):
-  python unir_planilhas.py
-
-Uso (CLI):
-  python unir_planilhas.py --input-dir r"C:\\pasta" --output r"C:\\saida\\base_unificada.xlsx"
-"""
-
 from __future__ import annotations
 
 import argparse

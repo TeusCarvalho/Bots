@@ -101,11 +101,11 @@ COORDENADOR_WEBHOOKS = {
 }
 
 LINK_RELATORIO = (
-    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/IgC6tTpIgFRPQo0UnmEcJ-yrAXFzhGv-zmG-ea0nro6zlm4?e=wtpi2f"
+    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/IgBldPNr5MwPQaiozw6vEIihAdlI_1TZb8xYQ3V04eKiLuM?e=G4g9Q9"
 )
 
-BASE_DIR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Custo - Coordenador"
-OUTPUT_FILE = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Custo\Minha_responsabilidade_atualizada.xlsx"
+BASE_DIR = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\02 - Custo - Coordenador"
+OUTPUT_FILE = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Custo - Franquia\Minha_responsabilidade_atualizada.xlsx"
 
 BASES_PERMITIDAS = [
     "F AGB 02-MT", "F AGB-MT", "F AGL-GO", "F ALV-AM", "F AMB-MS", "F ANA-PA",

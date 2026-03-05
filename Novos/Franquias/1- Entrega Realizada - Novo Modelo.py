@@ -19,7 +19,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("sla_franquias.log", encoding="utf-8"),
+        logging.FileHandler("Antigos/sla_franquias.log", encoding="utf-8"),
         logging.StreamHandler()
     ]
 )
@@ -29,13 +29,13 @@ logging.basicConfig(
 # ==========================================================
 os.environ["POLARS_MAX_THREADS"] = str(multiprocessing.cpu_count())
 
-PASTA_ENTRADA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\14-  SLA Entrega Realizada Franquia"
+PASTA_ENTRADA = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\06-  SLA Entrega Realizada Franquia"
 
 # ✅ PASTA DE SAÍDA (onde você quer que gere a planilha nova)
-PASTA_SAIDA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\Franquias\Entrega Realizada"
+PASTA_SAIDA = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\SLA - Franquias"
 
 WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/92a82aea-9b5c-4e3d-9169-8d4753ecef38"
-LINK_PASTA = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/IgDyD96CIiyUQKnAdUmf9Z5mAVyyGEiZCJ7OT3_189jqmP8?e=1GcNs5"
+LINK_PASTA = "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/IgB0KPVG-6d0Qqxw1Tk7GypbAZqn_A3JLD5XXsi7cBiWlHQ?e=gXLZ41"
 
 COL_DATA_ORIGINAL = "Data prevista de entrega"
 COL_DATA_UPPER = "DATA PREVISTA DE ENTREGA"

@@ -15,7 +15,7 @@ import pandas as pd
 # =========================
 # CONFIG (AJUSTE SE PRECISAR)
 # =========================
-PASTA_PADRAO = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Pasta de Teste para Teste"
+PASTA_PADRAO = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Junção"
 
 COL_BASE = "Nome da base"
 COL_DATA = "Data"

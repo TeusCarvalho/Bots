@@ -34,9 +34,9 @@ os.environ["POLARS_MAX_THREADS"] = str(multiprocessing.cpu_count())
 # ============================================================
 # Caminhos
 # ============================================================
-PASTA_ENTRADA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\SLA - Entrega Realizada"
-PASTA_COORDENADOR = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda (1)\Área de Trabalho\Testes\Coordenador\Base_Atualizada.xlsx"
-PASTA_SAIDA = r"C:\Users\J&T-099\OneDrive - Speed Rabbit Express Ltda\SLA - Entrega Realizada"
+PASTA_ENTRADA = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\03 - SLA - Entrega Realizada LM"
+PASTA_COORDENADOR = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\01 - Coordenador"
+PASTA_SAIDA = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\SLA - Coordenadores LM"
 
 # Arquivo morto (para relatórios e bases antigas)
 PASTA_ARQUIVO = os.path.join(PASTA_SAIDA, "Arquivo Morto")
@@ -59,8 +59,7 @@ ARQUIVO_SAIDA_DOMINGO = os.path.join(PASTA_SAIDA, f"Resumo_Consolidado_Domingo_{
 EXCEL_MAX_ROWS = 1_048_576
 
 LINK_PASTA = (
-    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/"
-    "IgCkMQtn4udmRZAFJTit7pkaAVAudAyWYHic-zXIKMlQz1Q?e=d3eOd5"
+    "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/IgCBcizkJxWcTYzIEL35TMQtAap5Mm22qqaWrAoK6sSlijs?e=5aj7RG"
 )
 
 # ============================================================
