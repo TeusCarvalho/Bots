@@ -26,9 +26,8 @@ INDICADOR_NOME = "Multas 5+ dias — Bases por quantidade (Δ vs relatório ante
 COORDENADOR_WEBHOOKS = {
     "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/1d9bbacf-79ed-4eb3-8046-26d7480893c3",
     "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/5c2bb460-1971-4770-9b37-98b6e4ba3cd9",
-    "Anderson Matheus": "https://open.feishu.cn/open-apis/bot/v2/hook/ac4a5800-44b5-45d5-b0d2-f4d88a677967",
+    "Anderson Matheus": "https://open.feishu.cn/open-apis/bot/v2/hook/914ce9f9-35ab-4869-860f-d2bef7d933fb",
     "Marcelo Medina": "https://open.feishu.cn/open-apis/bot/v2/hook/20a61c63-6db7-4e83-9e44-ae6b545495cc",
-    "Odária Fereira": "https://open.feishu.cn/open-apis/bot/v2/hook/914ce9f9-35ab-4869-860f-d2bef7d933fb",
     "Rodrigo Castro": "https://open.feishu.cn/open-apis/bot/v2/hook/16414836-5020-49bd-b3d3-ded4f34878ab",
     "Orlean Nascimento": "https://open.feishu.cn/open-apis/bot/v2/hook/62cd648c-ecd5-406a-903d-b596944c1919",
     "Fabio Souza": "https://open.feishu.cn/open-apis/bot/v2/hook/7616db98-d225-4b46-915e-dc73bde24284",
