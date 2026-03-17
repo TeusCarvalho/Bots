@@ -202,8 +202,9 @@ def post_multipart(url: str, data: dict, files: dict, headers: Optional[dict] = 
             last_err = e
             time.sleep(0.8 * attempt)
     raise RuntimeError(f"{tag} Falhou após retries. Último erro: {last_err}")
+
 # =========================
-# BLOCO 2/3 — LEITURA + PROCESSAMENTO + IMAGEM (TEMA J&T)
+# BLOCO 2/3 — LEITURA + PROCESSAMENTO + IMAGEM (LAYOUT ESTILO RELATÓRIO J&T + DESTAQUES)
 # =========================
 
 def encontrar_arquivo_entrada(pasta: str) -> str:
@@ -216,6 +217,7 @@ def encontrar_arquivo_entrada(pasta: str) -> str:
     arquivos.sort(key=lambda f: os.path.getmtime(os.path.join(pasta, f)), reverse=True)
     return os.path.join(pasta, arquivos[0])
 
+
 def carregar_excel_auto(path: str) -> pd.DataFrame:
     ext = os.path.splitext(path)[1].lower()
     if ext == ".xlsx":
@@ -225,12 +227,13 @@ def carregar_excel_auto(path: str) -> pd.DataFrame:
     except Exception:
         return pd.read_excel(path, dtype=str)
 
+
 def to_float_safe(series: pd.Series) -> pd.Series:
     """
-    ✅ Parser robusto:
+    Parser robusto:
     - "1.234,56" -> 1234.56
     - "1,234.56" -> 1234.56
-    - "1234.56"  -> 1234.56  (não vira 123456)
+    - "1234.56"  -> 1234.56
     - "1234,56"  -> 1234.56
     """
     s = series.astype(str).str.strip()
@@ -245,30 +248,28 @@ def to_float_safe(series: pd.Series) -> pd.Series:
 
     out = pd.Series([None] * len(s), index=s.index, dtype="float64")
 
-    # Caso 1: tem "," e "." -> último separador é decimal
     sb = s[both]
     comma_decimal = sb.str.rfind(",") > sb.str.rfind(".")
-    sb1 = sb[comma_decimal].str.replace(".", "", regex=False).str.replace(",", ".", regex=False)  # 1.234,56
-    sb2 = sb[~comma_decimal].str.replace(",", "", regex=False)                                   # 1,234.56
+    sb1 = sb[comma_decimal].str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+    sb2 = sb[~comma_decimal].str.replace(",", "", regex=False)
     out.loc[sb1.index] = pd.to_numeric(sb1, errors="coerce")
     out.loc[sb2.index] = pd.to_numeric(sb2, errors="coerce")
 
-    # Caso 2: só "," -> decimal BR
     sc = s[only_comma].str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
     out.loc[sc.index] = pd.to_numeric(sc, errors="coerce")
 
-    # Caso 3: só "." -> decimal US (não remove o ponto!)
     sd = s[only_dot]
     out.loc[sd.index] = pd.to_numeric(sd, errors="coerce")
 
-    # Caso 4: nenhum separador
     sn = s[~has_comma & ~has_dot]
     out.loc[sn.index] = pd.to_numeric(sn, errors="coerce")
 
     return out.fillna(0.0)
 
+
 def _chunk_list(items: List[Any], size: int) -> List[List[Any]]:
     return [items[i:i + size] for i in range(0, len(items), size)]
+
 
 def gerar_imagens_todas_as_bases_dark(
     coord: str,
@@ -281,12 +282,12 @@ def gerar_imagens_todas_as_bases_dark(
     rows_per_page: int = 28,
 ) -> List[str]:
     """
-    Paleta solicitada:
-    - Vermelho Institucional: #E30613
-    - Vermelho Suave:        #C4272E
-    - Cinza Fundo:           #F2F2F2
-    - Texto Cinza escuro:    #333333
-    - Branco:                #FFFFFF
+    Layout inspirado na referência:
+    - fundo vermelho institucional
+    - cabeçalho centralizado
+    - painel branco arredondado
+    - cards de destaque para Total de pedidos / Bases avaliadas / Custo total
+    - tabela com cabeçalho vermelho
     """
     from PIL import Image, ImageDraw, ImageFont
 
@@ -297,6 +298,8 @@ def gerar_imagens_todas_as_bases_dark(
             ("segoeuib.ttf" if bold else "segoeui.ttf"),
             ("arialbd.ttf" if bold else "arial.ttf"),
             ("calibrib.ttf" if bold else "calibri.ttf"),
+            ("msyhbd.ttc" if bold else "msyh.ttc"),
+            ("simhei.ttf" if bold else "simsun.ttc"),
         ]
         for name in candidates:
             try:
@@ -311,7 +314,6 @@ def gerar_imagens_todas_as_bases_dark(
         except Exception:
             draw.rectangle(xy, fill=fill, outline=outline, width=width)
 
-    # ====== NOVO: medição + auto-fit + wrap para não cortar texto ======
     def _measure(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> Tuple[int, int]:
         text = text or ""
         try:
@@ -319,11 +321,9 @@ def gerar_imagens_todas_as_bases_dark(
             return int(b[2] - b[0]), int(b[3] - b[1])
         except Exception:
             try:
-                # Pillow antigo
                 w, h = draw.textsize(text, font=font)  # type: ignore[attr-defined]
                 return int(w), int(h)
             except Exception:
-                # fallback bem seguro
                 return int(len(text) * 8), 18
 
     def _ellipsize(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w: int) -> str:
@@ -331,9 +331,11 @@ def gerar_imagens_todas_as_bases_dark(
         w, _ = _measure(draw, text, font)
         if w <= max_w:
             return text
-        ell = "…"
+
+        ell = "..."
         lo, hi = 0, len(text)
         best = ell
+
         while lo <= hi:
             mid = (lo + hi) // 2
             cand = (text[:mid].rstrip() + ell)
@@ -342,9 +344,17 @@ def gerar_imagens_todas_as_bases_dark(
                 lo = mid + 1
             else:
                 hi = mid - 1
+
         return best
 
-    def _fit_font(draw: ImageDraw.ImageDraw, text: str, start_size: int, min_size: int, bold: bool, max_w: int):
+    def _fit_font(
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        start_size: int,
+        min_size: int,
+        bold: bool,
+        max_w: int,
+    ):
         size = start_size
         while size >= min_size:
             f = load_font(size, bold=bold)
@@ -353,13 +363,21 @@ def gerar_imagens_todas_as_bases_dark(
             size -= 1
         return load_font(min_size, bold=bold)
 
-    def _wrap_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w: int, max_lines: int = 2) -> List[str]:
+    def _wrap_lines(
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        font: ImageFont.ImageFont,
+        max_w: int,
+        max_lines: int = 2,
+    ) -> List[str]:
         text = (text or "").strip()
         if not text:
             return [""]
+
         words = text.split()
         lines: List[str] = []
         cur = ""
+
         for w in words:
             cand = (cur + " " + w).strip() if cur else w
             if _measure(draw, cand, font)[0] <= max_w:
@@ -374,169 +392,347 @@ def gerar_imagens_todas_as_bases_dark(
         if cur:
             lines.append(cur)
 
-        # Se estourou, reticências na última linha
         if len(lines) > max_lines:
             lines = lines[:max_lines]
+
         if lines:
             lines[-1] = _ellipsize(draw, lines[-1], font, max_w)
+
         return lines
 
-    RED_MAIN = (227, 6, 19)      # #E30613
-    RED_SOFT = (196, 39, 46)     # #C4272E
-    BG = (242, 242, 242)         # #F2F2F2
-    WHITE = (255, 255, 255)      # #FFFFFF
-    TXT = (51, 51, 51)           # #333333
+    def _draw_centered_line(
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        y: int,
+        font: ImageFont.ImageFont,
+        fill,
+        max_w: int,
+        center_x: int,
+    ) -> int:
+        txt = _ellipsize(draw, text, font, max_w)
+        w, h = _measure(draw, txt, font)
+        draw.text((center_x - w // 2, y), txt, fill=fill, font=font)
+        return y + h
 
-    STROKE = (220, 220, 220)
-    MUTED = (110, 110, 110)
-    Z1 = (255, 255, 255)
-    Z2 = (248, 248, 248)
-    CARD_SOFT = BG
+    def fmt_int(n: int) -> str:
+        return f"{int(n):,}".replace(",", ".")
 
-    W = 1500
-    padding = 34
+    def draw_metric_card(
+        draw: ImageDraw.ImageDraw,
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
+        label: str,
+        value: str,
+        fill,
+        label_fill,
+        value_fill,
+        border,
+        highlight: bool = False,
+    ):
+        rr(draw, (x1, y1, x2, y2), 18, fill, outline=border, width=2)
 
-    # ✅ AUMENTEI O HEADER PARA NÃO CORTAR E SUPORTAR 2 LINHAS DE INDICADOR
-    header_h = 175
+        label_font = load_font(19, bold=False)
+        value_font = load_font(30 if highlight else 27, bold=True)
 
-    cards_h = 110
-    gap = 16
-    row_h = 46
+        inner_w = (x2 - x1) - 24
+        label = _ellipsize(draw, label, label_font, inner_w)
+        value = _ellipsize(draw, value, value_font, inner_w)
+
+        lw, lh = _measure(draw, label, label_font)
+        vw, vh = _measure(draw, value, value_font)
+
+        draw.text((x1 + ((x2 - x1) - lw) // 2, y1 + 16), label, fill=label_fill, font=label_font)
+        draw.text((x1 + ((x2 - x1) - vw) // 2, y1 + 48), value, fill=value_fill, font=value_font)
+
+    RED_BG = (227, 6, 19)
+    RED_HDR = (235, 0, 0)
+    RED_STRONG = (212, 0, 0)
+    RED_SOFT = (255, 238, 240)
+    WHITE = (255, 255, 255)
+    PANEL_BG = (255, 255, 255)
+    ROW_A = (252, 252, 252)
+    ROW_B = (245, 245, 245)
+    GRID = (226, 226, 226)
+    TEXT = (51, 51, 51)
+    MUTED = (105, 105, 105)
+
+    W = 1600
+    OUTER = 18
+    TOP_AREA_H = 142
+
+    PANEL_PAD = 22
+    SUMMARY_H = 112
+    SUMMARY_GAP = 16
+    TABLE_HEAD_H = 68
+    ROW_H = 42
+    PANEL_BOTTOM = 22
+    FOOTER_RED_H = 62
+
+    coord = safe_str(coord) or "Sem Coordenador"
+    indicador_nome = safe_str(indicador_nome) or "Indicador"
 
     pages = _chunk_list(rows_all, rows_per_page)
-    total_pages = max(1, len(pages))
+    if not pages:
+        pages = [[]]
+
+    total_pages = len(pages)
     out_paths: List[str] = []
 
-    f_sub = load_font(18, bold=False)
-    f_sub_bold = load_font(18, bold=True)
-    f_card_label = load_font(16, bold=False)
-    f_card_value = load_font(22, bold=True)
-    f_head = load_font(18, bold=True)
-    f_row = load_font(17, bold=False)
-
-    indicador_nome = (indicador_nome or "").strip() or "Indicador"
-
     for page_idx, page_rows in enumerate(pages, start=1):
-        table_h = 90 + (len(page_rows) * row_h) + 38
-        H = padding * 2 + header_h + gap + cards_h + gap + table_h
+        row_count = len(page_rows)
 
-        img = Image.new("RGB", (W, H), BG)
+        panel_x1 = OUTER
+        panel_x2 = W - OUTER
+        panel_y1 = TOP_AREA_H + 10
+
+        panel_h = (
+            PANEL_PAD
+            + SUMMARY_H
+            + SUMMARY_GAP
+            + TABLE_HEAD_H
+            + (row_count * ROW_H)
+            + PANEL_BOTTOM
+        )
+        panel_y2 = panel_y1 + panel_h
+
+        H = panel_y2 + FOOTER_RED_H + 18
+
+        img = Image.new("RGB", (W, H), RED_BG)
         draw = ImageDraw.Draw(img)
 
-        rr(draw, (padding, padding, W - padding, H - padding), 26, WHITE, outline=STROKE, width=2)
+        center_x = W // 2
 
-        # Header gradiente
-        hx1, hy1 = padding + 18, padding + 18
-        hx2, hy2 = W - padding - 18, padding + header_h
+        # =========================
+        # Topo vermelho
+        # =========================
+        f_logo_big = load_font(42, bold=True)
+        f_logo_small = load_font(20, bold=True)
+        draw.text((22, 24), "J&T", fill=WHITE, font=f_logo_big)
+        draw.text((106, 43), "EXPRESS", fill=WHITE, font=f_logo_small)
 
-        for i in range(hy2 - hy1):
-            t = i / max(1, (hy2 - hy1))
-            c = (
-                int(RED_SOFT[0] + (RED_MAIN[0] - RED_SOFT[0]) * t),
-                int(RED_SOFT[1] + (RED_MAIN[1] - RED_SOFT[1]) * t),
-                int(RED_SOFT[2] + (RED_MAIN[2] - RED_SOFT[2]) * t),
-            )
-            draw.line([(hx1, hy1 + i), (hx2, hy1 + i)], fill=c)
+        max_center_w = W - 380
 
-        # ✅ HEADER COM AUTO-FIT + WRAP (evita cortar)
-        left = hx1 + 22
-        inner_w = (hx2 - hx1) - 44
+        titulo = f"Relatório de {indicador_nome}"
+        subtitulo = f"Coordenador: {coord}"
+        linha_info = (
+            f"Atualizado: {DATA_HUMANA}   •   "
+            f"Página {page_idx}/{total_pages}"
+        )
 
-        coord_txt = (coord or "").strip()
-        coord_font = _fit_font(draw, coord_txt, start_size=34, min_size=20, bold=True, max_w=inner_w)
-        coord_txt = _ellipsize(draw, coord_txt, coord_font, inner_w)
+        f_title = _fit_font(draw, titulo, start_size=35, min_size=24, bold=True, max_w=max_center_w)
+        f_sub = _fit_font(draw, subtitulo, start_size=26, min_size=18, bold=True, max_w=max_center_w)
+        f_meta = load_font(18, bold=False)
 
-        y_cursor = hy1 + 12
-        draw.text((left, y_cursor), coord_txt, fill=WHITE, font=coord_font)
-        coord_h = _measure(draw, coord_txt, coord_font)[1]
-        y_cursor += coord_h + 8
+        y = 18
+        y = _draw_centered_line(draw, titulo, y, f_title, WHITE, max_center_w, center_x) + 5
+        y = _draw_centered_line(draw, subtitulo, y, f_sub, WHITE, max_center_w, center_x) + 7
 
-        indicador_full = f"Indicador: {indicador_nome}"
-        ind_lines = _wrap_lines(draw, indicador_full, f_sub_bold, inner_w, max_lines=2)
-        for line in ind_lines:
-            draw.text((left, y_cursor), line, fill=WHITE, font=f_sub_bold)
-            y_cursor += _measure(draw, line, f_sub_bold)[1] + 2
+        meta_lines = _wrap_lines(draw, linha_info, f_meta, max_center_w, max_lines=2)
+        for line in meta_lines:
+            y = _draw_centered_line(draw, line, y, f_meta, WHITE, max_center_w, center_x) + 2
 
-        y_cursor += 4
+        # =========================
+        # Painel branco
+        # =========================
+        rr(draw, (panel_x1, panel_y1, panel_x2, panel_y2), 20, PANEL_BG, outline=None, width=1)
 
-        footer_line = f"Atualizado: {DATA_HUMANA}   •   Página {page_idx}/{total_pages}"
-        footer_font = _fit_font(draw, footer_line, start_size=18, min_size=14, bold=False, max_w=inner_w)
-        footer_line = _ellipsize(draw, footer_line, footer_font, inner_w)
-        draw.text((left, y_cursor), footer_line, fill=WHITE, font=footer_font)
+        inner_x1 = panel_x1 + PANEL_PAD
+        inner_x2 = panel_x2 - PANEL_PAD
+        inner_y1 = panel_y1 + PANEL_PAD
+        inner_w = inner_x2 - inner_x1
 
-        # Cards
-        cx1 = padding + 18
-        cy1 = hy2 + gap
-        cwidth = (hx2 - hx1 - 2 * gap) // 3
+        # =========================
+        # Cards de destaque
+        # =========================
+        card_gap = 16
+        card_w = (inner_w - (2 * card_gap)) // 3
 
-        def metric(x, label, value, value_color=TXT):
-            rr(draw, (x, cy1, x + cwidth, cy1 + cards_h), 18, CARD_SOFT, outline=STROKE, width=2)
-            draw.text((x + 16, cy1 + 14), label, fill=MUTED, font=f_card_label)
-            draw.text((x + 16, cy1 + 44), value, fill=value_color, font=f_card_value)
+        c1_x1 = inner_x1
+        c1_x2 = c1_x1 + card_w
 
-        metric(cx1, "Total de pedidos", f"{total_pedidos:,}".replace(",", "."))
-        metric(cx1 + cwidth + gap, "Bases avaliadas", f"{total_bases:,}".replace(",", "."))
-        metric(cx1 + (cwidth + gap) * 2, "Custo total", money_br(custo_total), value_color=RED_SOFT)
+        c2_x1 = c1_x2 + card_gap
+        c2_x2 = c2_x1 + card_w
 
+        c3_x1 = c2_x2 + card_gap
+        c3_x2 = inner_x2
+
+        c_y1 = inner_y1
+        c_y2 = c_y1 + SUMMARY_H
+
+        draw_metric_card(
+            draw,
+            c1_x1,
+            c_y1,
+            c1_x2,
+            c_y2,
+            "Total de pedidos",
+            fmt_int(total_pedidos),
+            fill=WHITE,
+            label_fill=MUTED,
+            value_fill=RED_STRONG,
+            border=(230, 230, 230),
+            highlight=True,
+        )
+
+        draw_metric_card(
+            draw,
+            c2_x1,
+            c_y1,
+            c2_x2,
+            c_y2,
+            "Bases avaliadas",
+            fmt_int(total_bases),
+            fill=WHITE,
+            label_fill=MUTED,
+            value_fill=TEXT,
+            border=(230, 230, 230),
+            highlight=False,
+        )
+
+        draw_metric_card(
+            draw,
+            c3_x1,
+            c_y1,
+            c3_x2,
+            c_y2,
+            "Custo total",
+            money_br(custo_total),
+            fill=RED_SOFT,
+            label_fill=RED_STRONG,
+            value_fill=RED_STRONG,
+            border=(245, 190, 195),
+            highlight=True,
+        )
+
+        # =========================
         # Tabela
-        tx1 = padding + 18
-        ty1 = cy1 + cards_h + gap
-        tx2 = W - padding - 18
+        # =========================
+        table_y1 = c_y2 + SUMMARY_GAP
 
-        draw.text((tx1 + 10, ty1 + 14), "Bases (todas) — ordenado por custo", fill=TXT, font=f_head)
-        draw.line((tx1, ty1 + 46, tx2, ty1 + 46), fill=STROKE, width=2)
+        w_rank = 90
+        w_qtd = 210
+        w_custo = 260
+        w_base = inner_w - w_rank - w_qtd - w_custo
 
-        col_rank = tx1 + 10
-        col_base = tx1 + 90
-        col_qtd = tx2 - 360
-        col_custo_right = tx2 - 16
+        col1_x1 = inner_x1
+        col1_x2 = col1_x1 + w_rank
 
-        draw.text((col_rank, ty1 + 58), "#", fill=MUTED, font=f_head)
-        draw.text((col_base, ty1 + 58), "Base", fill=MUTED, font=f_head)
-        draw.text((col_qtd, ty1 + 58), "Qtd", fill=MUTED, font=f_head)
+        col2_x1 = col1_x2
+        col2_x2 = col2_x1 + w_base
 
-        custo_head = "Custo"
-        try:
-            bbox = draw.textbbox((0, 0), custo_head, font=f_head)
-            w_head = bbox[2] - bbox[0]
-        except Exception:
-            w_head = 60
-        draw.text((col_custo_right - int(w_head), ty1 + 58), custo_head, fill=MUTED, font=f_head)
+        col3_x1 = col2_x2
+        col3_x2 = col3_x1 + w_qtd
 
-        y = ty1 + 92
-        start_rank = (page_idx - 1) * rows_per_page
+        col4_x1 = col3_x2
+        col4_x2 = inner_x2
+
+        rr(draw, (inner_x1, table_y1, inner_x2, table_y1 + TABLE_HEAD_H), 14, RED_HDR, outline=None, width=1)
+
+        for x in [col1_x2, col2_x2, col3_x2]:
+            draw.line((x, table_y1, x, table_y1 + TABLE_HEAD_H), fill=WHITE, width=2)
+
+        f_th = load_font(18, bold=True)
+
+        headers = [
+            ("Rank", col1_x1, col1_x2),
+            ("Base de Entrega", col2_x1, col2_x2),
+            ("Qtd de Pedidos", col3_x1, col3_x2),
+            ("Custo Total", col4_x1, col4_x2),
+        ]
+
+        for text, x1, x2 in headers:
+            fw, fh = _measure(draw, text, f_th)
+            tx = x1 + ((x2 - x1) - fw) // 2
+            ty = table_y1 + ((TABLE_HEAD_H - fh) // 2)
+            draw.text((tx, ty), text, fill=WHITE, font=f_th)
+
+        f_row = load_font(18, bold=False)
+        start_y = table_y1 + TABLE_HEAD_H
 
         for i, (base, qtd, custo) in enumerate(page_rows, start=1):
-            bg_row = Z1 if (i % 2 == 1) else Z2
-            rr(draw, (tx1, y - 8, tx2, y + row_h - 10), 14, bg_row, outline=None)
+            y1 = start_y + ((i - 1) * ROW_H)
+            y2 = y1 + ROW_H
 
-            rank = start_rank + i
-            base_txt = (base or "")[:62]
-            custo_fmt = money_br(float(custo))
+            fill_row = ROW_A if i % 2 == 1 else ROW_B
+            draw.rectangle((inner_x1, y1, inner_x2, y2), fill=fill_row)
 
-            draw.text((col_rank, y), f"{rank:02d}", fill=TXT, font=f_row)
-            draw.text((col_base, y), base_txt, fill=TXT, font=f_row)
-            draw.text((col_qtd, y), str(int(qtd)), fill=TXT, font=f_row)
+            draw.line((inner_x1, y2, inner_x2, y2), fill=GRID, width=1)
+            for x in [col1_x2, col2_x2, col3_x2]:
+                draw.line((x, y1, x, y2), fill=GRID, width=1)
 
-            try:
-                bbox = draw.textbbox((0, 0), custo_fmt, font=f_row)
-                w = bbox[2] - bbox[0]
-            except Exception:
-                w = 120
-            draw.text((col_custo_right - int(w), y), custo_fmt, fill=TXT, font=f_row)
+            rank_txt = f"{((page_idx - 1) * rows_per_page) + i}"
+            base_txt = _ellipsize(draw, safe_str(base), f_row, (w_base - 28))
+            qtd_txt = fmt_int(int(qtd))
+            custo_txt = money_br(float(custo))
 
-            y += row_h
+            rw, rh = _measure(draw, rank_txt, f_row)
+            draw.text(
+                (col1_x1 + ((w_rank - rw) // 2), y1 + ((ROW_H - rh) // 2)),
+                rank_txt,
+                fill=TEXT,
+                font=f_row,
+            )
 
-        draw.line((tx1, H - padding - 58, tx2, H - padding - 58), fill=STROKE, width=2)
-        draw.text((tx1, H - padding - 42), f"📁 Pasta: {LINK_PASTA}", fill=MUTED, font=f_sub)
+            bw, bh = _measure(draw, base_txt, f_row)
+            draw.text(
+                (col2_x1 + 14, y1 + ((ROW_H - bh) // 2)),
+                base_txt,
+                fill=TEXT,
+                font=f_row,
+            )
+
+            qw, qh = _measure(draw, qtd_txt, f_row)
+            draw.text(
+                (col3_x1 + ((w_qtd - qw) // 2), y1 + ((ROW_H - qh) // 2)),
+                qtd_txt,
+                fill=TEXT,
+                font=f_row,
+            )
+
+            cw, ch = _measure(draw, custo_txt, f_row)
+            draw.text(
+                (col4_x2 - cw - 16, y1 + ((ROW_H - ch) // 2)),
+                custo_txt,
+                fill=RED_STRONG if float(custo) > 0 else TEXT,
+                font=f_row,
+            )
+
+        total_table_h = TABLE_HEAD_H + (row_count * ROW_H)
+        draw.rounded_rectangle(
+            (inner_x1, table_y1, inner_x2, table_y1 + total_table_h),
+            radius=14,
+            outline=GRID,
+            width=1,
+        )
+
+        # =========================
+        # Rodapé vermelho
+        # =========================
+        f_footer = load_font(15, bold=False)
+        footer_y = panel_y2 + 16
+
+        footer_txt_1 = f"Pasta compartilhada: {LINK_PASTA}"
+        footer_txt_2 = f"J&T Express • {indicador_nome}"
+
+        footer_txt_1 = _ellipsize(draw, footer_txt_1, f_footer, W - 120)
+
+        w1, h1 = _measure(draw, footer_txt_1, f_footer)
+        w2, h2 = _measure(draw, footer_txt_2, f_footer)
+
+        draw.text((center_x - w1 // 2, footer_y), footer_txt_1, fill=WHITE, font=f_footer)
+        draw.text((center_x - w2 // 2, footer_y + h1 + 4), footer_txt_2, fill=WHITE, font=f_footer)
 
         safe_coord = "".join([c for c in coord if c.isalnum() or c in (" ", "_", "-")]).strip().replace(" ", "_")
         filename = f"Custos_{safe_coord}_{DATA_ATUAL}_p{page_idx:02d}.png"
         out_path = os.path.join(out_dir, filename)
+
         img.save(out_path, "PNG")
         out_paths.append(out_path)
 
     return out_paths
+
 # =========================
 # BLOCO 3/3 — FEISHU TOKEN+UPLOAD + CARD + MAIN
 # =========================
