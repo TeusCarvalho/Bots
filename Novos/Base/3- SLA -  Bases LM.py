@@ -5,6 +5,7 @@
 # =========================
 
 import os
+import mimetypes
 import requests
 import warnings
 import polars as pl
@@ -14,6 +15,8 @@ import logging
 import shutil
 import unicodedata
 import time
+
+from io import BytesIO
 from datetime import datetime, timedelta, date
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional, Tuple, Dict, Set, Any
@@ -37,7 +40,6 @@ os.environ["POLARS_MAX_THREADS"] = str(multiprocessing.cpu_count())
 PASTA_ENTRADA = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\03 - SLA - Entrega Realizada LM"
 
 # ✅ Pode ser PASTA ou ARQUIVO
-# Exemplo pasta:
 CAMINHO_COORDENADOR = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\01 - Coordenador"
 
 # Exemplo arquivo direto:
@@ -74,7 +76,7 @@ LINK_PASTA = (
 # ============================================================
 INDICADOR_NOME = "SLA Entrega Realizada — %SLA por Base (pior → melhor)"
 
-# ✅ COLE AQUI SEUS WEBHOOKS ATUAIS
+# ✅ RECOLOQUE AQUI SEUS WEBHOOKS
 COORDENADOR_WEBHOOKS = {
     "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/3663dd30-722c-45d6-9e3c-1d4e2838f112",
     "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/0b907801-c73e-4de8-9f84-682d7b54f6fd",
@@ -103,6 +105,10 @@ _CACHE_FERIADOS: Dict[int, Set[date]] = {}
 # ✅ FEISHU (UPLOAD DE IMAGEM)
 # ============================================================
 FEISHU_BASE_DOMAIN = "https://open.feishu.cn"
+
+# Preferencial: usar variáveis de ambiente
+# setx FEISHU_APP_ID "SEU_APP_ID"
+# setx FEISHU_APP_SECRET "SEU_APP_SECRET"
 FEISHU_APP_ID = os.getenv("FEISHU_APP_ID", "cli_a906d2d682f8dbd8").strip()
 FEISHU_APP_SECRET = os.getenv("FEISHU_APP_SECRET", "Fzh1cr6K55a3oQUBV9wCZd6AWiZH5ONw").strip()
 
@@ -139,14 +145,42 @@ def _post_with_retry(url: str, json_payload: dict, timeout: int = 25, tries: int
     raise RuntimeError(f"Falha POST {url} após {tries} tentativas. Último erro: {last}")
 
 
-def _post_multipart_with_retry(url: str, data: dict, files: dict, headers: dict, timeout: int = 90, tries: int = 7) -> requests.Response:
+def _post_multipart_with_retry(
+    url: str,
+    data: dict,
+    file_bytes: bytes,
+    file_field: str,
+    filename: str,
+    headers: dict,
+    timeout: int = 90,
+    tries: int = 7,
+) -> requests.Response:
+    if not file_bytes:
+        raise RuntimeError(f"Arquivo '{filename}' está vazio antes do upload.")
+
+    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
     last = None
+
     for i in range(1, tries + 1):
         try:
-            return requests.post(url, data=data, files=files, headers=headers, timeout=timeout)
+            files = {
+                file_field: (
+                    filename,
+                    BytesIO(file_bytes),
+                    content_type,
+                )
+            }
+            return requests.post(
+                url,
+                data=data,
+                files=files,
+                headers=headers,
+                timeout=timeout,
+            )
         except Exception as e:
             last = e
             time.sleep(0.7 * i)
+
     raise RuntimeError(f"Falha UPLOAD {url} após {tries} tentativas. Último erro: {last}")
 # =========================
 # BLOCO 2/4 — FUNÇÕES (FERIADOS / PERÍODO / LEITURA / EXPORT / RESUMO)
@@ -209,7 +243,6 @@ def localizar_arquivo_coordenador(caminho: str) -> str:
             if termo in nome:
                 idx = i
                 break
-        # mais recente primeiro
         return (idx, -os.path.getmtime(p), os.path.basename(p).lower())
 
     arquivos.sort(key=prioridade_arquivo)
@@ -560,7 +593,7 @@ def _feishu_enabled() -> bool:
 
 def feishu_get_token() -> str:
     if not _feishu_enabled():
-        raise RuntimeError("Defina FEISHU_APP_ID e FEISHU_APP_SECRET (env) para enviar imagens.")
+        raise RuntimeError("Defina FEISHU_APP_ID e FEISHU_APP_SECRET para enviar imagens.")
 
     now = int(time.time())
     if _TOKEN_CACHE["token"] and now < int(_TOKEN_CACHE["exp"]):
@@ -589,16 +622,46 @@ def feishu_upload_image_get_key(image_path: str) -> str:
     url = f"{FEISHU_BASE_DOMAIN}/open-apis/im/v1/images"
     headers = {"Authorization": f"Bearer {token}"}
 
-    with open(image_path, "rb") as f:
-        r = _post_multipart_with_retry(
-            url,
-            data={"image_type": "message"},
-            files={"image": (os.path.basename(image_path), f)},
-            headers=headers,
-            timeout=90,
+    if not os.path.exists(image_path):
+        raise FileNotFoundError(f"Imagem não encontrada para upload: {image_path}")
+
+    file_size = os.path.getsize(image_path)
+    if file_size <= 0:
+        raise RuntimeError(f"Imagem gerada com 0 bytes: {image_path}")
+
+    limite_10mb = 10 * 1024 * 1024
+    if file_size > limite_10mb:
+        raise RuntimeError(
+            f"Imagem maior que 10 MB e será recusada pelo Feishu: "
+            f"{os.path.basename(image_path)} ({file_size:,} bytes)"
         )
 
-    data = r.json() if r.content else {}
+    with open(image_path, "rb") as f:
+        file_bytes = f.read()
+
+    if not file_bytes:
+        raise RuntimeError(f"Falha ao ler bytes da imagem: {image_path}")
+
+    r = _post_multipart_with_retry(
+        url=url,
+        data={"image_type": "message"},
+        file_bytes=file_bytes,
+        file_field="image",
+        filename=os.path.basename(image_path),
+        headers=headers,
+        timeout=90,
+    )
+
+    try:
+        data = r.json() if r.content else {}
+    except Exception:
+        data = {"raw_text": r.text}
+
+    if r.status_code != 200:
+        raise RuntimeError(
+            f"HTTP {r.status_code} no upload da imagem '{os.path.basename(image_path)}': {data}"
+        )
+
     if data.get("code") != 0:
         if data.get("code") == 234007:
             raise RuntimeError(
@@ -606,11 +669,24 @@ def feishu_upload_image_get_key(image_path: str) -> str:
                 "Feishu Dev Console: Add Features > Bot (Add) e publique a versão (Test).\n"
                 "Permissão típica: im:resource (upload image)."
             )
+
+        if data.get("code") == 234010:
+            raise RuntimeError(
+                f"Upload falhou (234010): o Feishu recebeu arquivo vazio.\n"
+                f"Arquivo: {image_path}\n"
+                f"Tamanho no disco: {file_size} bytes"
+            )
+
         raise RuntimeError(f"Upload imagem falhou: {data}")
 
     image_key = (data.get("data") or {}).get("image_key")
     if not image_key:
         raise RuntimeError(f"Upload OK mas sem image_key: {data}")
+
+    logging.info(
+        f"🖼️ Upload Feishu OK: {os.path.basename(image_path)} "
+        f"({file_size} bytes) -> image_key recebido"
+    )
     return image_key
 
 
@@ -867,7 +943,18 @@ def gerar_imagens_sla_tabela(
         fs = (file_suffix or "").strip()
         filename = f"SLA_{safe_coord}{fs}_{DATA_HOJE}_p{page_idx:02d}.png"
         out_path = os.path.join(out_dir, filename)
-        img.save(out_path, "PNG")
+
+        img.save(out_path, format="PNG")
+
+        try:
+            size_img = os.path.getsize(out_path)
+        except Exception:
+            size_img = -1
+
+        if size_img <= 0:
+            raise RuntimeError(f"PNG gerado com 0 bytes: {out_path}")
+
+        logging.info(f"🖼️ Imagem gerada: {out_path} ({size_img} bytes)")
         out_paths.append(out_path)
 
     return out_paths
@@ -887,8 +974,8 @@ def enviar_card_feishu(
     titulo_suffix: str = "",
 ) -> bool:
     try:
-        if not webhook:
-            logging.warning(f"⚠️ Webhook vazio para {coord}. Pulei.")
+        if not webhook or webhook == "COLE_SEU_WEBHOOK_AQUI":
+            logging.warning(f"⚠️ Webhook vazio/inválido para {coord}. Pulei.")
             return False
 
         titulo = f"{coord}{titulo_suffix}"
@@ -1017,20 +1104,54 @@ def processar_parte_e_enviar(
 
         if img_paths and _feishu_enabled():
             for i, p in enumerate(img_paths, start=1):
-                img_key = feishu_upload_image_get_key(p)
-                enviar_card_feishu(
-                    webhook=webhook,
-                    coord=coord,
-                    indicador_nome=INDICADOR_NOME,
-                    periodo_txt=periodo_txt_parte,
-                    dias_txt=dias_txt_parte,
-                    sla=sla,
-                    bases=bases,
-                    arquivos_gerados_md=arquivos_md,
-                    image_key=img_key,
-                    page_label=f"{i}/{len(img_paths)}",
-                    titulo_suffix=titulo_suffix,
-                )
+                try:
+                    size_img = os.path.getsize(p) if os.path.exists(p) else -1
+                    logging.info(
+                        f"📤 Enviando imagem para Feishu | Coord: {coord}{titulo_suffix} | "
+                        f"Arquivo: {os.path.basename(p)} | Tamanho: {size_img} bytes"
+                    )
+
+                    if size_img <= 0:
+                        raise RuntimeError(f"Imagem inválida para upload: {p}")
+
+                    img_key = feishu_upload_image_get_key(p)
+
+                    enviar_card_feishu(
+                        webhook=webhook,
+                        coord=coord,
+                        indicador_nome=INDICADOR_NOME,
+                        periodo_txt=periodo_txt_parte,
+                        dias_txt=dias_txt_parte,
+                        sla=sla,
+                        bases=bases,
+                        arquivos_gerados_md=arquivos_md,
+                        image_key=img_key,
+                        page_label=f"{i}/{len(img_paths)}",
+                        titulo_suffix=titulo_suffix,
+                    )
+
+                except Exception as e:
+                    logging.error(
+                        f"⚠️ Falha no upload/envio da imagem para {coord}{titulo_suffix}: {e}"
+                    )
+                    logging.info(
+                        f"↪️ Vou enviar o card sem imagem para {coord}{titulo_suffix}."
+                    )
+
+                    enviar_card_feishu(
+                        webhook=webhook,
+                        coord=coord,
+                        indicador_nome=INDICADOR_NOME,
+                        periodo_txt=periodo_txt_parte,
+                        dias_txt=dias_txt_parte,
+                        sla=sla,
+                        bases=bases,
+                        arquivos_gerados_md=arquivos_md,
+                        image_key=None,
+                        page_label=None,
+                        titulo_suffix=titulo_suffix,
+                    )
+
                 time.sleep(0.35)
         else:
             enviar_card_feishu(
@@ -1051,7 +1172,7 @@ def processar_parte_e_enviar(
 # =========================
 
 if __name__ == "__main__":
-    logging.info("🚀 Iniciando processamento SLA (v2.18 — leitura robusta do arquivo de coordenador)...")
+    logging.info("🚀 Iniciando processamento SLA (v2.19 — upload robusto de imagem Feishu + fallback sem imagem)...")
 
     try:
         os.makedirs(PASTA_SAIDA, exist_ok=True)
@@ -1184,6 +1305,29 @@ if __name__ == "__main__":
 
         sem_coord = df_periodo_all.filter(pl.col("COORDENADOR").is_null()).height
         logging.info(f"🧩 Registros sem coordenador após join (período total): {sem_coord}")
+
+        if sem_coord > 0:
+            try:
+                arq_sem_coord = os.path.join(
+                    PASTA_SAIDA,
+                    f"Bases_Sem_Coordenador_{DATA_HOJE}.xlsx"
+                )
+
+                df_sem_coord = (
+                    df_periodo_all
+                    .filter(pl.col("COORDENADOR").is_null())
+                    .select(["BASE DE ENTREGA"])
+                    .unique()
+                    .sort("BASE DE ENTREGA")
+                    .to_pandas()
+                )
+
+                if not df_sem_coord.empty:
+                    with pd.ExcelWriter(arq_sem_coord, engine="openpyxl") as w:
+                        df_sem_coord.to_excel(w, index=False, sheet_name="Bases Sem Coordenador")
+                    logging.info(f"📝 Lista de bases sem coordenador salva em: {arq_sem_coord}")
+            except Exception as e:
+                logging.warning(f"⚠️ Não consegui salvar a lista de bases sem coordenador: {e}")
 
         # separar seg-sab / domingo
         df_seg_sab = df_periodo_all.filter(pl.col(COL_DATA_BASE).is_in(datas_seg_sab)) if datas_seg_sab else pl.DataFrame()

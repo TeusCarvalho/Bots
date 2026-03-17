@@ -50,23 +50,27 @@ DIAGNOSTICO_SCHEMA = True
 # ==========================================================
 # LISTA DE BASES VÁLIDAS
 # ==========================================================
-BASES_VALIDAS = [ 'F CHR-AM', 'F CAC-RO', 'F PDR-GO','F PVH-RO', 'F ARQ - RO',
-                  'F AGB-MT', 'F GYN 03-GO', 'F RBR-AC', 'IPR -GO',
-                  'F GYN - GO','F VHL-RO', 'F PON-GO', 'F ANP-GO','F GYN 02-GO','F CDN-AM',
-                  'F AGL-GO', 'F APG - GO', 'F RVD - GO', 'F PDT-TO', 'F PLN-DF','F SEN-GO','F PVL-MT',
-                  'F TRD-GO', 'F CEI-DF','F CNF-MT', 'F FMA-GO','F ALV-AM','F POS-GO','F PPA-MS','F MAC-AP',
-                  'F GAI-TO', 'F CRX-GO', 'F DOM -PA', 'F CCR-MT', 'F GRP-TO', 'F PVL 02-MT','F AMB-MS','F BVB-RR',
-                  'F SVC-RR', 'F MCP-AP','F JPN 02-RO', 'F MCP 02-AP', 'F BSL-AC', 'F PVH 02-RO', 'F JPN-RO',
-                  'F CMV-MT','F DOU-MS','F PGM-PA', 'F RDC -PA', 'F XIG-PA', 'F TGT-DF','F CGR - MS', 'F VLP-GO',
-                  'F CGR 02-MS','F PLA-GO', 'F TGA-MT','F RFI-DF', 'F ORL-PA', 'F ITI-PA', 'F PCA-PA',
-                  'F CNC-PA','F SJA-GO', 'F IGA-PA','F PAZ-AM','F TUR-PA','F JCD-PA', 'F TLA-PA',
-                  'F ELD-PA', 'F BSB-DF', 'F OCD-GO', 'F EMA-DF', 'F GUA-DF','F STM-PA', 'F SBN-DF',
-                  'F AGB 02-MT', 'F ANA-PA', 'F ARQ 02-RO', 'F BAO-PA', 'F BGA-MT', 'F BTS-RO', 'F CDN 02-AM',
-                  'F CGR 03-MS', 'F CGR 04-MS', 'F CRH-PA', 'F CTL-GO', 'F DOU 02-MS', 'F GFN-PA', 'F GNS-PA',
-                  'F GYN 04-GO', 'F HMT-AM', 'F IGM-PA', 'F IPX-PA', 'F ITT-PA', 'F JAU-RO', 'F JRG-GO',
-                  'F MDO-RO', 'F MDR-PA', 'F MRL-AM', 'F MTB-PA', 'F NDI-MS', 'F NMB-PA', 'F PDP-PA', 'F PMW-TO',
-                  'F PNA-TO', 'F PTD-MT', 'F PVH 03-RO', 'F QUI-GO', 'F RBR 02-AC', 'F ROO-MT', 'F SAM-DF', 'F SBS-DF',
-                  'F SBZ-PA', 'F SFX-PA', 'F SNP-MT', 'F TPN-PA' ]
+BASES_VALIDAS = [
+    'F CHR-AM', 'F CAC-RO', 'F PDR-GO', 'F PVH-RO', 'F ARQ - RO',
+    'F AGB-MT', 'F GYN 03-GO', 'F RBR-AC','F GYN - GO', 'F VHL-RO', 'F PON-GO', 'F ANP-GO', 'F GYN 02-GO', 'F CDN-AM',
+    'F AGL-GO', 'F APG - GO', 'F RVD - GO', 'F PDT-TO', 'F PLN-DF', 'F SEN-GO', 'F PVL-MT',
+    'F TRD-GO', 'F CEI-DF', 'F CNF-MT', 'F FMA-GO', 'F ALV-AM', 'F POS-GO', 'F PPA-MS', 'F MAC-AP',
+    'F GAI-TO', 'F CRX-GO', 'F DOM -PA', 'F CCR-MT', 'F GRP-TO', 'F PVL 02-MT', 'F AMB-MS', 'F BVB-RR',
+    'F SVC-RR', 'F MCP-AP', 'F JPN 02-RO', 'F MCP 02-AP', 'F BSL-AC', 'F PVH 02-RO', 'F JPN-RO',
+    'F CMV-MT', 'F DOU-MS', 'F PGM-PA', 'F RDC -PA', 'F XIG-PA', 'F TGT-DF', 'F CGR - MS', 'F VLP-GO',
+    'F CGR 02-MS', 'F PLA-GO', 'F TGA-MT', 'F RFI-DF', 'F ORL-PA', 'F ITI-PA', 'F PCA-PA',
+    'F CNC-PA', 'F SJA-GO', 'F IGA-PA', 'F PAZ-AM', 'F TUR-PA', 'F JCD-PA', 'F TLA-PA',
+    'F ELD-PA', 'F BSB-DF', 'F OCD-GO', 'F EMA-DF', 'F GUA-DF', 'F STM-PA', 'F SBN-DF',
+    'F AGB 02-MT', 'F ANA-PA', 'F ARQ 02-RO', 'F BAO-PA', 'F BGA-MT', 'F BTS-RO', 'F CDN 02-AM',
+    'F CGR 03-MS', 'F CGR 04-MS', 'F CRH-PA', 'F CTL-GO', 'F DOU 02-MS', 'F GFN-PA', 'F GNS-PA',
+    'F GYN 04-GO', 'F HMT-AM', 'F IGM-PA', 'F IPX-PA', 'F ITT-PA', 'F JAU-RO', 'F JRG-GO',
+    'F MDO-RO', 'F MDR-PA', 'F MRL-AM', 'F MTB-PA', 'F NDI-MS', 'F NMB-PA', 'F PDP-PA', 'F PMW-TO',
+    'F PNA-TO', 'F PTD-MT', 'F PVH 03-RO', 'F QUI-GO', 'F RBR 02-AC', 'F ROO-MT', 'F SAM-DF', 'F SBS-DF',
+    'F SBZ-PA', 'F SFX-PA', 'F SNP-MT', 'F TPN-PA','F ANP 02-GO', 'F APG 02-GO', 'F BBG-MT', 'F BRV-PA', 'F CAM-PA',
+    'F CDN 03-AM', 'F CGR 05-MS', 'F CNA-PA', 'F CNP-MT', 'F CRJ-RO',
+    'F GAM-DF', 'F GYN 06-GO', 'F GYN 07-GO', 'F JTI-GO', 'F MCP 04-AP',
+    'F MDT-MT', 'F PMG-GO', 'F PVH 04-RO', 'F RDM-RO', 'F TGT 02-DF'
+]
 
 
 # ==========================================================
