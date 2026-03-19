@@ -76,7 +76,6 @@ LINK_PASTA = (
 # ============================================================
 INDICADOR_NOME = "SLA Entrega Realizada — %SLA por Base (pior → melhor)"
 
-# ✅ RECOLOQUE AQUI SEUS WEBHOOKS
 COORDENADOR_WEBHOOKS = {
     "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/3663dd30-722c-45d6-9e3c-1d4e2838f112",
     "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/0b907801-c73e-4de8-9f84-682d7b54f6fd",
@@ -88,8 +87,8 @@ COORDENADOR_WEBHOOKS = {
     "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/63751a67-efe8-40e4-b841-b290a4819836",
     "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/3ddc5962-2d32-4b2d-92d9-a4bc95ac3393",
     "Ana Cunha": "https://open.feishu.cn/open-apis/bot/v2/hook/b2ec868f-3149-4808-af53-9e0c6d2cd94e",
-    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/a53ad30e-17dd-4330-93db-15138b20d8f2", }
-
+    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/a53ad30e-17dd-4330-93db-15138b20d8f2",
+}
 
 EXTS = (".xlsx", ".xls", ".csv")
 COL_DATA_BASE = "DATA PREVISTA DE ENTREGA"
@@ -123,13 +122,13 @@ _TOKEN_CACHE = {"token": None, "exp": 0}
 # ============================================================
 JT_RED_MAIN = (227, 6, 19)      # #E30613
 JT_RED_SOFT = (196, 39, 46)     # #C4272E
-JT_BG_GRAY  = (242, 242, 242)   # #F2F2F2
-JT_TEXT     = (51, 51, 51)      # #333333
-JT_WHITE    = (255, 255, 255)   # #FFFFFF
+JT_BG_GRAY = (242, 242, 242)    # #F2F2F2
+JT_TEXT = (51, 51, 51)          # #333333
+JT_WHITE = (255, 255, 255)      # #FFFFFF
 
-JT_STROKE   = (220, 220, 220)
-JT_MUTED    = (110, 110, 110)
-JT_ROW_ALT  = (248, 248, 248)
+JT_STROKE = (220, 220, 220)
+JT_MUTED = (110, 110, 110)
+JT_ROW_ALT = (248, 248, 248)
 
 # ============================================================
 # HTTP (retry simples)
@@ -182,6 +181,8 @@ def _post_multipart_with_retry(
             time.sleep(0.7 * i)
 
     raise RuntimeError(f"Falha UPLOAD {url} após {tries} tentativas. Último erro: {last}")
+
+
 # =========================
 # BLOCO 2/4 — FUNÇÕES (FERIADOS / PERÍODO / LEITURA / EXPORT / RESUMO)
 # =========================
@@ -358,11 +359,18 @@ def calcular_periodo_base() -> Optional[Tuple[date, date, List[date]]]:
             logging.warning("⚠️ Não foi possível encontrar datas válidas após recuar 15 dias. Cancelando.")
             return None
 
-        logging.warning(f"⚠️ Período ({formatar_periodo(inicio, fim)}) vazio após remover feriados. Recuando 1 dia...")
+        logging.warning(
+            f"⚠️ Período ({formatar_periodo(inicio, fim)}) vazio após remover feriados. Recuando 1 dia..."
+        )
         fim = fim - timedelta(days=1)
 
 
-def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo: str, excluir_contains: Optional[str] = None) -> None:
+def arquivar_relatorios_antigos(
+    pasta_origem: str,
+    pasta_destino: str,
+    prefixo: str,
+    excluir_contains: Optional[str] = None
+) -> None:
     os.makedirs(pasta_destino, exist_ok=True)
     if not os.path.isdir(pasta_origem):
         return
@@ -378,7 +386,12 @@ def arquivar_relatorios_antigos(pasta_origem: str, pasta_destino: str, prefixo: 
             logging.error(f"Erro ao mover {arquivo}: {e}")
 
 
-def arquivar_bases_antigas(pasta_origem: str, pasta_destino: str, prefixo: str, excluir_contains: Optional[str] = None) -> None:
+def arquivar_bases_antigas(
+    pasta_origem: str,
+    pasta_destino: str,
+    prefixo: str,
+    excluir_contains: Optional[str] = None
+) -> None:
     os.makedirs(pasta_destino, exist_ok=True)
     if not os.path.isdir(pasta_origem):
         return
@@ -457,7 +470,11 @@ def garantir_coluna_data(df: pl.DataFrame, coluna: str) -> pl.DataFrame:
 
 
 def ajustar_periodo_por_dados(
-    df: pl.DataFrame, coluna_data: str, inicio: date, fim: date, datas: List[date]
+    df: pl.DataFrame,
+    coluna_data: str,
+    inicio: date,
+    fim: date,
+    datas: List[date]
 ) -> Tuple[date, date, List[date]]:
     if df.is_empty() or coluna_data not in df.columns:
         return inicio, fim, datas
@@ -541,7 +558,12 @@ def exportar_base_consolidada(df_periodo: pl.DataFrame, tag: str = "") -> Dict[s
     return {"parquet": arq_parquet, "csv": arq_csv, "xlsx": arq_xlsx}
 
 
-def exportar_resumo_excel(resumo_pd: pd.DataFrame, arquivo_saida: str, prefixo: str, excluir_contains: Optional[str] = None) -> None:
+def exportar_resumo_excel(
+    resumo_pd: pd.DataFrame,
+    arquivo_saida: str,
+    prefixo: str,
+    excluir_contains: Optional[str] = None
+) -> None:
     os.makedirs(PASTA_SAIDA, exist_ok=True)
     arquivar_relatorios_antigos(PASTA_SAIDA, PASTA_ARQUIVO, prefixo, excluir_contains=excluir_contains)
     with pd.ExcelWriter(arquivo_saida, engine="openpyxl") as w:
@@ -583,6 +605,8 @@ def gerar_resumo_por_base(df_periodo: pl.DataFrame) -> pd.DataFrame:
         .sort("% SLA Cumprido", descending=True)
     )
     return resumo.to_pandas().rename(columns={"BASE DE ENTREGA": "Base De Entrega"})
+
+
 # =========================
 # BLOCO 3/4 — FEISHU + IMAGEM (PIL) + CARD
 # =========================
@@ -706,6 +730,9 @@ def gerar_imagens_sla_tabela(
     rows_per_page: int = 22,
     file_suffix: str = "",
 ) -> List[str]:
+    """
+    Layout visual do relatório em imagem.
+    """
     try:
         from PIL import Image, ImageDraw, ImageFont
     except Exception:
@@ -734,6 +761,8 @@ def gerar_imagens_sla_tabela(
             ("segoeuib.ttf" if bold else "segoeui.ttf"),
             ("arialbd.ttf" if bold else "arial.ttf"),
             ("calibrib.ttf" if bold else "calibri.ttf"),
+            ("msyhbd.ttc" if bold else "msyh.ttc"),
+            ("simhei.ttf" if bold else "simsun.ttc"),
         ]
         for name in candidates:
             try:
@@ -765,9 +794,11 @@ def gerar_imagens_sla_tabela(
         w, _ = _measure(draw, text, font)
         if w <= max_w:
             return text
-        ell = "…"
+
+        ell = "..."
         lo, hi = 0, len(text)
         best = ell
+
         while lo <= hi:
             mid = (lo + hi) // 2
             cand = (text[:mid].rstrip() + ell)
@@ -776,9 +807,17 @@ def gerar_imagens_sla_tabela(
                 lo = mid + 1
             else:
                 hi = mid - 1
+
         return best
 
-    def _fit_font(draw: ImageDraw.ImageDraw, text: str, start_size: int, min_size: int, bold: bool, max_w: int):
+    def _fit_font(
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        start_size: int,
+        min_size: int,
+        bold: bool,
+        max_w: int,
+    ):
         size = start_size
         while size >= min_size:
             f = load_font(size, bold=bold)
@@ -787,7 +826,13 @@ def gerar_imagens_sla_tabela(
             size -= 1
         return load_font(min_size, bold=bold)
 
-    def _wrap_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w: int, max_lines: int = 2) -> List[str]:
+    def _wrap_lines(
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        font: ImageFont.ImageFont,
+        max_w: int,
+        max_lines: int = 2,
+    ) -> List[str]:
         text = (text or "").strip()
         if not text:
             return [""]
@@ -796,14 +841,14 @@ def gerar_imagens_sla_tabela(
         lines: List[str] = []
         cur = ""
 
-        for w in words:
-            cand = (cur + " " + w).strip() if cur else w
+        for word in words:
+            cand = (cur + " " + word).strip() if cur else word
             if _measure(draw, cand, font)[0] <= max_w:
                 cur = cand
             else:
                 if cur:
                     lines.append(cur)
-                cur = w
+                cur = word
                 if len(lines) >= max_lines - 1:
                     break
 
@@ -818,126 +863,334 @@ def gerar_imagens_sla_tabela(
 
         return lines
 
-    BG = JT_BG_GRAY
-    CARD = JT_WHITE
-    STROKE = JT_STROKE
-    TXT = JT_TEXT
-    MUTED = JT_MUTED
-    ROW1 = JT_WHITE
-    ROW2 = JT_ROW_ALT
+    def _draw_centered_line(
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        y: int,
+        font: ImageFont.ImageFont,
+        fill,
+        max_w: int,
+        center_x: int,
+    ) -> int:
+        txt = _ellipsize(draw, text, font, max_w)
+        w, h = _measure(draw, txt, font)
+        draw.text((center_x - w // 2, y), txt, fill=fill, font=font)
+        return y + h
 
-    W = 1800
-    pad = 34
+    def fmt_int(n: int) -> str:
+        return f"{int(n):,}".replace(",", ".")
 
-    header_h = 205
-    row_h = 52
-    gap = 18
+    def fmt_pct(v: float) -> str:
+        return f"{float(v):.2%}"
 
-    f_head = load_font(19, bold=True)
-    f_row = load_font(19, bold=False)
+    def draw_metric_card(
+        draw: ImageDraw.ImageDraw,
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
+        label: str,
+        value: str,
+        fill,
+        label_fill,
+        value_fill,
+        border,
+        highlight: bool = False,
+    ):
+        rr(draw, (x1, y1, x2, y2), 18, fill, outline=border, width=2)
 
-    out_paths: List[str] = []
+        label_font = load_font(18, bold=False)
+        value_font = load_font(29 if highlight else 26, bold=True)
+
+        inner_w = (x2 - x1) - 24
+        label = _ellipsize(draw, label, label_font, inner_w)
+        value = _ellipsize(draw, value, value_font, inner_w)
+
+        lw, _ = _measure(draw, label, label_font)
+        vw, _ = _measure(draw, value, value_font)
+
+        draw.text((x1 + ((x2 - x1) - lw) // 2, y1 + 16), label, fill=label_fill, font=label_font)
+        draw.text((x1 + ((x2 - x1) - vw) // 2, y1 + 48), value, fill=value_fill, font=value_font)
+
+    coord = (coord or "").strip() or "Sem Coordenador"
+    indicador_nome = (indicador_nome or "").strip() or "SLA Entrega Realizada"
+
     total_pages = len(pages)
     data_humana = datetime.now().strftime("%d/%m/%Y %H:%M")
 
-    indicador_nome = (indicador_nome or "").strip() or "SLA Entrega Realizada"
+    total_bases = int(sub2["Base De Entrega"].nunique()) if not sub2.empty else 0
+    total_geral = int(sub2["Total"].sum()) if "Total" in sub2.columns and not sub2.empty else 0
+    total_no_prazo = int(sub2["Entregues no Prazo"].sum()) if "Entregues no Prazo" in sub2.columns and not sub2.empty else 0
+    total_fora = int(sub2["Fora do Prazo"].sum()) if "Fora do Prazo" in sub2.columns and not sub2.empty else 0
+
+    RED_BG = JT_RED_MAIN
+    RED_HDR = (235, 0, 0)
+    RED_STRONG = (212, 0, 0)
+    RED_SOFT_BG = (255, 238, 240)
+    WHITE = JT_WHITE
+    PANEL_BG = JT_WHITE
+    ROW_A = (252, 252, 252)
+    ROW_B = (245, 245, 245)
+    GRID = (226, 226, 226)
+    TEXT = JT_TEXT
+    MUTED = (105, 105, 105)
+    GOOD_GREEN = (22, 163, 74)
+    WARN_ORANGE = (180, 120, 0)
+
+    W = 1800
+    OUTER = 18
+    TOP_AREA_H = 160
+
+    PANEL_PAD = 22
+    SUMMARY_H = 112
+    SUMMARY_GAP = 16
+    TABLE_HEAD_H = 68
+    ROW_H = 46
+    PANEL_BOTTOM = 22
+    FOOTER_RED_H = 62
+
+    out_paths: List[str] = []
 
     for page_idx, page_rows in enumerate(pages, start=1):
-        table_h = 130 + (len(page_rows) * row_h) + 40
-        H = pad * 2 + header_h + gap + table_h
+        row_count = len(page_rows)
 
-        img = Image.new("RGB", (W, H), BG)
+        panel_x1 = OUTER
+        panel_x2 = W - OUTER
+        panel_y1 = TOP_AREA_H + 10
+
+        panel_h = (
+            PANEL_PAD
+            + SUMMARY_H
+            + SUMMARY_GAP
+            + TABLE_HEAD_H
+            + (row_count * ROW_H)
+            + PANEL_BOTTOM
+        )
+        panel_y2 = panel_y1 + panel_h
+
+        H = panel_y2 + FOOTER_RED_H + 18
+
+        img = Image.new("RGB", (W, H), RED_BG)
         draw = ImageDraw.Draw(img)
 
-        rr(draw, (pad, pad, W - pad, H - pad), 26, CARD, outline=STROKE, width=2)
+        center_x = W // 2
 
-        hx1, hy1 = pad + 18, pad + 18
-        hx2, hy2 = W - pad - 18, pad + header_h
+        # topo
+        f_logo_big = load_font(42, bold=True)
+        f_logo_small = load_font(20, bold=True)
+        draw.text((22, 24), "J&T", fill=WHITE, font=f_logo_big)
+        draw.text((106, 43), "EXPRESS", fill=WHITE, font=f_logo_small)
 
-        for i in range(hy2 - hy1):
-            t = i / max(1, (hy2 - hy1))
-            c = (
-                int(JT_RED_SOFT[0] + (JT_RED_MAIN[0] - JT_RED_SOFT[0]) * t),
-                int(JT_RED_SOFT[1] + (JT_RED_MAIN[1] - JT_RED_SOFT[1]) * t),
-                int(JT_RED_SOFT[2] + (JT_RED_MAIN[2] - JT_RED_SOFT[2]) * t),
-            )
-            draw.line([(hx1, hy1 + i), (hx2, hy1 + i)], fill=c)
+        max_center_w = W - 380
 
-        left = hx1 + 22
-        inner_w = (hx2 - hx1) - 44
-        y = hy1 + 12
+        titulo = f"Relatório de {indicador_nome}"
+        subtitulo = f"Coordenador: {coord}{titulo_suffix}".strip()
+        linha_info = f"Atualizado: {data_humana}   •   Página {page_idx}/{total_pages}"
+        linha_periodo = f"Período: {periodo_txt}   •   Dias: {dias_txt}"
 
-        title = f"{coord}{titulo_suffix}".strip()
-        f_title_fit = _fit_font(draw, title, start_size=34, min_size=20, bold=True, max_w=inner_w)
-        title = _ellipsize(draw, title, f_title_fit, inner_w)
-        draw.text((left, y), title, fill=JT_WHITE, font=f_title_fit)
-        y += _measure(draw, title, f_title_fit)[1] + 8
+        f_title = _fit_font(draw, titulo, start_size=35, min_size=24, bold=True, max_w=max_center_w)
+        f_sub = _fit_font(draw, subtitulo, start_size=26, min_size=18, bold=True, max_w=max_center_w)
+        f_meta = load_font(18, bold=False)
 
-        indicador_full = f"Indicador: {indicador_nome}".strip()
-        f_ind_fit = _fit_font(draw, indicador_full, start_size=19, min_size=14, bold=True, max_w=inner_w)
-        ind_lines = _wrap_lines(draw, indicador_full, f_ind_fit, inner_w, max_lines=2)
-        for line in ind_lines:
-            draw.text((left, y), line, fill=JT_WHITE, font=f_ind_fit)
-            y += _measure(draw, line, f_ind_fit)[1] + 2
-        y += 4
+        y = 18
+        y = _draw_centered_line(draw, titulo, y, f_title, WHITE, max_center_w, center_x) + 5
+        y = _draw_centered_line(draw, subtitulo, y, f_sub, WHITE, max_center_w, center_x) + 7
 
-        line_atual = f"Atualizado: {data_humana}   •   Página {page_idx}/{total_pages}   •   SLA total: {sla_total:.2%}"
-        f_line_fit = _fit_font(draw, line_atual, start_size=19, min_size=13, bold=False, max_w=inner_w)
-        line_atual = _ellipsize(draw, line_atual, f_line_fit, inner_w)
-        draw.text((left, y), line_atual, fill=JT_WHITE, font=f_line_fit)
-        y += _measure(draw, line_atual, f_line_fit)[1] + 4
+        meta_lines_1 = _wrap_lines(draw, linha_info, f_meta, max_center_w, max_lines=2)
+        for line_txt in meta_lines_1:
+            y = _draw_centered_line(draw, line_txt, y, f_meta, WHITE, max_center_w, center_x) + 2
 
-        line_periodo = f"Período: {periodo_txt}   •   Dias: {dias_txt}"
-        f_per_fit = _fit_font(draw, line_periodo, start_size=19, min_size=13, bold=False, max_w=inner_w)
-        line_periodo = _ellipsize(draw, line_periodo, f_per_fit, inner_w)
-        draw.text((left, y), line_periodo, fill=JT_WHITE, font=f_per_fit)
+        meta_lines_2 = _wrap_lines(draw, linha_periodo, f_meta, max_center_w, max_lines=2)
+        for line_txt in meta_lines_2:
+            y = _draw_centered_line(draw, line_txt, y, f_meta, WHITE, max_center_w, center_x) + 2
 
-        tx1 = pad + 18
-        ty1 = hy2 + gap
-        tx2 = W - pad - 18
-        rr(draw, (tx1, ty1, tx2, H - pad - 18), 20, JT_WHITE, outline=STROKE, width=2)
+        # painel branco
+        rr(draw, (panel_x1, panel_y1, panel_x2, panel_y2), 20, PANEL_BG, outline=None, width=1)
 
-        draw.text((tx1 + 18, ty1 + 14), "Todas as bases — %SLA (pior → melhor)", fill=TXT, font=f_head)
-        draw.line((tx1 + 12, ty1 + 52, tx2 - 12, ty1 + 52), fill=STROKE, width=2)
+        inner_x1 = panel_x1 + PANEL_PAD
+        inner_x2 = panel_x2 - PANEL_PAD
+        inner_y1 = panel_y1 + PANEL_PAD
+        inner_w = inner_x2 - inner_x1
 
-        col_rank = tx1 + 18
-        col_base = tx1 + 90
-        col_total = tx2 - 560
-        col_ent = tx2 - 420
-        col_fora = tx2 - 290
-        col_sla_right = tx2 - 22
+        # cards
+        card_gap = 16
+        card_w = (inner_w - (3 * card_gap)) // 4
 
-        draw.text((col_rank, ty1 + 64), "#", fill=MUTED, font=f_head)
-        draw.text((col_base, ty1 + 64), "Base", fill=MUTED, font=f_head)
-        draw.text((col_total, ty1 + 64), "Total", fill=MUTED, font=f_head)
-        draw.text((col_ent, ty1 + 64), "No Prazo", fill=MUTED, font=f_head)
-        draw.text((col_fora, ty1 + 64), "Fora", fill=MUTED, font=f_head)
+        c1_x1 = inner_x1
+        c1_x2 = c1_x1 + card_w
 
-        sla_head = "%SLA"
-        bbox_h = draw.textbbox((0, 0), sla_head, font=f_head)
-        draw.text((col_sla_right - (bbox_h[2] - bbox_h[0]), ty1 + 64), sla_head, fill=MUTED, font=f_head)
+        c2_x1 = c1_x2 + card_gap
+        c2_x2 = c2_x1 + card_w
 
-        ytbl = ty1 + 102
-        start_rank = (page_idx - 1) * rows_per_page
+        c3_x1 = c2_x2 + card_gap
+        c3_x2 = c3_x1 + card_w
+
+        c4_x1 = c3_x2 + card_gap
+        c4_x2 = inner_x2
+
+        c_y1 = inner_y1
+        c_y2 = c_y1 + SUMMARY_H
+
+        draw_metric_card(
+            draw, c1_x1, c_y1, c1_x2, c_y2,
+            "Bases Avaliadas", fmt_int(total_bases),
+            fill=WHITE, label_fill=MUTED, value_fill=TEXT, border=(230, 230, 230), highlight=False,
+        )
+
+        draw_metric_card(
+            draw, c2_x1, c_y1, c2_x2, c_y2,
+            "Total", fmt_int(total_geral),
+            fill=WHITE, label_fill=MUTED, value_fill=RED_STRONG, border=(230, 230, 230), highlight=True,
+        )
+
+        draw_metric_card(
+            draw, c3_x1, c_y1, c3_x2, c_y2,
+            "No Prazo", fmt_int(total_no_prazo),
+            fill=WHITE, label_fill=MUTED, value_fill=TEXT, border=(230, 230, 230), highlight=False,
+        )
+
+        draw_metric_card(
+            draw, c4_x1, c_y1, c4_x2, c_y2,
+            "SLA Total", fmt_pct(sla_total),
+            fill=RED_SOFT_BG, label_fill=RED_STRONG, value_fill=RED_STRONG, border=(245, 190, 195), highlight=True,
+        )
+
+        # tabela
+        table_y1 = c_y2 + SUMMARY_GAP
+
+        w_rank = 85
+        w_total = 150
+        w_ent = 170
+        w_fora = 150
+        w_sla = 170
+        w_base = inner_w - w_rank - w_total - w_ent - w_fora - w_sla
+
+        col1_x1 = inner_x1
+        col1_x2 = col1_x1 + w_rank
+
+        col2_x1 = col1_x2
+        col2_x2 = col2_x1 + w_base
+
+        col3_x1 = col2_x2
+        col3_x2 = col3_x1 + w_total
+
+        col4_x1 = col3_x2
+        col4_x2 = col4_x1 + w_ent
+
+        col5_x1 = col4_x2
+        col5_x2 = col5_x1 + w_fora
+
+        col6_x1 = col5_x2
+        col6_x2 = inner_x2
+
+        rr(draw, (inner_x1, table_y1, inner_x2, table_y1 + TABLE_HEAD_H), 14, RED_HDR, outline=None, width=1)
+
+        for x in [col1_x2, col2_x2, col3_x2, col4_x2, col5_x2]:
+            draw.line((x, table_y1, x, table_y1 + TABLE_HEAD_H), fill=WHITE, width=2)
+
+        f_th = load_font(18, bold=True)
+
+        headers = [
+            ("Rank", col1_x1, col1_x2),
+            ("Base de Entrega", col2_x1, col2_x2),
+            ("Total", col3_x1, col3_x2),
+            ("No Prazo", col4_x1, col4_x2),
+            ("Fora", col5_x1, col5_x2),
+            ("%SLA", col6_x1, col6_x2),
+        ]
+
+        for txt, x1, x2 in headers:
+            fw, fh = _measure(draw, txt, f_th)
+            tx = x1 + ((x2 - x1) - fw) // 2
+            ty = table_y1 + ((TABLE_HEAD_H - fh) // 2)
+            draw.text((tx, ty), txt, fill=WHITE, font=f_th)
+
+        f_row = load_font(18, bold=False)
+        start_y = table_y1 + TABLE_HEAD_H
 
         for i, (base, tot, ent, fora, sla) in enumerate(page_rows, start=1):
-            bg_row = ROW1 if (i % 2 == 1) else ROW2
-            rr(draw, (tx1 + 12, ytbl - 8, tx2 - 12, ytbl + row_h - 10), 14, bg_row, outline=None)
+            y1 = start_y + ((i - 1) * ROW_H)
+            y2 = y1 + ROW_H
 
-            rank = start_rank + i
-            base_txt = (base or "")[:78]
-            sla_txt = f"{sla:.2%}"
+            fill_row = ROW_A if i % 2 == 1 else ROW_B
+            draw.rectangle((inner_x1, y1, inner_x2, y2), fill=fill_row)
 
-            draw.text((col_rank, ytbl), f"{rank:02d}", fill=TXT, font=f_row)
-            draw.text((col_base, ytbl), base_txt, fill=TXT, font=f_row)
-            draw.text((col_total, ytbl), str(tot), fill=TXT, font=f_row)
-            draw.text((col_ent, ytbl), str(ent), fill=TXT, font=f_row)
-            draw.text((col_fora, ytbl), str(fora), fill=TXT, font=f_row)
+            draw.line((inner_x1, y2, inner_x2, y2), fill=GRID, width=1)
+            for x in [col1_x2, col2_x2, col3_x2, col4_x2, col5_x2]:
+                draw.line((x, y1, x, y2), fill=GRID, width=1)
 
-            bbox = draw.textbbox((0, 0), sla_txt, font=f_row)
-            draw.text((col_sla_right - (bbox[2] - bbox[0]), ytbl), sla_txt, fill=JT_RED_SOFT, font=f_row)
+            rank_txt = f"{((page_idx - 1) * rows_per_page) + i}"
+            base_txt = _ellipsize(draw, str(base), f_row, (w_base - 28))
+            total_txt = fmt_int(int(tot))
+            ent_txt = fmt_int(int(ent))
+            fora_txt = fmt_int(int(fora))
+            sla_txt = fmt_pct(float(sla))
 
-            ytbl += row_h
+            if float(sla) >= 0.97:
+                sla_color = GOOD_GREEN
+            elif float(sla) >= 0.95:
+                sla_color = WARN_ORANGE
+            else:
+                sla_color = RED_STRONG
+
+            rw, rh = _measure(draw, rank_txt, f_row)
+            draw.text(
+                (col1_x1 + ((w_rank - rw) // 2), y1 + ((ROW_H - rh) // 2)),
+                rank_txt, fill=TEXT, font=f_row,
+            )
+
+            _, bh = _measure(draw, base_txt, f_row)
+            draw.text(
+                (col2_x1 + 14, y1 + ((ROW_H - bh) // 2)),
+                base_txt, fill=TEXT, font=f_row,
+            )
+
+            tw, th = _measure(draw, total_txt, f_row)
+            draw.text(
+                (col3_x1 + ((w_total - tw) // 2), y1 + ((ROW_H - th) // 2)),
+                total_txt, fill=TEXT, font=f_row,
+            )
+
+            ew, eh = _measure(draw, ent_txt, f_row)
+            draw.text(
+                (col4_x1 + ((w_ent - ew) // 2), y1 + ((ROW_H - eh) // 2)),
+                ent_txt, fill=TEXT, font=f_row,
+            )
+
+            fw, fh = _measure(draw, fora_txt, f_row)
+            draw.text(
+                (col5_x1 + ((w_fora - fw) // 2), y1 + ((ROW_H - fh) // 2)),
+                fora_txt, fill=TEXT, font=f_row,
+            )
+
+            sw, sh = _measure(draw, sla_txt, f_row)
+            draw.text(
+                (col6_x1 + ((w_sla - sw) // 2), y1 + ((ROW_H - sh) // 2)),
+                sla_txt, fill=sla_color, font=f_row,
+            )
+
+        total_table_h = TABLE_HEAD_H + (row_count * ROW_H)
+        draw.rounded_rectangle(
+            (inner_x1, table_y1, inner_x2, table_y1 + total_table_h),
+            radius=14,
+            outline=GRID,
+            width=1,
+        )
+
+        # rodapé
+        f_footer = load_font(15, bold=False)
+        footer_y = panel_y2 + 16
+
+        footer_txt_1 = f"Pasta compartilhada: {LINK_PASTA}"
+        footer_txt_2 = f"J&T Express • {indicador_nome}"
+
+        footer_txt_1 = _ellipsize(draw, footer_txt_1, f_footer, W - 120)
+
+        w1, h1 = _measure(draw, footer_txt_1, f_footer)
+        w2, _ = _measure(draw, footer_txt_2, f_footer)
+
+        draw.text((center_x - w1 // 2, footer_y), footer_txt_1, fill=WHITE, font=f_footer)
+        draw.text((center_x - w2 // 2, footer_y + h1 + 4), footer_txt_2, fill=WHITE, font=f_footer)
 
         safe_coord = normalizar(coord).replace(" ", "_")
         fs = (file_suffix or "").strip()
@@ -1064,10 +1317,11 @@ def processar_parte_e_enviar(
     periodo_txt_parte = periodo_txt_de_datas(datas_parte)
     dias_txt_parte = formatar_lista_dias(datas_parte)
 
-    logging.info(f"🧾 {parte_nome}: Período: {periodo_txt_parte} | Dias: {dias_txt_parte} | Registros: {df_parte.height}")
+    logging.info(
+        f"🧾 {parte_nome}: Período: {periodo_txt_parte} | Dias: {dias_txt_parte} | Registros: {df_parte.height}"
+    )
 
     paths_base = exportar_base_consolidada(df_parte, tag=tag_base)
-
     resumo_pd = gerar_resumo_por_base(df_parte)
 
     excluir_contains = "Domingo" if tag_base != "_Domingo" else None
@@ -1167,6 +1421,8 @@ def processar_parte_e_enviar(
                 page_label=None,
                 titulo_suffix=titulo_suffix,
             )
+
+
 # =========================
 # BLOCO 4/4 — MAIN
 # =========================
@@ -1186,7 +1442,7 @@ if __name__ == "__main__":
 
         inicio, fim, datas = periodo
 
-        datas_seg_sab_pre, datas_domingo_pre = separar_seg_sab_e_domingo(datas)
+        _, datas_domingo_pre = separar_seg_sab_e_domingo(datas)
         if not datas_domingo_pre:
             logging.info("ℹ️ Período calculado não contém domingo — vai gerar somente Seg–Sáb (ou dias úteis do período).")
 
@@ -1247,10 +1503,8 @@ if __name__ == "__main__":
         logging.info(f"📎 Base de coordenadores carregada: {arquivo_coord}")
         logging.info(f"📥 Registros base coordenador: {coord_df.height}")
 
-        # limpar nomes de colunas
         coord_df = coord_df.rename({c: c.strip() for c in coord_df.columns})
 
-        # tentativa de rename mais tolerante
         rename_map = {}
         if "Nome da base" in coord_df.columns:
             rename_map["Nome da base"] = "BASE DE ENTREGA"
@@ -1266,7 +1520,6 @@ if __name__ == "__main__":
         if rename_map:
             coord_df = coord_df.rename(rename_map)
 
-        # se ainda não encontrou, tenta por normalização
         cols_norm = {normalizar(c): c for c in coord_df.columns}
 
         if "BASE DE ENTREGA" not in coord_df.columns:
@@ -1286,7 +1539,6 @@ if __name__ == "__main__":
                 f"❌ O arquivo de coordenador precisa ter 'BASE DE ENTREGA' e 'COORDENADOR'. Colunas encontradas: {coord_df.columns}"
             )
 
-        # normalizar base para join
         df_periodo_all = df_periodo_all.with_columns(
             pl.col("BASE DE ENTREGA").map_elements(normalizar, return_dtype=pl.Utf8).alias("BASE_NORM")
         )
@@ -1294,7 +1546,6 @@ if __name__ == "__main__":
             pl.col("BASE DE ENTREGA").map_elements(normalizar, return_dtype=pl.Utf8).alias("BASE_NORM")
         )
 
-        # evitar duplicação no join (many-to-many)
         coord_df = coord_df.unique(subset=["BASE_NORM"], keep="first")
 
         df_periodo_all = df_periodo_all.join(
@@ -1329,14 +1580,12 @@ if __name__ == "__main__":
             except Exception as e:
                 logging.warning(f"⚠️ Não consegui salvar a lista de bases sem coordenador: {e}")
 
-        # separar seg-sab / domingo
         df_seg_sab = df_periodo_all.filter(pl.col(COL_DATA_BASE).is_in(datas_seg_sab)) if datas_seg_sab else pl.DataFrame()
         df_domingo = df_periodo_all.filter(pl.col(COL_DATA_BASE).is_in(datas_domingo)) if datas_domingo else pl.DataFrame()
 
         logging.info(f"📦 Registros Seg–Sáb: {df_seg_sab.height if hasattr(df_seg_sab, 'height') else 0}")
         logging.info(f"📦 Registros Domingo: {df_domingo.height if hasattr(df_domingo, 'height') else 0}")
 
-        # ✅ GERA SEMPRE SEG–SÁB
         if datas_seg_sab and not df_seg_sab.is_empty():
             processar_parte_e_enviar(
                 parte_nome="Seg–Sáb",
@@ -1351,7 +1600,6 @@ if __name__ == "__main__":
         else:
             logging.warning("⚠️ Sem dados para Seg–Sáb no período. Nada a exportar/enviar (Seg–Sáb).")
 
-        # ✅ DOMINGO SÓ SE EXISTIR
         if datas_domingo and not df_domingo.is_empty():
             processar_parte_e_enviar(
                 parte_nome="Domingo",

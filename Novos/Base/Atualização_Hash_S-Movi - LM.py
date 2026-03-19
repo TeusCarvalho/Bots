@@ -1,6 +1,6 @@
 # =========================================================
 # ARQUIVO COMPLETO — INDICADOR NA IMAGEM + CARD (CORES J&T)
-# Cole TUDO no mesmo .py
+# Layout novo no mesmo estilo da imagem anterior
 # =========================================================
 # -*- coding: utf-8 -*-
 
@@ -21,7 +21,7 @@ from typing import Dict, Any, Optional, Tuple, List
 # =========================
 
 # 🏷️ Nome do indicador (vai aparecer na IMAGEM e no CARD)
-INDICADOR_NOME = "Multas 5+ dias — Bases por quantidade (Δ vs relatório anterior)"  # <-- ajuste aqui
+INDICADOR_NOME = "Multas 5+ dias — Bases por quantidade (Δ vs relatório anterior)"
 
 COORDENADOR_WEBHOOKS = {
     "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/1d9bbacf-79ed-4eb3-8046-26d7480893c3",
@@ -57,7 +57,7 @@ APP_ID = os.getenv("FEISHU_APP_ID", "cli_a906d2d682f8dbd8").strip()
 APP_SECRET = os.getenv("FEISHU_APP_SECRET", "Fzh1cr6K55a3oQUBV9wCZd6AWiZH5ONw").strip()
 
 # =========================
-# 🎨 PALETA J&T (HEX -> RGB)
+# 🎨 PALETA J&T
 # =========================
 JT_RED_MAIN = (227, 6, 19)      # #E30613
 JT_RED_SOFT = (196, 39, 46)     # #C4272E
@@ -69,8 +69,8 @@ JT_STROKE   = (210, 210, 210)
 JT_MUTED    = (120, 120, 120)
 JT_ROW_ALT  = (248, 248, 248)
 
-# (Opcional) cor “boa” para queda (não faz parte da paleta, mas melhora leitura)
 GOOD_GREEN  = (16, 185, 129)
+
 # =========================
 # BLOCO 2/3 — UTIL + FEISHU TOKEN/UPLOAD + IMAGENS (PIL)
 # =========================
@@ -80,6 +80,13 @@ def format_currency_brl(value: float) -> str:
         return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception:
         return "R$ 0,00"
+
+
+def format_int_br(value: int) -> str:
+    try:
+        return f"{int(value):,}".replace(",", ".")
+    except Exception:
+        return "0"
 
 
 def calcular_hash_md5(file_path: str) -> str:
@@ -128,7 +135,6 @@ def requests_post_with_retry(
 
 
 def safe_filename(text: str) -> str:
-    """Evita problemas com caracteres especiais no nome do arquivo."""
     if text is None:
         return "SEM_NOME"
     ok = []
@@ -148,7 +154,6 @@ def feishu_enabled() -> bool:
 
 
 def get_tenant_access_token() -> str:
-    """POST /open-apis/auth/v3/tenant_access_token/internal"""
     url = f"{FEISHU_BASE_DOMAIN}/open-apis/auth/v3/tenant_access_token/internal"
     payload = {"app_id": APP_ID, "app_secret": APP_SECRET}
 
@@ -163,7 +168,6 @@ def get_tenant_access_token() -> str:
 
 
 def upload_image_get_key(image_path: str, token: str, image_type: str = "message") -> str:
-    """POST /open-apis/im/v1/images (multipart)"""
     url = f"{FEISHU_BASE_DOMAIN}/open-apis/im/v1/images"
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -184,16 +188,23 @@ def upload_image_get_key(image_path: str, token: str, image_type: str = "message
 
 
 # =========================
-# GERAR IMAGEM “BONITINHA” (PILLOW) — SEM BARRAS
-# + INDICADOR NO HEADER (CORES J&T)
+# FONTES
 # =========================
 
 def _load_font(size: int, bold: bool = False):
     from PIL import ImageFont
     candidates = []
     if bold:
-        candidates += [r"C:\Windows\Fonts\arialbd.ttf", r"C:\Windows\Fonts\calibrib.ttf", r"C:\Windows\Fonts\segoeuib.ttf"]
-    candidates += [r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\calibri.ttf", r"C:\Windows\Fonts\segoeui.ttf"]
+        candidates += [
+            r"C:\Windows\Fonts\arialbd.ttf",
+            r"C:\Windows\Fonts\calibrib.ttf",
+            r"C:\Windows\Fonts\segoeuib.ttf",
+        ]
+    candidates += [
+        r"C:\Windows\Fonts\arial.ttf",
+        r"C:\Windows\Fonts\calibri.ttf",
+        r"C:\Windows\Fonts\segoeui.ttf",
+    ]
 
     for p in candidates:
         if os.path.exists(p):
@@ -204,52 +215,33 @@ def _load_font(size: int, bold: bool = False):
     return ImageFont.load_default()
 
 
+# =========================
+# IMAGEM NOVA — MESMO ESTILO DO OUTRO RELATÓRIO
+# =========================
+
 def gerar_imagens_bases(
     coordenador: str,
     indicador_nome: str,
+    total_pacotes: int,
+    total_multa: float,
+    total_bases: int,
     bases_atuais: Dict[str, int],
     bases_antigas: Dict[str, int],
     out_dir: str,
     rows_per_page: int = ROWS_PER_PAGE,
 ) -> List[str]:
     """
-    Retorna lista de caminhos de imagens (paginadas) com todas as bases, ordenadas por qtd desc.
-    ✅ Mostra INDICADOR no header
-    ✅ CORES J&T
-    ✅ NÃO CORTA texto (auto-fit + wrap + reticências)
+    Gera imagens no mesmo padrão visual do relatório anterior:
+    - fundo vermelho J&T
+    - header centralizado
+    - painel branco arredondado
+    - cards de destaque
+    - tabela com cabeçalho vermelho
+    - coluna Δ mantida
     """
     from PIL import Image, ImageDraw
 
-    indicador_nome = (indicador_nome or "").strip() or "Indicador"
-
-    items = sorted((bases_atuais or {}).items(), key=lambda x: x[1], reverse=True)
-    if not items:
-        return []
-
-    total_pages = (len(items) + rows_per_page - 1) // rows_per_page
-    ts = datetime.now().strftime("%d/%m/%Y %H:%M")
-
-    # ===== Tema J&T =====
-    bg = JT_BG_GRAY
-    card = JT_WHITE
-    line = JT_STROKE
-    text = JT_TEXT
-    muted = JT_MUTED
-    row_alt = JT_ROW_ALT
-
-    # layout
-    W = 1400
-    pad = 36
-
-    # ✅ AUMENTEI para caber indicador em 2 linhas
-    header_h = 190
-
-    table_top = header_h + 26
-    row_h = 44
-    head_h = 44
-    footer_h = 24
-
-    out_paths: List[str] = []
+    os.makedirs(out_dir, exist_ok=True)
 
     def rr(draw: ImageDraw.ImageDraw, xy, r, fill, outline=None, width=1):
         try:
@@ -257,62 +249,78 @@ def gerar_imagens_bases(
         except Exception:
             draw.rectangle(xy, fill=fill, outline=outline, width=width)
 
-    # ===== Helpers: medir / ellipsis / auto-fit / wrap =====
-    def _measure(draw: ImageDraw.ImageDraw, text_: str, font_) -> Tuple[int, int]:
-        text_ = text_ or ""
+    def _measure(draw: ImageDraw.ImageDraw, text: str, font) -> Tuple[int, int]:
+        text = text or ""
         try:
-            b = draw.textbbox((0, 0), text_, font=font_)
+            b = draw.textbbox((0, 0), text, font=font)
             return int(b[2] - b[0]), int(b[3] - b[1])
         except Exception:
             try:
-                w_, h_ = draw.textsize(text_, font=font_)  # type: ignore[attr-defined]
-                return int(w_), int(h_)
+                w, h = draw.textsize(text, font=font)  # type: ignore[attr-defined]
+                return int(w), int(h)
             except Exception:
-                return int(len(text_) * 8), 18
+                return int(len(text) * 8), 18
 
-    def _ellipsize(draw: ImageDraw.ImageDraw, text_: str, font_, max_w: int) -> str:
-        text_ = text_ or ""
-        if _measure(draw, text_, font_)[0] <= max_w:
-            return text_
-        ell = "…"
-        lo, hi = 0, len(text_)
+    def _ellipsize(draw: ImageDraw.ImageDraw, text: str, font, max_w: int) -> str:
+        text = text or ""
+        w, _ = _measure(draw, text, font)
+        if w <= max_w:
+            return text
+
+        ell = "..."
+        lo, hi = 0, len(text)
         best = ell
+
         while lo <= hi:
             mid = (lo + hi) // 2
-            cand = (text_[:mid].rstrip() + ell)
-            if _measure(draw, cand, font_)[0] <= max_w:
+            cand = (text[:mid].rstrip() + ell)
+            if _measure(draw, cand, font)[0] <= max_w:
                 best = cand
                 lo = mid + 1
             else:
                 hi = mid - 1
+
         return best
 
-    def _fit_font(draw: ImageDraw.ImageDraw, text_: str, start_size: int, min_size: int, bold: bool, max_w: int):
+    def _fit_font(
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        start_size: int,
+        min_size: int,
+        bold: bool,
+        max_w: int,
+    ):
         size = start_size
         while size >= min_size:
             f = _load_font(size, bold=bold)
-            if _measure(draw, text_, f)[0] <= max_w:
+            if _measure(draw, text, f)[0] <= max_w:
                 return f
             size -= 1
         return _load_font(min_size, bold=bold)
 
-    def _wrap_lines(draw: ImageDraw.ImageDraw, text_: str, font_, max_w: int, max_lines: int = 2) -> List[str]:
-        text_ = (text_ or "").strip()
-        if not text_:
+    def _wrap_lines(
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        font,
+        max_w: int,
+        max_lines: int = 2,
+    ) -> List[str]:
+        text = (text or "").strip()
+        if not text:
             return [""]
 
-        words = text_.split()
+        words = text.split()
         lines: List[str] = []
         cur = ""
 
-        for w_ in words:
-            cand = (cur + " " + w_).strip() if cur else w_
-            if _measure(draw, cand, font_)[0] <= max_w:
+        for word in words:
+            cand = (cur + " " + word).strip() if cur else word
+            if _measure(draw, cand, font)[0] <= max_w:
                 cur = cand
             else:
                 if cur:
                     lines.append(cur)
-                cur = w_
+                cur = word
                 if len(lines) >= max_lines - 1:
                     break
 
@@ -323,115 +331,340 @@ def gerar_imagens_bases(
             lines = lines[:max_lines]
 
         if lines:
-            lines[-1] = _ellipsize(draw, lines[-1], font_, max_w)
+            lines[-1] = _ellipsize(draw, lines[-1], font, max_w)
 
         return lines
 
-    for page in range(1, total_pages + 1):
-        chunk = items[(page - 1) * rows_per_page: page * rows_per_page]
-        H = table_top + head_h + (len(chunk) * row_h) + footer_h + pad
+    def _draw_centered_line(
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        y: int,
+        font,
+        fill,
+        max_w: int,
+        center_x: int,
+    ) -> int:
+        txt = _ellipsize(draw, text, font, max_w)
+        w, h = _measure(draw, txt, font)
+        draw.text((center_x - w // 2, y), txt, fill=fill, font=font)
+        return y + h
 
-        img = Image.new("RGB", (W, H), bg)
+    def draw_metric_card(
+        draw: ImageDraw.ImageDraw,
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
+        label: str,
+        value: str,
+        fill,
+        label_fill,
+        value_fill,
+        border,
+        highlight: bool = False,
+    ):
+        rr(draw, (x1, y1, x2, y2), 18, fill, outline=border, width=2)
+
+        label_font = _load_font(19, bold=False)
+        value_font = _load_font(30 if highlight else 27, bold=True)
+
+        inner_w = (x2 - x1) - 24
+        label = _ellipsize(draw, label, label_font, inner_w)
+        value = _ellipsize(draw, value, value_font, inner_w)
+
+        lw, lh = _measure(draw, label, label_font)
+        vw, vh = _measure(draw, value, value_font)
+
+        draw.text((x1 + ((x2 - x1) - lw) // 2, y1 + 16), label, fill=label_fill, font=label_font)
+        draw.text((x1 + ((x2 - x1) - vw) // 2, y1 + 48), value, fill=value_fill, font=value_font)
+
+    coordenador = (coordenador or "").strip() or "Sem Coordenador"
+    indicador_nome = (indicador_nome or "").strip() or "Indicador"
+
+    items = sorted((bases_atuais or {}).items(), key=lambda x: x[1], reverse=True)
+    if not items:
+        return []
+
+    total_pages = (len(items) + rows_per_page - 1) // rows_per_page
+    ts = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    RED_BG = JT_RED_MAIN
+    RED_HDR = (235, 0, 0)
+    RED_STRONG = (212, 0, 0)
+    RED_SOFT_BG = (255, 238, 240)
+    WHITE = JT_WHITE
+    PANEL_BG = JT_WHITE
+    ROW_A = (252, 252, 252)
+    ROW_B = (245, 245, 245)
+    GRID = (226, 226, 226)
+    TEXT = JT_TEXT
+    MUTED = (105, 105, 105)
+
+    W = 1600
+    OUTER = 18
+    TOP_AREA_H = 142
+
+    PANEL_PAD = 22
+    SUMMARY_H = 112
+    SUMMARY_GAP = 16
+    TABLE_HEAD_H = 68
+    ROW_H = 42
+    PANEL_BOTTOM = 22
+    FOOTER_RED_H = 62
+
+    out_paths: List[str] = []
+
+    for page_idx in range(1, total_pages + 1):
+        chunk = items[(page_idx - 1) * rows_per_page: page_idx * rows_per_page]
+        row_count = len(chunk)
+
+        panel_x1 = OUTER
+        panel_x2 = W - OUTER
+        panel_y1 = TOP_AREA_H + 10
+
+        panel_h = (
+            PANEL_PAD
+            + SUMMARY_H
+            + SUMMARY_GAP
+            + TABLE_HEAD_H
+            + (row_count * ROW_H)
+            + PANEL_BOTTOM
+        )
+        panel_y2 = panel_y1 + panel_h
+
+        H = panel_y2 + FOOTER_RED_H + 18
+
+        img = Image.new("RGB", (W, H), RED_BG)
         draw = ImageDraw.Draw(img)
 
-        # card externo
-        rr(draw, (18, 18, W - 18, H - 18), 20, card, outline=line, width=2)
+        center_x = W // 2
 
-        # header gradiente (vermelho soft -> vermelho main)
-        hx1, hy1 = 22, 22
-        hx2, hy2 = W - 22, 22 + header_h
-        rr(draw, (hx1, hy1, hx2, hy2), 18, JT_RED_SOFT, outline=None, width=1)
-        for i in range(hy2 - hy1):
-            t = i / max(1, (hy2 - hy1))
-            c = (
-                int(JT_RED_SOFT[0] + (JT_RED_MAIN[0] - JT_RED_SOFT[0]) * t),
-                int(JT_RED_SOFT[1] + (JT_RED_MAIN[1] - JT_RED_SOFT[1]) * t),
-                int(JT_RED_SOFT[2] + (JT_RED_MAIN[2] - JT_RED_SOFT[2]) * t),
-            )
-            draw.line([(hx1 + 1, hy1 + i), (hx2 - 1, hy1 + i)], fill=c)
+        # =========================
+        # Topo vermelho
+        # =========================
+        f_logo_big = _load_font(42, bold=True)
+        f_logo_small = _load_font(20, bold=True)
+        draw.text((22, 24), "J&T", fill=WHITE, font=f_logo_big)
+        draw.text((106, 43), "EXPRESS", fill=WHITE, font=f_logo_small)
 
-        # ✅ HEADER SEM CORTE
-        left = pad
-        inner_w = (hx2 - left) - 24  # margem direita interna
-        y = hy1 + 14
+        max_center_w = W - 380
 
-        title = (coordenador or "").strip()
-        font_title = _fit_font(draw, title, start_size=32, min_size=18, bold=True, max_w=inner_w)
-        title_draw = _ellipsize(draw, title, font_title, inner_w)
-        draw.text((left, y), title_draw, fill=JT_WHITE, font=font_title)
-        y += _measure(draw, title_draw, font_title)[1] + 8
+        titulo = f"Relatório de {indicador_nome}"
+        subtitulo = f"Coordenador: {coordenador}"
+        linha_info = f"Atualizado: {ts}   •   Página {page_idx}/{total_pages}"
 
-        ind_full = f"Indicador: {indicador_nome}".strip()
-        font_ind = _fit_font(draw, ind_full, start_size=18, min_size=13, bold=True, max_w=inner_w)
-        ind_lines = _wrap_lines(draw, ind_full, font_ind, inner_w, max_lines=2)
-        for line_txt in ind_lines:
-            draw.text((left, y), line_txt, fill=JT_WHITE, font=font_ind)
-            y += _measure(draw, line_txt, font_ind)[1] + 2
-        y += 6
+        f_title = _fit_font(draw, titulo, start_size=35, min_size=24, bold=True, max_w=max_center_w)
+        f_sub = _fit_font(draw, subtitulo, start_size=26, min_size=18, bold=True, max_w=max_center_w)
+        f_meta = _load_font(18, bold=False)
 
-        sub_full = f"Atualizado: {ts}  •  Página {page}/{total_pages}"
-        font_sub = _fit_font(draw, sub_full, start_size=18, min_size=12, bold=False, max_w=inner_w)
-        sub_draw = _ellipsize(draw, sub_full, font_sub, inner_w)
-        draw.text((left, y), sub_draw, fill=JT_WHITE, font=font_sub)
+        y = 18
+        y = _draw_centered_line(draw, titulo, y, f_title, WHITE, max_center_w, center_x) + 5
+        y = _draw_centered_line(draw, subtitulo, y, f_sub, WHITE, max_center_w, center_x) + 7
 
-        # table header
-        x0 = pad
-        yth = table_top
-        col_base = 720
-        col_qtd = 200
-        col_diff = 200
+        meta_lines = _wrap_lines(draw, linha_info, f_meta, max_center_w, max_lines=2)
+        for line_txt in meta_lines:
+            y = _draw_centered_line(draw, line_txt, y, f_meta, WHITE, max_center_w, center_x) + 2
 
-        font_head = _load_font(18, bold=True)
-        font_row = _load_font(18, bold=False)
+        # =========================
+        # Painel branco
+        # =========================
+        rr(draw, (panel_x1, panel_y1, panel_x2, panel_y2), 20, PANEL_BG, outline=None, width=1)
 
-        draw.text((x0, yth), "Base", fill=muted, font=font_head)
-        draw.text((x0 + col_base, yth), "Qtd", fill=muted, font=font_head)
-        draw.text((x0 + col_base + col_qtd, yth), "Δ", fill=muted, font=font_head)
-        draw.line((pad, yth + 34, W - pad, yth + 34), fill=line, width=2)
+        inner_x1 = panel_x1 + PANEL_PAD
+        inner_x2 = panel_x2 - PANEL_PAD
+        inner_y1 = panel_y1 + PANEL_PAD
+        inner_w = inner_x2 - inner_x1
 
-        # rows
-        y_row = yth + head_h
-        for idx, (base, qtd) in enumerate(chunk, 1):
-            if idx % 2 == 0:
-                rr(
-                    draw,
-                    (pad - 10, y_row - 6, W - pad + 10, y_row + row_h - 6),
-                    12,
-                    row_alt,
-                    outline=None,
-                    width=1
-                )
+        # =========================
+        # Cards de destaque
+        # =========================
+        card_gap = 16
+        card_w = (inner_w - (2 * card_gap)) // 3
+
+        c1_x1 = inner_x1
+        c1_x2 = c1_x1 + card_w
+
+        c2_x1 = c1_x2 + card_gap
+        c2_x2 = c2_x1 + card_w
+
+        c3_x1 = c2_x2 + card_gap
+        c3_x2 = inner_x2
+
+        c_y1 = inner_y1
+        c_y2 = c_y1 + SUMMARY_H
+
+        draw_metric_card(
+            draw,
+            c1_x1, c_y1, c1_x2, c_y2,
+            "Qtd de Pacotes",
+            format_int_br(total_pacotes),
+            fill=WHITE,
+            label_fill=MUTED,
+            value_fill=RED_STRONG,
+            border=(230, 230, 230),
+            highlight=True,
+        )
+
+        draw_metric_card(
+            draw,
+            c2_x1, c_y1, c2_x2, c_y2,
+            "Bases Avaliadas",
+            format_int_br(total_bases),
+            fill=WHITE,
+            label_fill=MUTED,
+            value_fill=TEXT,
+            border=(230, 230, 230),
+            highlight=False,
+        )
+
+        draw_metric_card(
+            draw,
+            c3_x1, c_y1, c3_x2, c_y2,
+            "Multa Atual",
+            format_currency_brl(total_multa),
+            fill=RED_SOFT_BG,
+            label_fill=RED_STRONG,
+            value_fill=RED_STRONG,
+            border=(245, 190, 195),
+            highlight=True,
+        )
+
+        # =========================
+        # Tabela
+        # =========================
+        table_y1 = c_y2 + SUMMARY_GAP
+
+        w_rank = 90
+        w_qtd = 210
+        w_diff = 260
+        w_base = inner_w - w_rank - w_qtd - w_diff
+
+        col1_x1 = inner_x1
+        col1_x2 = col1_x1 + w_rank
+
+        col2_x1 = col1_x2
+        col2_x2 = col2_x1 + w_base
+
+        col3_x1 = col2_x2
+        col3_x2 = col3_x1 + w_qtd
+
+        col4_x1 = col3_x2
+        col4_x2 = inner_x2
+
+        rr(draw, (inner_x1, table_y1, inner_x2, table_y1 + TABLE_HEAD_H), 14, RED_HDR, outline=None, width=1)
+
+        for x in [col1_x2, col2_x2, col3_x2]:
+            draw.line((x, table_y1, x, table_y1 + TABLE_HEAD_H), fill=WHITE, width=2)
+
+        f_th = _load_font(18, bold=True)
+
+        headers = [
+            ("Rank", col1_x1, col1_x2),
+            ("Base de Entrega", col2_x1, col2_x2),
+            ("Qtd", col3_x1, col3_x2),
+            ("Δ vs anterior", col4_x1, col4_x2),
+        ]
+
+        for txt, x1, x2 in headers:
+            fw, fh = _measure(draw, txt, f_th)
+            tx = x1 + ((x2 - x1) - fw) // 2
+            ty = table_y1 + ((TABLE_HEAD_H - fh) // 2)
+            draw.text((tx, ty), txt, fill=WHITE, font=f_th)
+
+        f_row = _load_font(18, bold=False)
+        start_y = table_y1 + TABLE_HEAD_H
+
+        for i, (base, qtd) in enumerate(chunk, start=1):
+            y1 = start_y + ((i - 1) * ROW_H)
+            y2 = y1 + ROW_H
+
+            fill_row = ROW_A if i % 2 == 1 else ROW_B
+            draw.rectangle((inner_x1, y1, inner_x2, y2), fill=fill_row)
+
+            draw.line((inner_x1, y2, inner_x2, y2), fill=GRID, width=1)
+            for x in [col1_x2, col2_x2, col3_x2]:
+                draw.line((x, y1, x, y2), fill=GRID, width=1)
+
+            rank_txt = f"{((page_idx - 1) * rows_per_page) + i}"
+            base_txt = _ellipsize(draw, str(base), f_row, (w_base - 28))
+            qtd_txt = format_int_br(int(qtd))
 
             diff = int(qtd) - int((bases_antigas or {}).get(base, 0))
             if diff > 0:
                 diff_txt = f"+{diff}"
-                diff_color = JT_RED_MAIN  # aumento = vermelho
+                diff_color = JT_RED_MAIN
             elif diff < 0:
                 diff_txt = f"{diff}"
-                diff_color = GOOD_GREEN   # queda = verde (opcional)
+                diff_color = GOOD_GREEN
             else:
                 diff_txt = "0"
-                diff_color = muted
+                diff_color = MUTED
 
-            base_txt = str(base)
-            if len(base_txt) > 40:
-                base_txt = base_txt[:37] + "..."
+            rw, rh = _measure(draw, rank_txt, f_row)
+            draw.text(
+                (col1_x1 + ((w_rank - rw) // 2), y1 + ((ROW_H - rh) // 2)),
+                rank_txt,
+                fill=TEXT,
+                font=f_row,
+            )
 
-            draw.text((x0, y_row + 8), base_txt, fill=text, font=font_row)
-            draw.text((x0 + col_base, y_row + 8), f"{int(qtd)}", fill=text, font=font_row)
-            draw.text((x0 + col_base + col_qtd, y_row + 8), diff_txt, fill=diff_color, font=font_row)
+            bw, bh = _measure(draw, base_txt, f_row)
+            draw.text(
+                (col2_x1 + 14, y1 + ((ROW_H - bh) // 2)),
+                base_txt,
+                fill=TEXT,
+                font=f_row,
+            )
 
-            y_row += row_h
+            qw, qh = _measure(draw, qtd_txt, f_row)
+            draw.text(
+                (col3_x1 + ((w_qtd - qw) // 2), y1 + ((ROW_H - qh) // 2)),
+                qtd_txt,
+                fill=TEXT,
+                font=f_row,
+            )
 
-        # footer
-        draw.text((pad, H - 44), "Bases (todas) — ordenado por quantidade", fill=muted, font=font_sub)
+            dw, dh = _measure(draw, diff_txt, f_row)
+            draw.text(
+                (col4_x1 + ((w_diff - dw) // 2), y1 + ((ROW_H - dh) // 2)),
+                diff_txt,
+                fill=diff_color,
+                font=f_row,
+            )
 
-        fname = f"bases_{safe_filename(coordenador)}_p{page:02d}.png"
+        total_table_h = TABLE_HEAD_H + (row_count * ROW_H)
+        draw.rounded_rectangle(
+            (inner_x1, table_y1, inner_x2, table_y1 + total_table_h),
+            radius=14,
+            outline=GRID,
+            width=1,
+        )
+
+        # =========================
+        # Rodapé vermelho
+        # =========================
+        f_footer = _load_font(15, bold=False)
+        footer_y = panel_y2 + 16
+
+        footer_txt_1 = f"Relatório completo: {LINK_RELATORIO}"
+        footer_txt_2 = f"J&T Express • {indicador_nome}"
+
+        footer_txt_1 = _ellipsize(draw, footer_txt_1, f_footer, W - 120)
+
+        w1, h1 = _measure(draw, footer_txt_1, f_footer)
+        w2, h2 = _measure(draw, footer_txt_2, f_footer)
+
+        draw.text((center_x - w1 // 2, footer_y), footer_txt_1, fill=WHITE, font=f_footer)
+        draw.text((center_x - w2 // 2, footer_y + h1 + 4), footer_txt_2, fill=WHITE, font=f_footer)
+
+        fname = f"bases_{safe_filename(coordenador)}_p{page_idx:02d}.png"
         out_path = os.path.join(out_dir, fname)
         img.save(out_path, "PNG")
         out_paths.append(out_path)
 
     return out_paths
+
+
 # =========================
 # BLOCO 3/3 — PROCESSAR RELATÓRIO + SNAPSHOT + CARD + MAIN
 # =========================
@@ -546,7 +779,6 @@ def create_feishu_payload(
         {"tag": "hr"},
     ]
 
-    # Imagens (páginas)
     if image_keys:
         for k in image_keys:
             elements.append(
@@ -590,7 +822,7 @@ def create_feishu_payload(
             "config": {"wide_screen_mode": True},
             "header": {
                 "title": {"tag": "plain_text", "content": f"{coordenador}"},
-                "template": "red",  # ✅ J&T (antes: green)
+                "template": "red",
             },
             "elements": elements,
         },
@@ -645,7 +877,6 @@ def run_main_task():
     snapshot_atual = gerar_snapshot(df)
     snapshot_atual["file_hash"] = file_hash
 
-    # token (uma vez)
     token = ""
     if feishu_enabled():
         try:
@@ -662,12 +893,14 @@ def run_main_task():
 
         data = comparar_coordenador(snapshot_atual, snapshot_antigo, coord)
 
-        # gerar imagens (todas as bases) — passa indicador
         image_keys: List[str] = []
         try:
             img_paths = gerar_imagens_bases(
                 coordenador=coord,
                 indicador_nome=INDICADOR_NOME,
+                total_pacotes=data["total_pacotes"],
+                total_multa=data["total_multa"],
+                total_bases=len(data["bases_atuais"]),
                 bases_atuais=data["bases_atuais"],
                 bases_antigas=data["bases_antigas"],
                 out_dir=IMAGES_OUT_DIR,
