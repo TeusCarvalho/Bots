@@ -29,7 +29,7 @@ logging.basicConfig(
 # ==========================================================
 os.environ["POLARS_MAX_THREADS"] = str(multiprocessing.cpu_count())
 
-PASTA_ENTRADA = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\06-  SLA Entrega Realizada Franquia"
+PASTA_ENTRADA = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Área de Trabalho\Testes\06-  SLA Entrega Realizada Franquia"
 
 # ✅ PASTA DE SAÍDA (onde você quer que gere a planilha nova)
 PASTA_SAIDA = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\SLA - Franquias"

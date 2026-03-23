@@ -104,7 +104,7 @@ LINK_RELATORIO = (
     "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/IgBldPNr5MwPQaiozw6vEIihAdlI_1TZb8xYQ3V04eKiLuM?e=G4g9Q9"
 )
 
-BASE_DIR = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\02 - Custo - Coordenador"
+BASE_DIR = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Área de Trabalho\Testes\02 - Custo - Coordenador"
 OUTPUT_FILE = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Custo - Franquia\Minha_responsabilidade_atualizada.xlsx"
 
 BASES_PERMITIDAS = [

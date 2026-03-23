@@ -37,13 +37,13 @@ os.environ["POLARS_MAX_THREADS"] = str(multiprocessing.cpu_count())
 # ============================================================
 # Caminhos
 # ============================================================
-PASTA_ENTRADA = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\03 - SLA - Entrega Realizada LM"
+PASTA_ENTRADA = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Área de Trabalho\Testes\03 - SLA - Entrega Realizada LM"
 
 # ✅ Pode ser PASTA ou ARQUIVO
-CAMINHO_COORDENADOR = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\01 - Coordenador"
+CAMINHO_COORDENADOR = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Área de Trabalho\Testes\01 - Coordenador"
 
 # Exemplo arquivo direto:
-# CAMINHO_COORDENADOR = r"C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\01 - Coordenador\Base_Atualizada.xlsx"
+# CAMINHO_COORDENADOR = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Área de Trabalho\Testes\01 - Coordenador"
 
 PASTA_SAIDA = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\SLA - Coordenadores LM"
 

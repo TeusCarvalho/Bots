@@ -14,9 +14,9 @@ from typing import List, Dict, Optional, Any
 # ==============================================================================
 
 # --- 1. Caminhos Principais ---
-BASE_PATH = r'C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\02 - Sem Movimentação'
+BASE_PATH = r'C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Área de Trabalho\Testes\02 - Sem Movimentação'
 OUTPUT_BASE_PATH = r'C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Sem_Movimentação - LM'
-COORDENADOR_BASE_PATH = r'C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\01 - Coordenador'
+COORDENADOR_BASE_PATH = r'C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Área de Trabalho\Testes\01 - Coordenador'
 
 # --- 2. Pastas e Arquivos de Entrada ---
 PATH_INPUT_MAIN = os.path.join(BASE_PATH, 'Sem_Movimentação')
