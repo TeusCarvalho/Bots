@@ -4,12 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="git commit">
-      <change afterPath="$PROJECT_DIR$/Novos/Falta de bipagem/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/StreamLit/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Falta de bipagem/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Novos/StreamLit/teste_app2.py" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Falta de bipagem/teste_app2.py" afterDir="false" />
-    </list>
+    <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="git commit" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -203,11 +198,11 @@
       <recent name="C:\Users\J&amp;T-099\PycharmProjects\Bots\Novos\Franquias" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\mathe_70oz1qs\PycharmProjects\Bots\Novos\Falta de bipagem" />
+      <recent name="C:\Users\mathe_70oz1qs\PycharmProjects\Bots\Novos\output_comparacao\Falta de Bipagem" />
       <recent name="C:\Users\mathe_70oz1qs\PycharmProjects\Bots\Novos\StreamLit" />
       <recent name="C:\Users\mathe_70oz1qs\PycharmProjects\Bots\Novos" />
       <recent name="C:\Users\mathe_70oz1qs\PycharmProjects\Bots\Novos\Base" />
-      <recent name="C:\Users\mathe_70oz1qs\PycharmProjects\Bots\Novos\Franquias\Antigos" />
-      <recent name="C:\Users\mathe_70oz1qs\PycharmProjects\Bots\Novos\Base\Antigos" />
     </key>
   </component>
   <component name="RunManager">
@@ -642,15 +637,7 @@
       <workItem from="1774526064131" duration="13000" />
       <workItem from="1774528866144" duration="795000" />
       <workItem from="1774532691516" duration="3341000" />
-      <workItem from="1774554657543" duration="304000" />
-    </task>
-    <task id="LOCAL-00069" summary="git commit">
-      <option name="closed" value="true" />
-      <created>1763382000207</created>
-      <option name="number" value="00069" />
-      <option name="presentableId" value="LOCAL-00069" />
-      <option name="project" value="LOCAL" />
-      <updated>1763382000207</updated>
+      <workItem from="1774554657543" duration="697000" />
     </task>
     <task id="LOCAL-00070" summary="git commit">
       <option name="closed" value="true" />
@@ -1036,7 +1023,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774541449555</updated>
     </task>
-    <option name="localTasksCounter" value="118" />
+    <task id="LOCAL-00118" summary="git commit">
+      <option name="closed" value="true" />
+      <created>1774554974608</created>
+      <option name="number" value="00118" />
+      <option name="presentableId" value="LOCAL-00118" />
+      <option name="project" value="LOCAL" />
+      <updated>1774554974608</updated>
+    </task>
+    <option name="localTasksCounter" value="119" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
