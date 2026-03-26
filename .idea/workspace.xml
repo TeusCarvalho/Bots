@@ -4,7 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="git commit" />
+    <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="git commit">
+      <change beforePath="$PROJECT_DIR$/Novos/Falta de bipagem/__init__.py" beforeDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -637,15 +639,7 @@
       <workItem from="1774526064131" duration="13000" />
       <workItem from="1774528866144" duration="795000" />
       <workItem from="1774532691516" duration="3341000" />
-      <workItem from="1774554657543" duration="697000" />
-    </task>
-    <task id="LOCAL-00070" summary="git commit">
-      <option name="closed" value="true" />
-      <created>1763403686852</created>
-      <option name="number" value="00070" />
-      <option name="presentableId" value="LOCAL-00070" />
-      <option name="project" value="LOCAL" />
-      <updated>1763403686852</updated>
+      <workItem from="1774554657543" duration="1067000" />
     </task>
     <task id="LOCAL-00071" summary="git commit">
       <option name="closed" value="true" />
@@ -1031,7 +1025,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774554974608</updated>
     </task>
-    <option name="localTasksCounter" value="119" />
+    <task id="LOCAL-00119" summary="git commit">
+      <option name="closed" value="true" />
+      <created>1774555566177</created>
+      <option name="number" value="00119" />
+      <option name="presentableId" value="LOCAL-00119" />
+      <option name="project" value="LOCAL" />
+      <updated>1774555566177</updated>
+    </task>
+    <option name="localTasksCounter" value="120" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
