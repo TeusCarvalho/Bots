@@ -5,7 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="80c00fde-ae1e-441b-bb9f-244e115a32d3" name="Changes" comment="git commit">
-      <change beforePath="$PROJECT_DIR$/Novos/Falta de bipagem/bipagem/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/Novos/Falta de bipagem/bipagem/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -639,23 +639,7 @@
       <workItem from="1774526064131" duration="13000" />
       <workItem from="1774528866144" duration="795000" />
       <workItem from="1774532691516" duration="3341000" />
-      <workItem from="1774554657543" duration="2337000" />
-    </task>
-    <task id="LOCAL-00076" summary="git commit">
-      <option name="closed" value="true" />
-      <created>1764189019580</created>
-      <option name="number" value="00076" />
-      <option name="presentableId" value="LOCAL-00076" />
-      <option name="project" value="LOCAL" />
-      <updated>1764189019580</updated>
-    </task>
-    <task id="LOCAL-00077" summary="git commit">
-      <option name="closed" value="true" />
-      <created>1764677647207</created>
-      <option name="number" value="00077" />
-      <option name="presentableId" value="LOCAL-00077" />
-      <option name="project" value="LOCAL" />
-      <updated>1764677647207</updated>
+      <workItem from="1774554657543" duration="3052000" />
     </task>
     <task id="LOCAL-00078" summary="git commit">
       <option name="closed" value="true" />
@@ -1033,7 +1017,23 @@
       <option name="project" value="LOCAL" />
       <updated>1774556874032</updated>
     </task>
-    <option name="localTasksCounter" value="125" />
+    <task id="LOCAL-00125" summary="git commit">
+      <option name="closed" value="true" />
+      <created>1774557020401</created>
+      <option name="number" value="00125" />
+      <option name="presentableId" value="LOCAL-00125" />
+      <option name="project" value="LOCAL" />
+      <updated>1774557020401</updated>
+    </task>
+    <task id="LOCAL-00126" summary="git commit">
+      <option name="closed" value="true" />
+      <created>1774557321148</created>
+      <option name="number" value="00126" />
+      <option name="presentableId" value="LOCAL-00126" />
+      <option name="project" value="LOCAL" />
+      <updated>1774557321148</updated>
+    </task>
+    <option name="localTasksCounter" value="127" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
