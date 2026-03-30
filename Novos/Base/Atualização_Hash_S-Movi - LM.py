@@ -38,7 +38,7 @@ COORDENADOR_WEBHOOKS = {
 }
 
 REPORTS_FOLDER_PATH = r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Sem_Movimentação - LM"
-HASH_FILE = os.path.join(os.path.dirname(__file__), "../ultimo_relatorio.json")
+HASH_FILE = os.path.join(os.path.dirname(__file__), "../Demais/ultimo_relatorio.json")
 
 LINK_RELATORIO = (
     "https://jtexpressdf-my.sharepoint.com/:f:/g/personal/matheus_carvalho_jtexpressdf_onmicrosoft_com/IgBjYhTX-imSQKw7j2RKp9M6AZjMTBT-NFfPY-u-WPCgzkU?e=tfVi3V"

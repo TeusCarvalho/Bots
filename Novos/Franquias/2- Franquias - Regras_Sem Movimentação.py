@@ -10,11 +10,13 @@ from typing import List, Dict, Any, Optional
 # CONFIGURAÇÕES GERAIS
 # =====================================================================
 
-BASE_PATH = r'C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\02 - Sem Movimentação'
+BASE_PATH = r'C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Área de Trabalho\Testes\02 - Sem Movimentação\Sem_Movimentação'
 OUTPUT_BASE_PATH = r'C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Sem_Movimentação - Franquia'
 COORDENADOR_BASE_PATH = r'C:\Users\mathe_70oz1qs\OneDrive\Desktop\Testes\01 - Coordenador'
 
-PATH_INPUT_MAIN = os.path.join(BASE_PATH, 'Sem_Movimentação')
+# Se os arquivos já ficam direto dentro de BASE_PATH, use BASE_PATH
+PATH_INPUT_MAIN = BASE_PATH
+
 PATH_OUTPUT_REPORTS = OUTPUT_BASE_PATH
 PATH_OUTPUT_ARQUIVO_MORTO = os.path.join(OUTPUT_BASE_PATH, "Arquivo Morto")
 
@@ -58,10 +60,6 @@ BASES_VALIDAS = [
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
-# =====================================================================
-# FUNÇÕES DE NEGÓCIO — POLARS
-# =====================================================================
-
 def aplicar_regras_transito(df: pl.DataFrame) -> pl.DataFrame:
     if COL_BASE_RECENTE not in df.columns:
         return df.with_columns(pl.lit("COLUNA DE BASE RECENTE NÃO ENCONTRADA").alias(COL_TRANSITO))
@@ -101,11 +99,11 @@ def aplicar_regras_status(df: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-# =====================================================================
-# APOIO E COMPARAÇÃO
-# =====================================================================
-
 def carregar_relatorio_anterior(pasta: str) -> Optional[pl.DataFrame]:
+    if not os.path.exists(pasta):
+        logging.warning(f"Pasta de relatórios não encontrada: {pasta}")
+        return None
+
     ontem = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
     candidatos = [f for f in os.listdir(pasta) if ontem in f and f.endswith(".xlsx")]
 
@@ -172,18 +170,18 @@ def comparar_relatorios(df_atual: pl.DataFrame, df_anterior: Optional[pl.DataFra
     return qtd_total, variacao_total, piores_list, melhores_list
 
 
-# =====================================================================
-# MOVER ARQUIVOS PARA ARQUIVO MORTO
-# =====================================================================
-
 def mover_para_arquivo_morto():
     data_hoje = datetime.now().strftime("%Y-%m-%d")
+
+    if not os.path.exists(PATH_OUTPUT_REPORTS):
+        os.makedirs(PATH_OUTPUT_REPORTS, exist_ok=True)
+
     arquivos = [f for f in os.listdir(PATH_OUTPUT_REPORTS) if f.endswith(".xlsx")]
 
     os.makedirs(PATH_OUTPUT_ARQUIVO_MORTO, exist_ok=True)
 
     for f in arquivos:
-        if data_hoje not in f:  # move apenas os dias anteriores
+        if data_hoje not in f:
             origem = os.path.join(PATH_OUTPUT_REPORTS, f)
             destino = os.path.join(PATH_OUTPUT_ARQUIVO_MORTO, f)
             try:
@@ -192,10 +190,6 @@ def mover_para_arquivo_morto():
             except Exception as e:
                 logging.error(f"❌ Erro ao mover {f}: {e}")
 
-
-# =====================================================================
-# CARD FEISHU
-# =====================================================================
 
 def _formatar_piores(piores: List[tuple]) -> str:
     if not piores:
@@ -206,7 +200,6 @@ def _formatar_piores(piores: List[tuple]) -> str:
 def _formatar_melhores(melhores: List[tuple]) -> str:
     if not melhores:
         return "- Nenhuma redução identificada."
-    # Mantém o número com sinal e adiciona o sufixo "(Redução)"
     return "\n".join([f"- {b}: {q} (Redução)" for b, q in melhores])
 
 
@@ -248,28 +241,33 @@ def enviar_card(payload: Dict[str, Any], webhook: str):
         logging.error(f"❌ Erro ao enviar card: {r.status_code} - {r.text}")
 
 
-# =====================================================================
-# MAIN
-# =====================================================================
-
 def main():
     logging.info("Iniciando processamento...")
 
-    arquivos = [f for f in os.listdir(PATH_INPUT_MAIN) if f.startswith(FILENAME_START_MAIN) and f.endswith('.xlsx')]
+    if not os.path.exists(PATH_INPUT_MAIN):
+        logging.error(f"Pasta de entrada não encontrada: {PATH_INPUT_MAIN}")
+        return
+
+    arquivos = [
+        f for f in os.listdir(PATH_INPUT_MAIN)
+        if f.startswith(FILENAME_START_MAIN) and f.endswith('.xlsx')
+    ]
+
     if not arquivos:
-        logging.error("Nenhum arquivo encontrado.")
+        logging.error(f"Nenhum arquivo encontrado em: {PATH_INPUT_MAIN}")
         return
 
     arquivo = max([os.path.join(PATH_INPUT_MAIN, f) for f in arquivos], key=os.path.getctime)
     logging.info(f"Lendo arquivo principal: {arquivo}")
+
+    os.makedirs(PATH_OUTPUT_REPORTS, exist_ok=True)
 
     df_lazy = pl.read_excel(arquivo, infer_schema_length=1000).lazy()
     df_lazy = df_lazy.filter(pl.col(COL_BASE_RECENTE).is_in(BASES_VALIDAS))
 
     df_lazy = df_lazy.with_columns([
         pl.col(COL_HORA_OPERACAO).cast(pl.Datetime).alias(COL_HORA_OPERACAO),
-        (pl.lit(datetime.now()) - pl.col(COL_HORA_OPERACAO)).dt.total_days().fill_null(0).cast(pl.Int64).alias(
-            COL_DIAS_PARADO)
+        (pl.lit(datetime.now()) - pl.col(COL_HORA_OPERACAO)).dt.total_days().fill_null(0).cast(pl.Int64).alias(COL_DIAS_PARADO)
     ])
 
     df_main = df_lazy.collect()
@@ -277,19 +275,14 @@ def main():
     df_final = aplicar_regras_status(df_main)
     df_final = aplicar_regras_transito(df_final)
 
-    # Carrega o relatório anterior antes de mover os arquivos
     df_ant = carregar_relatorio_anterior(PATH_OUTPUT_REPORTS)
-
-    # Move arquivos antigos para o Arquivo Morto
     mover_para_arquivo_morto()
 
-    # Salva o relatório novo
     data_hoje = datetime.now().strftime("%Y-%m-%d")
     output_path = os.path.join(PATH_OUTPUT_REPORTS, f"Relatório_SemMovimentação_Completo_{data_hoje}.xlsx")
     df_final.write_excel(output_path)
     logging.info(f"✅ Relatório salvo: {output_path}")
 
-    # Comparativo (somente 5+ dias)
     df_card = df_final.filter(pl.col(COL_DIAS_PARADO) >= 5)
     qtd_total, variacao_total, piores, melhores = comparar_relatorios(df_card, df_ant)
 
