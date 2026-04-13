@@ -2,11 +2,37 @@
 from __future__ import annotations
 
 import io
+import sys
 from typing import Optional
 
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+
+
+# =========================================================
+# VALIDAÇÃO DE EXECUÇÃO
+# =========================================================
+def validar_execucao_streamlit() -> None:
+    """
+    Garante que o arquivo foi iniciado com `streamlit run`
+    e não com `python arquivo.py`.
+    """
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        if get_script_run_ctx() is None:
+            print("\n[ERRO] Este arquivo é um app Streamlit.")
+            print("Execute assim:\n")
+            print(f'streamlit run "{__file__}"\n')
+            sys.exit(1)
+    except Exception:
+        # Se a API interna do Streamlit mudar, apenas segue.
+        # Em execução normal pelo Streamlit, o app continuará.
+        pass
+
+
+validar_execucao_streamlit()
 
 
 # =========================================================
@@ -53,7 +79,6 @@ def normalizar_numero(valor) -> float:
     if texto == "":
         return 0.0
 
-    # Ajuste básico para números com separadores
     texto = texto.replace(".", "").replace(",", ".")
 
     try:
@@ -381,6 +406,10 @@ except Exception as e:
     st.error(f"Erro ao ler/preparar a planilha: {e}")
     st.stop()
 
+if "df_consolidado" not in locals():
+    st.error("Não foi possível consolidar os dados.")
+    st.stop()
+
 
 # =========================================================
 # FILTROS
@@ -471,7 +500,7 @@ if usa_total_bipar:
         st.metric(
             "Pedidos a bipar",
             formatar_inteiro(comparativo["total_bipar_atual"]),
-            delta=formatar_inteiro(comparativo["delta_total_bipar"]).replace(".", "."),
+            delta=formatar_inteiro(comparativo["delta_total_bipar"]),
         )
 
     with k2:
@@ -730,35 +759,53 @@ with g2:
 # =========================================================
 st.subheader("Acompanhamento por base")
 
-bases_top_geral = df_resumo_base[COL_BASE].head(10).tolist()
-bases_grafico = st.multiselect(
-    "Selecione até 5 bases para acompanhar no gráfico",
-    options=df_resumo_base[COL_BASE].tolist(),
-    default=bases_top_geral[:3],
-    max_selections=5,
-)
-
-opcoes_modo = ["Total geral", "Recebimento", "Saída para entrega"]
-if usa_total_bipar:
-    opcoes_modo.extend(["% Recebimento", "% Saída"])
-
 modo_grafico = st.radio(
     "Indicador do gráfico por base",
-    options=opcoes_modo,
+    options=[
+        "Não bipados no recebimento",
+        "Não bipados na saída para entrega",
+    ],
     horizontal=True,
 )
 
+modo_selecao_base = st.radio(
+    "Modo de seleção das bases",
+    options=["Top 10 piores do indicador", "Escolher manualmente"],
+    horizontal=True,
+)
+
+if modo_grafico == "Não bipados no recebimento":
+    coluna_plot = COL_REC
+    titulo_grafico = "Acompanhamento diário por base - Não bipados no recebimento"
+    bases_default = (
+        df_resumo_base[[COL_BASE, COL_REC]]
+        .sort_values(COL_REC, ascending=False)
+        .head(10)[COL_BASE]
+        .tolist()
+    )
+else:
+    coluna_plot = COL_SAI
+    titulo_grafico = "Acompanhamento diário por base - Não bipados na saída para entrega"
+    bases_default = (
+        df_resumo_base[[COL_BASE, COL_SAI]]
+        .sort_values(COL_SAI, ascending=False)
+        .head(10)[COL_BASE]
+        .tolist()
+    )
+
+if modo_selecao_base == "Top 10 piores do indicador":
+    bases_grafico = bases_default
+    st.caption(f"Exibindo automaticamente as 10 piores bases para: {modo_grafico}")
+else:
+    bases_grafico = st.multiselect(
+        "Selecione até 10 bases para acompanhar no gráfico",
+        options=df_resumo_base[COL_BASE].tolist(),
+        default=bases_default,
+        max_selections=10,
+    )
+
 if bases_grafico:
     df_plot_base = df_filtrado[df_filtrado[COL_BASE].isin(bases_grafico)].copy()
-
-    mapa_coluna = {
-        "Total geral": "Total faltas",
-        "Recebimento": COL_REC,
-        "Saída para entrega": COL_SAI,
-        "% Recebimento": "Pct recebimento",
-        "% Saída": "Pct saída",
-    }
-    coluna_plot = mapa_coluna[modo_grafico]
 
     fig_bases = px.line(
         df_plot_base,
@@ -766,17 +813,14 @@ if bases_grafico:
         y=coluna_plot,
         color=COL_BASE,
         markers=True,
-        title=f"Acompanhamento diário por base - {modo_grafico}",
+        title=titulo_grafico,
     )
     fig_bases.update_layout(
-        height=500,
+        height=550,
         xaxis_title="Data",
-        yaxis_title="Valor",
+        yaxis_title="Quantidade",
         legend_title="Base",
     )
-
-    if coluna_plot in ["Pct recebimento", "Pct saída"]:
-        fig_bases.update_yaxes(tickformat=".2%")
 
     st.plotly_chart(fig_bases, use_container_width=True)
 else:

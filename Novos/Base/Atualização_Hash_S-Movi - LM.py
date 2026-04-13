@@ -24,7 +24,7 @@ from typing import Dict, Any, Optional, Tuple, List
 INDICADOR_NOME = "Multas 5+ dias — Bases por quantidade (Δ vs relatório anterior)"
 
 COORDENADOR_WEBHOOKS = {
-    "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/1d9bbacf-79ed-4eb3-8046-26d7480893c3",
+    "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/67153e53-3623-4e5b-9560-0cb6f0ef609e",
     "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/5c2bb460-1971-4770-9b37-98b6e4ba3cd9",
     "Anderson Matheus": "https://open.feishu.cn/open-apis/bot/v2/hook/914ce9f9-35ab-4869-860f-d2bef7d933fb",
     "Marcelo Medina": "https://open.feishu.cn/open-apis/bot/v2/hook/20a61c63-6db7-4e83-9e44-ae6b545495cc",

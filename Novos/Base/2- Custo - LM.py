@@ -42,7 +42,7 @@ INDICADOR_NOME = "Custos e Ressarcimento"
 # ✅ WEBHOOKS POR COORDENADOR
 # ======================================================
 COORDENADOR_WEBHOOKS = {
-    "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/1f3f48d7-b60c-45c1-87ee-6cc8ab9f6467",
+    "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/755a43fe-24b6-42db-89c3-dbf3a0e1e391",
     "Johas Vieira": "https://open.feishu.cn/open-apis/bot/v2/hook/b448a316-f146-49d0-9f0a-90b1f086b8a7",
     "Anderson Matheus": "https://open.feishu.cn/open-apis/bot/v2/hook/4cfd01be-defa-4adb-936e-6bfbee5326a6",
     "Marcelo Medina": "https://open.feishu.cn/open-apis/bot/v2/hook/e14d0307-c6d6-472b-bea1-d83a5573dc1b",

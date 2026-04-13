@@ -941,7 +941,7 @@ def montar_arquivos_gerados_md(arquivo_resumo: str, paths_base: Dict[str, str]) 
 
 
 # ============================================================
-# IMAGEM / GRADE ANALÍTICA
+# IMAGEM
 # ============================================================
 MESES_PT_ABREV = {
     1: "Jan.",
