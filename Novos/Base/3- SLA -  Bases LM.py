@@ -112,6 +112,14 @@ INDICADOR_NOME = os.getenv("INDICADOR_NOME", "Relatório SLA — Bases por quant
 RELATORIO_TITULO = os.getenv("RELATORIO_TITULO", "Relatório SLA — Bases por quantidade").strip()
 LINK_PASTA = os.getenv("LINK_PASTA", "").strip()
 
+# ============================================================
+# FILTRO DE PEDIDOS REMOVIDOS (não entram no resumo e não são enviados)
+# Regra atual:
+#   remover toda linha em que a coluna "Turno de linha secundária" for igual a "0Rit".
+# ============================================================
+COLUNA_0RIT_EXCLUSAO = os.getenv("COLUNA_0RIT_EXCLUSAO", "Turno de linha secundária").strip()
+VALOR_0RIT_EXCLUSAO = os.getenv("VALOR_0RIT_EXCLUSAO", "0Rit").strip()
+
 IMG_ROWS_PER_PAGE = getenv_int("IMG_ROWS_PER_PAGE", 28)
 CASAS_PERCENTUAL = getenv_int("CASAS_PERCENTUAL", 2)
 SLA_META_VERDE = getenv_float("SLA_META_VERDE", 0.97)
@@ -232,6 +240,74 @@ def normalizar(s) -> str:
         s = s.replace("  ", " ")
     return s
 
+
+def localizar_coluna_por_alias(df: pl.DataFrame, aliases: List[str]) -> Optional[str]:
+    if df is None or df.is_empty():
+        return None
+
+    mapa = {normalizar(c): c for c in df.columns}
+
+    for alias in aliases:
+        alias_norm = normalizar(alias)
+        if alias_norm in mapa:
+            return mapa[alias_norm]
+
+    return None
+
+
+def separar_pedidos_removidos(df: pl.DataFrame) -> Tuple[pl.DataFrame, pl.DataFrame]:
+    """
+    Remove os pedidos 0Rit usando uma única coluna da base.
+
+    Regra:
+        coluna "Turno de linha secundária" == "0Rit"
+
+    Resultado:
+        - filtrado: base sem os pedidos 0Rit
+        - removidos: somente os pedidos removidos, para gerar planilha separada
+    """
+    if df is None or df.is_empty():
+        return df, pl.DataFrame()
+
+    col_0rit = localizar_coluna_por_alias(
+        df,
+        [
+            COLUNA_0RIT_EXCLUSAO,
+            "Turno de linha secundária",
+            "TURNO DE LINHA SECUNDÁRIA",
+            "TURNO DE LINHA SECUNDARIA",
+            "TURNO LINHA SECUNDÁRIA",
+            "TURNO LINHA SECUNDARIA",
+            "LINHA SECUNDÁRIA",
+            "LINHA SECUNDARIA",
+        ],
+    )
+
+    if not col_0rit:
+        logging.warning(
+            "⚠️ Filtro 0Rit não aplicado. "
+            f"Coluna esperada não encontrada: {COLUNA_0RIT_EXCLUSAO}. "
+            f"Colunas disponíveis: {df.columns}"
+        )
+        return df, pl.DataFrame()
+
+    valor_norm = normalizar(VALOR_0RIT_EXCLUSAO)
+
+    filtro_remocao = (
+        pl.col(col_0rit)
+        .cast(pl.Utf8)
+        .map_elements(normalizar, return_dtype=pl.Utf8)
+        == valor_norm
+    )
+
+    removidos = df.filter(filtro_remocao)
+    filtrado = df.filter(~filtro_remocao)
+
+    logging.info(
+        f"🧹 Pedidos removidos pelo filtro [{col_0rit}={VALOR_0RIT_EXCLUSAO}]: {removidos.height}"
+    )
+
+    return filtrado, removidos
 
 def formatar_periodo(inicio: date, fim: date) -> str:
     if inicio == fim:
@@ -484,7 +560,7 @@ def detectar_e_padronizar_colunas_entrada(df: pl.DataFrame, origem: str = "") ->
             )
         return pl.DataFrame()
 
-    return df.select(obrigatorias)
+    return df
 
 def localizar_arquivo_coordenador(caminho: str) -> str:
     if not caminho or not str(caminho).strip():
@@ -554,15 +630,60 @@ def consolidar_planilhas(pasta_entrada: str) -> pl.DataFrame:
     with ThreadPoolExecutor(max_workers=min(16, len(arquivos))) as ex:
         dfs = list(ex.map(ler_planilha_rapido, arquivos))
 
-    validos = [df for df in dfs if not df.is_empty()]
+    validos: List[pl.DataFrame] = []
+    schemas_por_arquivo: List[Tuple[str, int, List[str]]] = []
+
+    for caminho, df in zip(arquivos, dfs):
+        if df is None or df.is_empty():
+            continue
+
+        # Garante nomes limpos e padronizados antes de consolidar.
+        df = df.rename({c: str(c).strip().upper() for c in df.columns})
+
+        validos.append(df)
+        schemas_por_arquivo.append((os.path.basename(caminho), len(df.columns), list(df.columns)))
+
+        logging.info(
+            f"✅ Arquivo válido: {os.path.basename(caminho)} | "
+            f"Linhas: {df.height:,} | Colunas: {len(df.columns)}"
+        )
+
     ignorados = len(dfs) - len(validos)
     if ignorados:
         logging.warning(f"⚠️ Arquivos ignorados por formato incompatível: {ignorados}")
 
     if not validos:
-        raise ValueError("Falha ao ler todos os arquivos da pasta de entrada ou nenhum arquivo bateu com os modelos esperados.")
+        raise ValueError(
+            "Falha ao ler todos os arquivos da pasta de entrada ou "
+            "nenhum arquivo bateu com os modelos esperados."
+        )
 
-    return pl.concat(validos, how="vertical_relaxed")
+    # Diagnóstico: mostra quando há layouts diferentes entre os arquivos.
+    qtd_colunas_distintas = sorted({qtd for _, qtd, _ in schemas_por_arquivo})
+    if len(qtd_colunas_distintas) > 1:
+        logging.warning(
+            "⚠️ Foram encontrados arquivos com quantidades de colunas diferentes: "
+            f"{qtd_colunas_distintas}. A consolidação será feita com diagonal_relaxed."
+        )
+        for nome, qtd, cols in schemas_por_arquivo:
+            logging.warning(f"📌 Schema: {nome} | Colunas: {qtd} | {cols}")
+
+    try:
+        # vertical_relaxed falha quando os arquivos têm quantidade de colunas diferente.
+        # diagonal_relaxed mantém todas as colunas e preenche com null onde a coluna não existir.
+        df_final = pl.concat(validos, how="diagonal_relaxed")
+    except Exception as e:
+        logging.error("❌ Falha ao consolidar arquivos. Detalhe dos schemas encontrados:")
+        for nome, qtd, cols in schemas_por_arquivo:
+            logging.error(f"Arquivo: {nome} | Colunas: {qtd} | {cols}")
+        raise e
+
+    logging.info(
+        f"✅ Consolidação concluída | Linhas: {df_final.height:,} | "
+        f"Colunas finais: {len(df_final.columns)}"
+    )
+
+    return df_final
 
 
 def mostrar_amostra_coluna_data(df: pl.DataFrame, coluna: str, limite: int = 5) -> None:
@@ -922,6 +1043,20 @@ def exportar_resumo_excel(
             dfc.to_excel(w, index=False, sheet_name=nome_sheet)
 
     logging.info(f"✅ Resumo Excel salvo em: {arquivo_saida}")
+
+
+def exportar_planilha_pedidos_removidos(df_removidos: pl.DataFrame) -> Optional[str]:
+    if df_removidos is None or df_removidos.is_empty():
+        return None
+
+    nome_arquivo = os.path.join(PASTA_SAIDA, f"Pedidos_Removidos_0RIT_{DATA_HOJE}.xlsx")
+    pdf = df_removidos.to_pandas()
+
+    with pd.ExcelWriter(nome_arquivo, engine="openpyxl") as w:
+        pdf.to_excel(w, index=False, sheet_name="Pedidos Removidos")
+
+    logging.info(f"📄 Planilha de pedidos removidos salva em: {nome_arquivo}")
+    return nome_arquivo
 
 
 def montar_arquivos_gerados_md(arquivo_resumo: str, paths_base: Dict[str, str]) -> str:
@@ -1738,7 +1873,13 @@ if __name__ == "__main__":
             & (pl.col(COL_DATA_BASE).dt.month() == mes_ref)
         )
 
-        logging.info(f"📊 Registros da competência: {df_periodo.height}")
+        df_periodo, df_removidos = separar_pedidos_removidos(df_periodo)
+        caminho_planilha_removidos = exportar_planilha_pedidos_removidos(df_removidos)
+
+        logging.info(f"📊 Registros da competência após filtro: {df_periodo.height}")
+
+        if caminho_planilha_removidos:
+            logging.info(f"📎 Planilha separada dos pedidos removidos: {caminho_planilha_removidos}")
 
         if df_periodo.is_empty():
             raise ValueError(
