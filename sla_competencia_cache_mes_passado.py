@@ -143,22 +143,22 @@ SLA_META_AMARELO = getenv_float("SLA_META_AMARELO", 0.95)
 SLA_META_DOMINGO_FERIADO = getenv_float("SLA_META_DOMINGO_FERIADO", 0.70)
 
 FEISHU_BASE_DOMAIN = "https://open.feishu.cn"
-FEISHU_APP_ID = os.getenv("FEISHU_APP_ID", "cli_a906d2d682f8dbd8").strip()
-FEISHU_APP_SECRET = os.getenv("FEISHU_APP_SECRET", "Fzh1cr6K55a3oQUBV9wCZd6AWiZH5ONw").strip()
+FEISHU_APP_ID = os.getenv("FEISHU_APP_ID", "").strip()
+FEISHU_APP_SECRET = os.getenv("FEISHU_APP_SECRET", "").strip()
 # Webhooks definidos diretamente no código para facilitar manutenção.
 # Preencha ou altere os links abaixo conforme necessário.
 COORDENADOR_WEBHOOKS = {
-    "João Melo": "https://open.feishu.cn/open-apis/bot/v2/hook/d7b14697-7a09-4542-89dd-b7dd6ae5904e",
-    "João Melo GO": "https://open.feishu.cn/open-apis/bot/v2/hook/0b907801-c73e-4de8-9f84-682d7b54f6fd",
-    "Anderson Matheus": "https://open.feishu.cn/open-apis/bot/v2/hook/c97ea284-bb3a-4723-b231-e76ff8616e17",
-    "Marcelo Medina": "https://open.feishu.cn/open-apis/bot/v2/hook/b749fd36-d287-460e-b1e2-c78bfb4c1946",
-    "Rodrigo Castro": "https://open.feishu.cn/open-apis/bot/v2/hook/606ed22b-dc49-451d-9bfe-0a8829dbe76e",
-    "Orlean Nascimento": "https://open.feishu.cn/open-apis/bot/v2/hook/e1158fab-21ab-46a2-aa5b-0457f820b0e3",
-    "Emerson Silva - AM e RR": "https://open.feishu.cn/open-apis/bot/v2/hook/ca2c260c-f69c-472d-9757-279db52a79b8",
-    "Emerson Silva": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
-    "Marcos Caique": "https://open.feishu.cn/open-apis/bot/v2/hook/0e81594f-f9ac-4393-b4e3-88d2ceffd7f3",
-    "Ana Cunha": "https://open.feishu.cn/open-apis/bot/v2/hook/6e85764d-138a-44c6-861b-22168617cb90",
-    "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/a53ad30e-17dd-4330-93db-15138b20d8f2",
+    "João Melo": "COLE_SEU_WEBHOOK_AQUI",
+    "João Melo GO": "COLE_SEU_WEBHOOK_AQUI",
+    "Anderson Matheus": "COLE_SEU_WEBHOOK_AQUI",
+    "Marcelo Medina": "COLE_SEU_WEBHOOK_AQUI",
+    "Rodrigo Castro": "COLE_SEU_WEBHOOK_AQUI",
+    "Orlean Nascimento": "COLE_SEU_WEBHOOK_AQUI",
+    "Emerson Silva - AM e RR": "COLE_SEU_WEBHOOK_AQUI",
+    "Emerson Silva": "COLE_SEU_WEBHOOK_AQUI",
+    "Marcos Caique": "COLE_SEU_WEBHOOK_AQUI",
+    "Ana Cunha": "COLE_SEU_WEBHOOK_AQUI",
+    "Jose Marlon": "COLE_SEU_WEBHOOK_AQUI",
 }
 
 EXTS = (".xlsx", ".xls", ".csv")

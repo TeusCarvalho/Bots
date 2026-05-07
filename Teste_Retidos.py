@@ -19,6 +19,12 @@ PASTA_RAIZ = Path(
     r"C:\Users\mathe_70oz1qs\OneDrive - Speed Rabbit Express Ltda\Área de Trabalho\Testes\13 - Teste dos Relatorios\Retidos"
 )
 
+# Se quiser usar somente essa planilha nova, deixe assim:
+CAMINHO_PLANILHA_UNICA = PASTA_RAIZ / "Estatística de itens retidos na base (dias corridos)(Lista)2209120260428140654.xlsx"
+
+# Se quiser voltar a ler todas as planilhas da pasta, coloque:
+# CAMINHO_PLANILHA_UNICA = None
+
 PASTA_SAIDA = PASTA_RAIZ / "Imagens_Retidos"
 
 TITULO = "Jose Marlon — Retidos por Base"
@@ -29,22 +35,14 @@ NOME_ARQUIVO_SAIDA = "Jose_Marlon_Retidos_por_Base"
 # CONFIGURAÇÃO DE DATA
 # ============================================================
 
-# None = usa sempre D-1 como limite máximo.
 DATA_REFERENCIA_FIXA = None
-
-# Exemplo para teste:
 # DATA_REFERENCIA_FIXA = "2026-04-27"
 
 DATA_MINIMA_ANALISE = None
 IGNORAR_DATAS_FUTURAS = True
 DATA_MAXIMA_ANALISE_FIXA = None
 
-# Quantos dias aparecerão como colunas na imagem.
-# 5 = últimas 5 datas existentes no mês atual até D-1.
-# None = todas as datas existentes no mês atual até D-1.
 QUANTIDADE_DIAS_NA_IMAGEM = 5
-
-# Quantas semanas aparecerão como colunas.
 QUANTIDADE_SEMANAS_NA_IMAGEM = 3
 
 GERAR_EXCEL_CONFERENCIA = True
@@ -57,7 +55,6 @@ GERAR_EXCEL_CONFERENCIA = True
 COORDENADOR_WEBHOOKS = {
     "Jose Marlon": "https://open.feishu.cn/open-apis/bot/v2/hook/b8328e19-9b9f-40d5-bce0-6af7f4612f1b",
 
-    # Para adicionar mais:
     # "Rodrigo Castro": "COLE_AQUI_O_WEBHOOK",
     # "Marcelo Medina": "COLE_AQUI_O_WEBHOOK",
     # "João Melo": "COLE_AQUI_O_WEBHOOK",
@@ -67,9 +64,6 @@ COORDENADOR_WEBHOOKS = {
 
 MODO_TESTE_ENVIAR_SOMENTE_UM = True
 WEBHOOK_TESTE_NOME = "Jose Marlon"
-
-# True = envia somente a primeira página da imagem principal
-# False = envia todas as páginas
 MODO_TESTE_ENVIAR_SOMENTE_PRIMEIRA_IMAGEM = True
 
 
@@ -96,13 +90,24 @@ MOSTRAR_ZERO_COMO_TRACO = False
 
 
 # ============================================================
-# COLUNAS DA PLANILHA
+# COLUNAS DA PLANILHA NOVA
 # ============================================================
 
 COLUNA_DATA_PREVISTA = "Data prevista de entrega"
 COLUNA_BASE = "Nome da base de entrega"
+COLUNA_PEDIDOS = "Pedidos"
+COLUNA_REMESSA = "Remessa"
+COLUNA_TEMPO_RETENCAO = "Tempo de retenção"
 
-COLUNAS_RETIDOS = [
+
+# ============================================================
+# COLUNAS DO MODELO ANTIGO
+# ============================================================
+# O código ainda aceita o modelo antigo.
+# Se essas colunas existirem, ele soma elas.
+# Se não existirem, ele usa a coluna "Pedidos".
+
+COLUNAS_RETIDOS_MODELO_ANTIGO = [
     "Retidos até 5 dias",
     "Retidos até 7 dias",
     "Retidos até 10 dias",
@@ -137,6 +142,27 @@ WEEKEND_ROW_ALT = "#FFF7DD"
 
 
 # ============================================================
+# MESES PARA PEGAR DATA PELO NOME DO ARQUIVO ANTIGO
+# ============================================================
+
+MESES_ARQUIVO = {
+    "JANEIRO": 1,
+    "FEVEREIRO": 2,
+    "MARCO": 3,
+    "MARÇO": 3,
+    "ABRIL": 4,
+    "MAIO": 5,
+    "JUNHO": 6,
+    "JULHO": 7,
+    "AGOSTO": 8,
+    "SETEMBRO": 9,
+    "OUTUBRO": 10,
+    "NOVEMBRO": 11,
+    "DEZEMBRO": 12,
+}
+
+
+# ============================================================
 # FUNÇÕES AUXILIARES
 # ============================================================
 
@@ -156,14 +182,20 @@ def limpar_texto_base(valor):
     return texto
 
 
+def remover_acentos(texto):
+    texto = str(texto)
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    return texto
+
+
 def normalizar_texto(valor):
     if pd.isna(valor):
         return ""
 
     texto = limpar_texto_base(valor)
     texto = texto.lower()
-    texto = unicodedata.normalize("NFKD", texto)
-    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    texto = remover_acentos(texto)
     texto = re.sub(r"\s+", " ", texto)
 
     return texto
@@ -190,30 +222,14 @@ def encontrar_coluna(df, nome_procurado):
     return mapa_colunas.get(nome_procurado_norm)
 
 
-def encontrar_colunas_retidos(df):
+def encontrar_colunas_modelo_antigo(df):
     encontradas = []
-    faltantes = []
 
-    print("\n🔎 Conferindo campos de retidos:")
-
-    for nome_coluna in COLUNAS_RETIDOS:
+    for nome_coluna in COLUNAS_RETIDOS_MODELO_ANTIGO:
         coluna_encontrada = encontrar_coluna(df, nome_coluna)
 
         if coluna_encontrada:
             encontradas.append(coluna_encontrada)
-            print(f"✅ {nome_coluna} -> {coluna_encontrada}")
-        else:
-            faltantes.append(nome_coluna)
-            print(f"❌ Não encontrada: {nome_coluna}")
-
-    if faltantes:
-        print("\n⚠️ Campos não encontrados:")
-        for col in faltantes:
-            print(f"   - {col}")
-
-        print("\n📌 Colunas disponíveis na planilha:")
-        for col in df.columns:
-            print(f"   - {col}")
 
     return encontradas
 
@@ -255,24 +271,48 @@ def converter_numero(valor):
 
 
 # ============================================================
-# CONVERSÃO ROBUSTA DE DATA
+# DATA PELO NOME DO ARQUIVO
+# ============================================================
+
+def extrair_data_do_nome_arquivo(nome_arquivo):
+    if not nome_arquivo:
+        return pd.NaT
+
+    texto = limpar_texto_base(nome_arquivo).upper()
+    texto_sem_acento = remover_acentos(texto).upper()
+
+    ano_match = re.search(r"(20\d{2})", texto_sem_acento)
+    dia_match = re.search(r"\((\d{1,2})\)", texto_sem_acento)
+
+    if not ano_match or not dia_match:
+        return pd.NaT
+
+    ano = int(ano_match.group(1))
+    dia = int(dia_match.group(1))
+
+    mes = None
+
+    for nome_mes, numero_mes in MESES_ARQUIVO.items():
+        nome_mes_norm = remover_acentos(nome_mes).upper()
+
+        if nome_mes_norm in texto_sem_acento:
+            mes = numero_mes
+            break
+
+    if mes is None:
+        return pd.NaT
+
+    try:
+        return pd.Timestamp(year=ano, month=mes, day=dia).normalize()
+    except Exception:
+        return pd.NaT
+
+
+# ============================================================
+# CONVERSÃO DE DATA
 # ============================================================
 
 def converter_data_valor(valor):
-    """
-    Converte datas misturadas para um único padrão interno.
-
-    Aceita:
-    - 2026-04-26
-    - 2026/04/26
-    - 09/04/2026
-    - 09-04-2026
-    - 2026-04-26 00:00:00
-    - 09/04/2026 00:00:00
-    - datetime/date do Excel
-    - número serial do Excel
-    """
-
     if pd.isna(valor):
         return pd.NaT
 
@@ -285,7 +325,6 @@ def converter_data_valor(valor):
     if isinstance(valor, date):
         return pd.Timestamp(valor).normalize()
 
-    # Caso venha como número serial do Excel
     if isinstance(valor, (int, float)):
         try:
             numero = float(valor)
@@ -306,12 +345,8 @@ def converter_data_valor(valor):
         return pd.NaT
 
     texto = texto.replace("T", " ")
-    texto = texto.strip()
-
-    # Remove hora se vier junto
     parte_data = texto.split(" ")[0].strip()
 
-    # Caso venha serial do Excel como texto: 46121 ou 46121.0
     texto_num = parte_data.replace(",", ".")
 
     if re.fullmatch(r"\d+(\.\d+)?", texto_num):
@@ -328,7 +363,30 @@ def converter_data_valor(valor):
         except Exception:
             pass
 
-    # Caso venha como 20260426
+    if re.fullmatch(r"\d{1,2}[-/]\d{1,2}[-/]\d{4}", parte_data):
+        parte_br = parte_data.replace("-", "/")
+
+        data = pd.to_datetime(
+            parte_br,
+            format="%d/%m/%Y",
+            errors="coerce"
+        )
+
+        if not pd.isna(data):
+            return data.normalize()
+
+    if re.fullmatch(r"\d{4}[-/]\d{1,2}[-/]\d{1,2}", parte_data):
+        parte_iso = parte_data.replace("/", "-")
+
+        data = pd.to_datetime(
+            parte_iso,
+            format="%Y-%m-%d",
+            errors="coerce"
+        )
+
+        if not pd.isna(data):
+            return data.normalize()
+
     if re.fullmatch(r"\d{8}", parte_data):
         data = pd.to_datetime(
             parte_data,
@@ -348,33 +406,6 @@ def converter_data_valor(valor):
         if not pd.isna(data):
             return data.normalize()
 
-    # Formato ISO: 2026-04-26 ou 2026/04/26
-    if re.fullmatch(r"\d{4}[-/]\d{1,2}[-/]\d{1,2}", parte_data):
-        parte_iso = parte_data.replace("/", "-")
-
-        data = pd.to_datetime(
-            parte_iso,
-            format="%Y-%m-%d",
-            errors="coerce"
-        )
-
-        if not pd.isna(data):
-            return data.normalize()
-
-    # Formato brasileiro: 09/04/2026 ou 09-04-2026
-    if re.fullmatch(r"\d{1,2}[-/]\d{1,2}[-/]\d{4}", parte_data):
-        parte_br = parte_data.replace("-", "/")
-
-        data = pd.to_datetime(
-            parte_br,
-            format="%d/%m/%Y",
-            errors="coerce"
-        )
-
-        if not pd.isna(data):
-            return data.normalize()
-
-    # Fallback final
     data = pd.to_datetime(
         texto,
         errors="coerce",
@@ -519,6 +550,10 @@ def texto_esquerda(draw, caixa, texto, fonte, fill, padding=10):
 # ============================================================
 
 def listar_arquivos(pasta):
+    if CAMINHO_PLANILHA_UNICA and Path(CAMINHO_PLANILHA_UNICA).exists():
+        print(f"📌 Modo planilha única ativo: {CAMINHO_PLANILHA_UNICA}")
+        return [Path(CAMINHO_PLANILHA_UNICA)]
+
     arquivos = []
 
     for arquivo in pasta.rglob("*"):
@@ -563,6 +598,7 @@ def ler_arquivo(arquivo):
 
         df = limpar_colunas_df(df)
         df["__arquivo_origem"] = arquivo.name
+        df["__caminho_origem"] = str(arquivo)
 
         return df
 
@@ -614,7 +650,11 @@ def preparar_base(df):
 
     coluna_data = encontrar_coluna(df, COLUNA_DATA_PREVISTA)
     coluna_base = encontrar_coluna(df, COLUNA_BASE)
-    colunas_retidos = encontrar_colunas_retidos(df)
+    coluna_pedidos = encontrar_coluna(df, COLUNA_PEDIDOS)
+    coluna_remessa = encontrar_coluna(df, COLUNA_REMESSA)
+    coluna_tempo_retencao = encontrar_coluna(df, COLUNA_TEMPO_RETENCAO)
+
+    colunas_retidos_antigo = encontrar_colunas_modelo_antigo(df)
 
     if not coluna_data:
         raise ValueError(f"Não encontrei a coluna: {COLUNA_DATA_PREVISTA}")
@@ -622,26 +662,39 @@ def preparar_base(df):
     if not coluna_base:
         raise ValueError(f"Não encontrei a coluna: {COLUNA_BASE}")
 
-    if not colunas_retidos:
-        raise ValueError(
-            "Não encontrei nenhuma coluna de retidos. "
-            "Verifique os nomes exibidos no terminal."
-        )
-
     print(f"\n✅ Coluna Data prevista: {coluna_data}")
     print(f"✅ Coluna Base: {coluna_base}")
-    print("✅ Colunas usadas na soma dos retidos:")
 
-    for col in colunas_retidos:
-        print(f"   - {col}")
+    if coluna_pedidos:
+        print(f"✅ Coluna Pedidos: {coluna_pedidos}")
+
+    if coluna_remessa:
+        print(f"✅ Coluna Remessa: {coluna_remessa}")
+
+    if coluna_tempo_retencao:
+        print(f"✅ Coluna Tempo de retenção: {coluna_tempo_retencao}")
 
     df = df.copy()
 
-    df["__data_prevista"] = converter_data_coluna(df[coluna_data])
+    df["__data_coluna_convertida"] = converter_data_coluna(df[coluna_data])
+
+    df["__data_arquivo"] = pd.NaT
+    if "__arquivo_origem" in df.columns:
+        df["__data_arquivo"] = df["__arquivo_origem"].apply(extrair_data_do_nome_arquivo)
+
+    df["__data_prevista"] = df["__data_arquivo"].where(
+        df["__data_arquivo"].notna(),
+        df["__data_coluna_convertida"]
+    )
+
+    df["__data_prevista"] = pd.to_datetime(
+        df["__data_prevista"],
+        errors="coerce"
+    ).dt.normalize()
+
     df["__base"] = df[coluna_base].astype(str).str.strip()
 
-    # Conferência das datas convertidas
-    print("\n📌 Conferência das datas convertidas:")
+    print("\n📌 Datas convertidas finais:")
     datas_convertidas = (
         df["__data_prevista"]
         .dropna()
@@ -663,19 +716,47 @@ def preparar_base(df):
     df["__retidos_total"] = 0
     colunas_numericas_debug = []
 
-    print("\n🧮 Soma por campo:")
+    if colunas_retidos_antigo:
+        print("\n📌 Modelo detectado: ANTIGO — somando colunas de retidos.")
 
-    for idx_col, coluna in enumerate(colunas_retidos, start=1):
-        nome_coluna_num = f"__retido_num_{idx_col}_{coluna}"
+        for idx_col, coluna in enumerate(colunas_retidos_antigo, start=1):
+            nome_coluna_num = f"__retido_num_{idx_col}_{coluna}"
 
-        df[nome_coluna_num] = df[coluna].apply(converter_numero)
-        colunas_numericas_debug.append(nome_coluna_num)
+            df[nome_coluna_num] = df[coluna].apply(converter_numero)
+            colunas_numericas_debug.append(nome_coluna_num)
 
-        soma_coluna = df[nome_coluna_num].sum()
+            soma_coluna = df[nome_coluna_num].sum()
 
-        print(f"   - {coluna}: {soma_coluna:,.0f}".replace(",", "."))
+            print(f"   - {coluna}: {soma_coluna:,.0f}".replace(",", "."))
 
-        df["__retidos_total"] = df["__retidos_total"] + df[nome_coluna_num]
+            df["__retidos_total"] = df["__retidos_total"] + df[nome_coluna_num]
+
+    elif coluna_pedidos:
+        print("\n📌 Modelo detectado: NOVO — somando coluna Pedidos.")
+
+        df["__pedidos_num"] = df[coluna_pedidos].apply(converter_numero)
+
+        if df["__pedidos_num"].sum() == 0 and coluna_remessa:
+            print("⚠️ Coluna Pedidos está zerada. Usando contagem de Remessa.")
+            df["__retidos_total"] = 1
+        else:
+            df["__retidos_total"] = df["__pedidos_num"]
+
+        colunas_numericas_debug.append("__pedidos_num")
+
+        print(
+            f"   - Soma da coluna Pedidos: "
+            f"{df['__retidos_total'].sum():,.0f}".replace(",", ".")
+        )
+
+    elif coluna_remessa:
+        print("\n📌 Modelo detectado: NOVO — sem Pedidos, contando Remessa.")
+        df["__retidos_total"] = 1
+
+    else:
+        raise ValueError(
+            "Não encontrei colunas de retidos, nem coluna Pedidos, nem coluna Remessa."
+        )
 
     df["__retidos_total"] = df["__retidos_total"].fillna(0).round(0).astype(int)
 
@@ -684,13 +765,20 @@ def preparar_base(df):
         f"{df['__retidos_total'].sum():,.0f}".replace(",", ".")
     )
 
-    print("\n📌 Exemplo da soma linha por linha:")
+    print("\n📌 Exemplo da base tratada:")
 
-    colunas_exemplo = ["__data_prevista", "__base"] + colunas_numericas_debug + ["__retidos_total"]
+    colunas_exemplo = [
+        "__arquivo_origem",
+        "__data_prevista",
+        "__base",
+        "__retidos_total",
+    ] + colunas_numericas_debug
+
+    colunas_exemplo = [col for col in colunas_exemplo if col in df.columns]
 
     print(
         df[colunas_exemplo]
-        .head(10)
+        .head(15)
         .to_string(index=False)
     )
 
@@ -861,10 +949,6 @@ def montar_resumo_geral(df):
     if resumo.empty:
         raise ValueError("Nenhuma base encontrada para o período analisado.")
 
-    # ========================================================
-    # MÊS ANTERIOR
-    # ========================================================
-
     df_mes_anterior = df[
         (df["__data_prevista"] >= primeiro_dia_mes_anterior)
         & (df["__data_prevista"] <= ultimo_dia_mes_anterior)
@@ -881,10 +965,6 @@ def montar_resumo_geral(df):
 
     resumo = resumo.merge(cont_mes_anterior, on="Base", how="left")
 
-    # ========================================================
-    # MÊS ATUAL
-    # ========================================================
-
     df_mes_atual = df[
         (df["__data_prevista"] >= primeiro_dia_mes_atual)
         & (df["__data_prevista"] <= data_limite_d1)
@@ -900,10 +980,6 @@ def montar_resumo_geral(df):
     )
 
     resumo = resumo.merge(cont_mes_atual, on="Base", how="left")
-
-    # ========================================================
-    # SEMANAS W
-    # ========================================================
 
     semanas = obter_semanas_para_exibir(
         df=df,
@@ -930,10 +1006,6 @@ def montar_resumo_geral(df):
         )
 
         resumo = resumo.merge(cont_semana, on="Base", how="left")
-
-    # ========================================================
-    # DIAS
-    # ========================================================
 
     datas_para_exibir = obter_datas_para_exibir(
         df=df,
@@ -963,10 +1035,6 @@ def montar_resumo_geral(df):
 
         resumo = resumo.merge(cont_dia, on="Base", how="left")
 
-    # ========================================================
-    # FINALIZAÇÃO
-    # ========================================================
-
     colunas_valores = [col for col in resumo.columns if col != "Base"]
     resumo[colunas_valores] = resumo[colunas_valores].fillna(0).astype(int)
 
@@ -984,18 +1052,7 @@ def montar_resumo_geral(df):
     ).reset_index(drop=True)
 
     print(f"\n📅 Limite D-1 oficial: {data_limite_d1.strftime('%d/%m/%Y')}")
-    print(
-        f"📅 Mês anterior: "
-        f"{primeiro_dia_mes_anterior.strftime('%d/%m/%Y')} até "
-        f"{ultimo_dia_mes_anterior.strftime('%d/%m/%Y')}"
-    )
-    print(
-        f"📅 Mês atual: "
-        f"{primeiro_dia_mes_atual.strftime('%d/%m/%Y')} até "
-        f"{data_limite_d1.strftime('%d/%m/%Y')}"
-    )
-
-    print(f"\n📊 Bases no resumo: {len(resumo)}")
+    print(f"📊 Bases no resumo: {len(resumo)}")
     print(f"📊 Soma mês atual: {resumo[label_mes_atual].sum():,}".replace(",", "."))
 
     info_periodo = {
@@ -1093,7 +1150,6 @@ def gerar_imagem_principal(df_resumo, info_periodo):
         x = margem_x
         y = topo
 
-        # Cabeçalho
         for col, largura in zip(colunas, larguras):
             cor_header = cor_header_coluna(
                 col,
@@ -1118,7 +1174,6 @@ def gerar_imagem_principal(df_resumo, info_periodo):
 
         y += altura_header
 
-        # Linhas
         for idx, row in df_pagina.iterrows():
             x = margem_x
             cor_fundo_padrao = ROW_BG if idx % 2 == 0 else ROW_ALT
@@ -1188,18 +1243,18 @@ def salvar_resumo_debug(df_resumo, df_base):
         with pd.ExcelWriter(caminho_excel, engine="openpyxl") as writer:
             df_resumo.to_excel(writer, sheet_name="Resumo Geral", index=False)
 
-            colunas_num = [col for col in df_base.columns if str(col).startswith("__retido_num_")]
-
-            colunas_base = [
+            colunas_debug = [
+                "__arquivo_origem",
+                "__data_coluna_convertida",
+                "__data_arquivo",
                 "__data_prevista",
                 "__base",
                 "__retidos_total",
-                "__arquivo_origem",
             ]
 
-            colunas_base = [col for col in colunas_base if col in df_base.columns]
+            colunas_debug = [col for col in colunas_debug if col in df_base.columns]
 
-            df_debug = df_base[colunas_base + colunas_num].copy()
+            df_debug = df_base[colunas_debug].copy()
             df_debug.to_excel(writer, sheet_name="Base Conferencia", index=False)
 
         print(f"📄 Excel de conferência salvo em: {caminho_excel}")
@@ -1371,24 +1426,7 @@ def enviar_resultado_feishu(arquivos, info_periodo):
         print("⚠️ Nenhum webhook válido configurado.")
         return
 
-    data_limite_d1 = info_periodo["data_limite_d1"]
-    datas_para_exibir = info_periodo.get("datas_para_exibir", [])
-
-    datas_texto = ", ".join(
-        pd.Timestamp(d).strftime("%d/%m")
-        for d in datas_para_exibir
-    )
-
-    texto_inicio = (
-        f"📊 {TITULO}\n"
-        f"Pedidos Retidos — soma por Base\n"
-        f"Comparativo mês anterior x mês atual + semanas + dias\n"
-        f"Datas convertidas para padrão único dd/mm/aaaa\n"
-        f"Campos de retidos somados linha por linha\n"
-        f"Limite D-1: {data_limite_d1.strftime('%d/%m/%Y')}\n"
-        f"Dias exibidos: {datas_texto}\n"
-        f"Total de página(s): {len(arquivos)}"
-    )
+    texto_inicio = f"📊 {TITULO}"
 
     for destino in webhooks:
         enviar_texto_webhook(
